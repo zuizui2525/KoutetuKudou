@@ -1,101 +1,93 @@
 #pragma once
-#include <d3d12.h>
-#include <wrl.h>
 #include <string>
 #include <vector>
 #include <deque>
 #include <chrono>
+#include <thread>
+#include <atomic>
+#include <unordered_map>
+#include <d3d12.h>
+#include <wrl.h>
+#include <dxgi1_4.h> // DXGI 1.4 for QueryVideoMemoryInfo
+#include <psapi.h>    // for GetProcessMemoryInfo
 
-/**
- * @brief パフォーマンス低下（FPSスパイク）やロード遅延を検知し、
- *        直近のリプレイ画像およびパフォーマンスログを出力する外部ライブラリクラス
- */
 class PerformanceReporter {
 public:
-    // マジックナンバー排除のための定数
-    static inline const float kDefaultFpsDropThreshold = 30.0f;  // FPS低下検知しきい値
-    static inline const int kDefaultCaptureSeconds = 3;           // リプレイ記録時間（秒）
-    static inline const int kFpsLogLimit = 300;                   // パフォーマンスログの最大保持件数
-
-public:
-    PerformanceReporter() = delete;
-    ~PerformanceReporter() = delete;
-
-    /**
-     * @brief レポーターの初期化
-     * @param device DirectX12デバイス
-     * @param commandQueue コマンドキュー（リソースコピーコマンドの発行用）
-     * @param width バックバッファの幅
-     * @param height バックバッファの高さ
-     */
-    static void Initialize(ID3D12Device* device, ID3D12CommandQueue* commandQueue, UINT width, UINT height);
-
-    /**
-     * @brief レポーターのシャットダウンとリソース解放
-     */
-    static void Finalize();
-
-    /**
-     * @brief 毎フレームの更新処理（FPS監視とロード時間監視）
-     * @param deltaTime 前フレームからの経過時間（秒）
-     * @param currentFps 現在のフレームレート
-     * @param memoryUsageMB 現在のメモリ使用量 (MB)
-     */
-    static void Update(float deltaTime, float currentFps, float memoryUsageMB);
-
-    /**
-     * @brief ロード開始の通知（ロード時間計測用）
-     */
-    static void StartLoadTimer();
-
-    /**
-     * @brief ロード終了の通知（ロード時間計測用、基準値を超えたら自動ダンプ）
-     * @param loadName ロードしたシーンやエリアの名前
-     * @param maxAllowedSeconds 許容される最大ロード時間（秒、これを超えたら警告）
-     */
-    static void EndLoadTimer(const std::string& loadName, float maxAllowedSeconds = 2.0f);
-
-    /**
-     * @brief 現在のバックバッファをキャプチャし、リングバッファに保存する
-     * @param backBuffer レンダリング完了後のバックバッファリソース
-     * @param currentState バックバッファの現在のリソース状態（通常は D3D12_RESOURCE_STATE_PRESENT）
-     */
-    static void CaptureFrame(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* backBuffer, D3D12_RESOURCE_STATES currentState = D3D12_RESOURCE_STATE_PRESENT);
-
-    /**
-     * @brief 手動または自動でパフォーマンスレポートのダンプを実行する
-     * @param reason ダンプが発生した理由（例: "FPS_DROP", "LONG_LOAD", "MANUAL_TRIGGER"）
-     * @param detail 詳細情報文字列
-     */
-    static void TriggerReport(const std::string& reason, const std::string& detail = "");
-
-    /**
-     * @brief 監視設定 of 変更
-     */
-    static void SetFpsDropThreshold(float threshold) { fpsDropThreshold_ = threshold; }
-    static void SetMonitoringEnabled(bool enabled) { isEnabled_ = enabled; }
-
-private:
-    // キャプチャされた1フレームの情報
-    struct CapturedFrame {
-        Microsoft::WRL::ComPtr<ID3D12Resource> gpuTexture; // GPU上のテクスチャ
-        float timestamp = 0.0f;
-    };
-
-    // パフォーマンスログのエントリ
+    // 統計ログに記録するFPSデータのエントリ
     struct PerfLogEntry {
         float time = 0.0f;
         float fps = 0.0f;
-        float memory = 0.0f;
+        float memory = 0.0f; // CPUメモリ使用量 (MB)
+        float vram = 0.0f;   // GPU VRAM使用量 (MB)
     };
 
-    // 内部ユーティリティ
-    static void SaveMp4File(const std::wstring& filePath, const std::vector<CapturedFrame>& textures, UINT width, UINT height);
-    static void SavePngFile(const std::wstring& filePath, BYTE* rawRgbaData, UINT width, UINT height);
-    static void DumpReportPackage(const std::string& reason, const std::string& detail);
-    static std::wstring ConvertToWstring(const std::string& str);
+    // 初期化と終了処理
+    static void Initialize(ID3D12Device* device, ID3D12CommandQueue* commandQueue, UINT width, UINT height);
+    static void Finalize();
+
+    // 毎フレームの更新（自己完結型: 内部でFPS、経過時間、CPU/GPUメモリを計測）
+    static void Update();
+
+    // 手動または特定のイベントでパフォーマンスレポートのダンプを実行
+    static void TriggerReport(const std::string& reason, const std::string& detail);
+
+    // 描画フレーム完了時のキャプチャ（コマンドリストでVRAMコピーをスケジュール）
+    static void CaptureFrame(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* backBuffer, D3D12_RESOURCE_STATES currentState);
+
+    // ロード時間計測用
+    static void StartLoadTimer();
+    static void EndLoadTimer(const std::string& loadName, float maxAllowedSeconds = 3.0f);
+
+    // 外部からデバッグ用メタデータを動的に登録できるインターフェース
+    static void SetMetaData(const std::string& key, const std::string& value);
+
+    // 設定と状態取得
+    static void SetFpsDropThreshold(float threshold) { fpsDropThreshold_ = threshold; }
+    static float GetFpsDropThreshold() { return fpsDropThreshold_; }
+    static void SetEnabled(bool enabled) { isEnabled_ = enabled; }
+    static bool IsEnabled() { return isEnabled_; }
+    static bool IsDumping() { return isDumping_; }
 
 private:
+    // キャプチャされた1フレームのデータ
+    struct CapturedFrame {
+        Microsoft::WRL::ComPtr<ID3D12Resource> gpuTexture;
+        float timestamp = 0.0f;
+    };
+
+    // バックグラウンドスレッドに渡すデータ
+    struct DumpData {
+        std::wstring mp4Path;
+        std::wstring pngPath;
+        std::string jsonPath;
+        std::string promptPath;
+        std::string folderName;
+        std::vector<std::vector<BYTE>> rawFrames; // MP4用ピクセルバッファ (BGRA)
+        std::vector<BYTE> screenshotRgba;         // スクリーンショット用RGBAバッファ
+        std::vector<PerfLogEntry> perfLog;
+        std::vector<std::string> logMessages;     // 直近 of システムログメッセージ
+        std::unordered_map<std::string, std::string> customMetaData; // カスタム登録されたメタデータ
+        std::string reason;
+        std::string detail;
+        std::tm tm_info;
+        UINT width = 0;
+        UINT height = 0;
+    };
+
+    // レポートパッケージの出力（メインスレッド：GPUバッファリードバック）
+    static void DumpReportPackage(const std::string& reason, const std::string& detail);
+
+    // 非同期書き出しスレッドのメイン処理
+    static void ExecuteDumpThread(DumpData data);
+
+    // MP4およびPNGのファイル書き出しヘルパー
+    static void SaveMp4File(const std::wstring& filePath, const std::vector<std::vector<BYTE>>& rawFrames, UINT width, UINT height);
+    static void SavePngFile(const std::wstring& filePath, BYTE* rawRgbaData, UINT width, UINT height);
+
+    // 文字列変換ヘルパー
+    static std::wstring ConvertToWstring(const std::string& str);
+
+    // 静的メンバー変数
     static ID3D12Device* device_;
     static ID3D12CommandQueue* commandQueue_;
     static UINT bufferWidth_;
@@ -110,6 +102,10 @@ private:
     static std::chrono::steady_clock::time_point loadStartTime_;
     static bool isLoading_;
 
+    // 自己計測用の基準時間と前フレーム時間
+    static std::chrono::steady_clock::time_point sessionStartTime_;
+    static std::chrono::steady_clock::time_point lastFrameTime_;
+
     // リプレイ用リングバッファ
     static std::deque<CapturedFrame> frameRingBuffer_;
     static size_t maxRingBufferSize_;
@@ -117,4 +113,29 @@ private:
 
     // 統計ログバッファ
     static std::deque<PerfLogEntry> perfLog_;
+
+    // 非同期ダンプ用スレッドとステート
+    static std::thread dumpThread_;
+    static std::atomic<bool> isDumping_;
+
+    // セッション（ゲーム起動）フォルダ名
+    static std::string sessionFolderName_;
+
+    // 外部から登録されたカスタムメタデータ
+    static std::unordered_map<std::string, std::string> customMetaData_;
+
+    // トリガー制限用カウント
+    static int triggerCount_;
+
+    // 常駐型ライブ同期スレッドシステム用のメンバ
+    static std::thread liveSyncThread_;
+    static std::atomic<bool> isLiveSyncRunning_;
+    static std::atomic<float> liveFps_;
+    static std::atomic<float> liveCpu_;
+    static std::atomic<float> liveVram_;
+    static void LiveSyncThreadWork();
+
+    // 制限定数
+    static constexpr size_t kFpsLogLimit = 300; // 直近の約30秒分（10fps換算）
+    static constexpr float kDefaultFpsDropThreshold = 30.0f;
 };

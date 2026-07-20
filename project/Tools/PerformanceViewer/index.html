@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Performance Report Viewer</title>
+    <title>パフォーマンス解析ビューワー - ZuizuiEngine</title>
     <link rel="stylesheet" href="style.css">
     <!-- Google Fonts: Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,62 +13,129 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- ヘッダー -->
-        <header class="app-header">
-            <div class="logo-area">
-                <span class="logo-icon">⚡</span>
-                <h1>Zuizui Performance Analyzer</h1>
+    <!-- 新設：アナウンスバナー -->
+    <div id="spike-banner" class="spike-banner-overlay">
+        <div class="spike-banner-content">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-text">
+                <h3>高負荷スパイク検出！</h3>
+                <p>ゲーム内で重い処理を検知し、データが最新状態に同期されました。</p>
             </div>
-            <div class="meta-info">
-                <span id="trigger-reason" class="badge">PENDING</span>
-                <span id="trigger-time" class="time-stamp">Loading report...</span>
-                <button id="exit-btn" class="exit-button">CLOSE</button>
+        </div>
+    </div>
+
+    <div class="app-layout">
+        <!-- 左側：過去のリプレイ履歴サイドバー -->
+        <aside class="app-sidebar">
+            <div class="sidebar-header">
+                <h2>📊 検出履歴リスト</h2>
             </div>
-        </header>
+            <ul id="sidebar-list" class="sidebar-list">
+                <!-- JS側で過去のレポート項目を動的に追加 -->
+                <li class="loading-item">履歴をロード中...</li>
+            </ul>
+        </aside>
 
-        <!-- メイングリッド -->
-        <main class="app-main">
-            <!-- 左：リプレイ動画プレイヤー -->
-            <section class="panel glass-panel player-panel">
-                <div class="panel-header">
-                    <h2>Instant Replay (直前3秒)</h2>
-                    <span id="frame-counter" class="counter">0 / 0</span>
+        <!-- 右側：メインコンテンツ領域 -->
+        <div class="app-container">
+            <!-- ヘッダー -->
+            <header class="app-header">
+                <div class="logo-area">
+                    <span class="logo-icon">⚡</span>
+                    <h1>Zuizui パフォーマンスアナライザー</h1>
                 </div>
-                <div class="video-container">
-                    <video id="replay-video" poster="/data/screenshot.png" controls loop style="width: 100%; border-radius: 8px; box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);"></video>
-                    <div id="no-replay-msg" class="centered-message hidden">No replay video found</div>
+                <div class="meta-info">
+                    <span id="trigger-reason" class="badge">準備中</span>
+                    <span id="trigger-time" class="time-stamp">レポートを読み込んでいます...</span>
+                    <button id="exit-btn" class="exit-button">終了する</button>
                 </div>
-            </section>
+            </header>
 
-            <!-- 右：パフォーマンス統計グラフ -->
-            <section class="panel glass-panel chart-panel">
-                <div class="panel-header">
-                    <h2>Performance Metrics</h2>
-                    <div class="stat-summary">
-                        <span id="avg-fps" class="stat-item">Avg FPS: --</span>
-                        <span id="max-mem" class="stat-item">Peak Mem: -- MB</span>
+            <!-- タブコントロール -->
+            <div class="tab-control">
+                <button id="tab-replay" class="tab-btn active">🎬 リプレイ解析モード</button>
+                <button id="tab-live" class="tab-btn">🟢 リアルタイム監視モード</button>
+            </div>
+
+            <!-- メインコンテンツ -->
+            <main class="app-main">
+                <!-- 1. リプレイ解析モード表示部 -->
+                <div id="replay-view" class="mode-view active">
+                    <div class="mode-grid-2col">
+                        <!-- 左：リプレイ動画プレイヤー -->
+                        <section class="panel glass-panel player-panel">
+                            <div class="panel-header">
+                                <h2>インスタント・リプレイ (直前3秒間)</h2>
+                                <span id="frame-counter" class="counter">0 / 0</span>
+                            </div>
+                            <div class="video-container">
+                                <video id="replay-video" poster="/data/screenshot.png" controls loop style="width: 100%; border-radius: 8px; box-shadow: 0 0 15px rgba(0, 242, 254, 0.3);"></video>
+                                <div id="no-replay-msg" class="centered-message hidden">録画データ（MP4）が見つかりません</div>
+                            </div>
+                        </section>
+
+                        <!-- 右：パフォーマンス統計グラフ -->
+                        <section class="panel glass-panel chart-panel">
+                            <div class="panel-header">
+                                <h2>パフォーマンス測定結果グラフ</h2>
+                                <div class="stat-summary">
+                                    <span id="avg-fps" class="stat-item">平均 FPS: --</span>
+                                    <span id="max-mem" class="stat-item">最大 CPUメモリ: -- MB</span>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="metricsChart"></canvas>
+                            </div>
+                            <div class="detail-info">
+                                <strong>検出時の詳細情報:</strong> <span id="report-detail">詳細情報はありません。</span>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- 下：AI連携用プロンプトパッケージ -->
+                    <section class="panel glass-panel prompt-panel" style="margin-top: 20px;">
+                        <div class="panel-header">
+                            <h2>AI解析アシスタント (コピーしてLLMに入力するプロンプト)</h2>
+                            <button id="copy-btn" class="glow-btn">プロンプトをコピー</button>
+                        </div>
+                        <div class="prompt-content">
+                            <textarea id="prompt-text" readonly placeholder="プロンプトを生成しています..."></textarea>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- 2. リアルタイム監視モード表示部 (新設) -->
+                <div id="live-view" class="mode-view">
+                    <div class="live-dashboard">
+                        <!-- 現在の数値カード -->
+                        <div class="live-cards-container">
+                            <div class="live-card fps-card">
+                                <span class="card-label">現在の FPS</span>
+                                <span id="live-val-fps" class="card-value text-cyan">--</span>
+                            </div>
+                            <div class="live-card cpu-card">
+                                <span class="card-label">現在の CPUメモリ使用量</span>
+                                <span id="live-val-cpu" class="card-value text-purple">-- MB</span>
+                            </div>
+                            <div class="live-card vram-card">
+                                <span class="card-label">現在の GPU VRAM使用量</span>
+                                <span id="live-val-vram" class="card-value text-orange">-- MB</span>
+                            </div>
+                        </div>
+
+                        <!-- リアルタイムグラフ -->
+                        <section class="panel glass-panel live-chart-panel">
+                            <div class="panel-header">
+                                <h2>リアルタイム・パフォーマンスモニター (常時更新中)</h2>
+                            </div>
+                            <div class="chart-container" style="min-height: 400px;">
+                                <canvas id="liveMetricsChart"></canvas>
+                            </div>
+                        </section>
                     </div>
                 </div>
-                <div class="chart-container">
-                    <canvas id="metricsChart"></canvas>
-                </div>
-                <div class="detail-info">
-                    <strong>Detail:</strong> <span id="report-detail">No details available.</span>
-                </div>
-            </section>
-
-            <!-- 下：AI連携用プロンプトパッケージ -->
-            <section class="panel glass-panel prompt-panel">
-                <div class="panel-header">
-                    <h2>AI Diagnostics Assistant (LLM用プロンプト)</h2>
-                    <button id="copy-btn" class="glow-btn">Copy Prompt</button>
-                </div>
-                <div class="prompt-content">
-                    <textarea id="prompt-text" readonly placeholder="Generating prompt..."></textarea>
-                </div>
-            </section>
-        </main>
+            </main>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>

@@ -1,0 +1,20 @@
+{
+  "reason": "FPS_DROP",
+  "detail": "FPS dropped to 3.43 (Threshold: 30.00 FPS)",
+  "time_triggered": "2026-07-20 16:31:39",
+  "resolution": "1280x720",
+  "logs": [
+    {
+      "time": 0.031,
+      "fps": 32.22,
+      "memory_mb": 427.15,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 0.323,
+      "fps": 3.43,
+      "memory_mb": 436.89,
+      "vram_mb": 0.00
+    }
+  ]
+}

@@ -182,7 +182,10 @@ void App::Run() {
 
     // --- 更新 ---
     // パフォーマンスレポーターの更新
-    PerformanceReporter::Update(deltaTime, currentFps, currentMem);
+#ifdef _USEIMGUI
+    PerformanceReporter::SetMetaData("Active3DObjects", std::to_string(SceneHierarchy::GetInstance()->GetObjects().size()));
+#endif
+    PerformanceReporter::Update();
 
     // デバッグキー（0キー）による手動トリガー
     if (input_->Trigger(DIK_0)) {

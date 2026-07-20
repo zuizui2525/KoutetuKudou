@@ -1,0 +1,1808 @@
+{
+  "reason": "FPS_DROP",
+  "detail": "FPS dropped to 25.14 (Threshold: 30.00 FPS)",
+  "time_triggered": "2026-07-20 15:23:38",
+  "resolution": "1280x720",
+  "logs": [
+    {
+      "time": 148.169,
+      "fps": 47.82,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.190,
+      "fps": 46.39,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.211,
+      "fps": 47.77,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.233,
+      "fps": 46.78,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.254,
+      "fps": 47.22,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.275,
+      "fps": 47.70,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.297,
+      "fps": 45.72,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.319,
+      "fps": 45.20,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.341,
+      "fps": 45.29,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.362,
+      "fps": 47.61,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.383,
+      "fps": 47.76,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.404,
+      "fps": 47.42,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.425,
+      "fps": 47.34,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.446,
+      "fps": 47.06,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.467,
+      "fps": 47.58,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.489,
+      "fps": 47.16,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.510,
+      "fps": 46.79,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.531,
+      "fps": 47.31,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.553,
+      "fps": 45.86,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.575,
+      "fps": 46.01,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.596,
+      "fps": 46.13,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.618,
+      "fps": 46.90,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.639,
+      "fps": 47.28,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.660,
+      "fps": 47.60,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.681,
+      "fps": 47.02,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.702,
+      "fps": 47.72,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.724,
+      "fps": 45.27,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.745,
+      "fps": 47.07,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.767,
+      "fps": 46.84,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.788,
+      "fps": 46.32,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.810,
+      "fps": 46.45,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.831,
+      "fps": 47.54,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.852,
+      "fps": 47.20,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.874,
+      "fps": 45.26,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.898,
+      "fps": 42.50,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.920,
+      "fps": 44.52,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.941,
+      "fps": 47.53,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.962,
+      "fps": 46.78,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 148.984,
+      "fps": 47.04,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.005,
+      "fps": 47.51,
+      "memory_mb": 4325.93,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.026,
+      "fps": 47.09,
+      "memory_mb": 4325.94,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.047,
+      "fps": 47.11,
+      "memory_mb": 4325.94,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.069,
+      "fps": 45.41,
+      "memory_mb": 4325.94,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.092,
+      "fps": 44.68,
+      "memory_mb": 4325.94,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.113,
+      "fps": 46.38,
+      "memory_mb": 4325.94,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.139,
+      "fps": 38.10,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.165,
+      "fps": 39.54,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.186,
+      "fps": 47.05,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.208,
+      "fps": 45.98,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.229,
+      "fps": 46.35,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.251,
+      "fps": 46.90,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.273,
+      "fps": 44.95,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.295,
+      "fps": 45.87,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.316,
+      "fps": 46.95,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.337,
+      "fps": 46.90,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.360,
+      "fps": 44.33,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.382,
+      "fps": 45.71,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.403,
+      "fps": 46.39,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.425,
+      "fps": 45.20,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.448,
+      "fps": 44.53,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.471,
+      "fps": 43.53,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.493,
+      "fps": 44.29,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.516,
+      "fps": 45.01,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.537,
+      "fps": 47.36,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.558,
+      "fps": 46.24,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.580,
+      "fps": 46.51,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.601,
+      "fps": 46.62,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.624,
+      "fps": 43.96,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.646,
+      "fps": 44.71,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.667,
+      "fps": 47.57,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.688,
+      "fps": 47.85,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.710,
+      "fps": 46.61,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.731,
+      "fps": 46.69,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.753,
+      "fps": 45.91,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.775,
+      "fps": 45.57,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.796,
+      "fps": 47.18,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.817,
+      "fps": 47.86,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.839,
+      "fps": 46.02,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.861,
+      "fps": 45.53,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.882,
+      "fps": 47.88,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.903,
+      "fps": 47.73,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.926,
+      "fps": 43.58,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.947,
+      "fps": 46.30,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.968,
+      "fps": 47.51,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 149.989,
+      "fps": 47.45,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.011,
+      "fps": 47.03,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.032,
+      "fps": 46.42,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.054,
+      "fps": 45.88,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.075,
+      "fps": 46.70,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.097,
+      "fps": 46.54,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.118,
+      "fps": 46.44,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.140,
+      "fps": 45.53,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.162,
+      "fps": 45.62,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.184,
+      "fps": 46.57,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.205,
+      "fps": 47.67,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.226,
+      "fps": 46.96,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.247,
+      "fps": 47.01,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.268,
+      "fps": 46.97,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.290,
+      "fps": 46.91,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.311,
+      "fps": 47.45,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.333,
+      "fps": 44.49,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.354,
+      "fps": 47.50,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.376,
+      "fps": 47.39,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.396,
+      "fps": 47.69,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.417,
+      "fps": 47.69,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.439,
+      "fps": 47.22,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.460,
+      "fps": 46.62,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.482,
+      "fps": 46.46,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.503,
+      "fps": 47.40,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.524,
+      "fps": 46.64,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.545,
+      "fps": 47.71,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.569,
+      "fps": 41.72,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.591,
+      "fps": 45.70,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.613,
+      "fps": 45.65,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.636,
+      "fps": 43.26,
+      "memory_mb": 4325.95,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.658,
+      "fps": 45.63,
+      "memory_mb": 4252.14,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.682,
+      "fps": 41.13,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.704,
+      "fps": 46.50,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.725,
+      "fps": 46.95,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.746,
+      "fps": 47.18,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.767,
+      "fps": 47.32,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.788,
+      "fps": 47.28,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.810,
+      "fps": 47.15,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.835,
+      "fps": 40.06,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.856,
+      "fps": 47.28,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.877,
+      "fps": 47.45,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.898,
+      "fps": 46.43,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.920,
+      "fps": 45.69,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.943,
+      "fps": 44.26,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.964,
+      "fps": 47.56,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 150.985,
+      "fps": 46.41,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.007,
+      "fps": 46.46,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.028,
+      "fps": 46.84,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.050,
+      "fps": 46.80,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.071,
+      "fps": 47.29,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.092,
+      "fps": 47.16,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.113,
+      "fps": 47.10,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.134,
+      "fps": 47.28,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.157,
+      "fps": 44.77,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.178,
+      "fps": 47.50,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.199,
+      "fps": 47.71,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.220,
+      "fps": 47.86,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.241,
+      "fps": 47.27,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.262,
+      "fps": 47.72,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.283,
+      "fps": 47.81,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.304,
+      "fps": 47.32,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.325,
+      "fps": 47.22,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.346,
+      "fps": 46.98,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.367,
+      "fps": 47.97,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.388,
+      "fps": 47.32,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.410,
+      "fps": 45.78,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.431,
+      "fps": 47.79,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.452,
+      "fps": 47.91,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.473,
+      "fps": 48.17,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.494,
+      "fps": 47.49,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.515,
+      "fps": 47.91,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.536,
+      "fps": 46.93,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.557,
+      "fps": 46.45,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.579,
+      "fps": 46.75,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.601,
+      "fps": 45.26,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.622,
+      "fps": 47.47,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.643,
+      "fps": 47.40,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.664,
+      "fps": 46.97,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.686,
+      "fps": 47.04,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.707,
+      "fps": 47.20,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.728,
+      "fps": 46.44,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.750,
+      "fps": 45.96,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.771,
+      "fps": 46.97,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.793,
+      "fps": 46.60,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.814,
+      "fps": 47.75,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.835,
+      "fps": 47.16,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.856,
+      "fps": 46.61,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.878,
+      "fps": 47.44,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.899,
+      "fps": 46.27,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.920,
+      "fps": 47.42,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.942,
+      "fps": 46.64,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.963,
+      "fps": 47.26,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 151.984,
+      "fps": 46.32,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.007,
+      "fps": 44.28,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.029,
+      "fps": 46.49,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.050,
+      "fps": 47.09,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.072,
+      "fps": 45.57,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.094,
+      "fps": 45.36,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.115,
+      "fps": 46.93,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.136,
+      "fps": 47.24,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.158,
+      "fps": 46.17,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.179,
+      "fps": 46.68,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.201,
+      "fps": 45.65,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.223,
+      "fps": 47.00,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.244,
+      "fps": 47.12,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.264,
+      "fps": 48.15,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.286,
+      "fps": 46.86,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.307,
+      "fps": 46.71,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.329,
+      "fps": 46.62,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.350,
+      "fps": 47.67,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.371,
+      "fps": 46.07,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.393,
+      "fps": 46.92,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.414,
+      "fps": 47.30,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.435,
+      "fps": 47.27,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.456,
+      "fps": 46.57,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.478,
+      "fps": 47.08,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.499,
+      "fps": 46.33,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.520,
+      "fps": 47.53,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.542,
+      "fps": 46.84,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.563,
+      "fps": 47.28,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.584,
+      "fps": 46.14,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.606,
+      "fps": 46.96,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.627,
+      "fps": 46.34,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.649,
+      "fps": 46.33,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.671,
+      "fps": 45.70,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.692,
+      "fps": 47.22,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.713,
+      "fps": 48.12,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.734,
+      "fps": 46.14,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.756,
+      "fps": 46.62,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.777,
+      "fps": 47.31,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.798,
+      "fps": 47.18,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.821,
+      "fps": 44.62,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.842,
+      "fps": 45.94,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.863,
+      "fps": 47.59,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.885,
+      "fps": 47.03,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.906,
+      "fps": 46.19,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.929,
+      "fps": 44.78,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.950,
+      "fps": 47.20,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.972,
+      "fps": 45.32,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 152.993,
+      "fps": 47.19,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.014,
+      "fps": 47.04,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.036,
+      "fps": 47.16,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.058,
+      "fps": 45.33,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.079,
+      "fps": 46.41,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.100,
+      "fps": 46.95,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.122,
+      "fps": 46.79,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.144,
+      "fps": 45.90,
+      "memory_mb": 4219.08,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.165,
+      "fps": 46.22,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.186,
+      "fps": 47.50,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.208,
+      "fps": 47.21,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.229,
+      "fps": 46.87,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.250,
+      "fps": 47.17,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.271,
+      "fps": 46.80,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.293,
+      "fps": 46.66,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.315,
+      "fps": 45.83,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.336,
+      "fps": 46.38,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.359,
+      "fps": 44.38,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.380,
+      "fps": 47.08,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.402,
+      "fps": 45.94,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.423,
+      "fps": 47.47,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.444,
+      "fps": 47.54,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.466,
+      "fps": 44.71,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.488,
+      "fps": 45.95,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.510,
+      "fps": 46.45,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.530,
+      "fps": 47.83,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.551,
+      "fps": 47.64,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.573,
+      "fps": 46.99,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.594,
+      "fps": 46.29,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.616,
+      "fps": 45.93,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.638,
+      "fps": 46.16,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.659,
+      "fps": 47.65,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.681,
+      "fps": 45.69,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.702,
+      "fps": 46.01,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.724,
+      "fps": 46.85,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.745,
+      "fps": 47.19,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.766,
+      "fps": 46.98,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.788,
+      "fps": 44.99,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.810,
+      "fps": 45.80,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.832,
+      "fps": 47.02,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.853,
+      "fps": 46.83,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.875,
+      "fps": 44.32,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.897,
+      "fps": 46.28,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.919,
+      "fps": 45.05,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.941,
+      "fps": 45.86,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.962,
+      "fps": 47.18,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 153.984,
+      "fps": 45.17,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.006,
+      "fps": 46.74,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.027,
+      "fps": 46.49,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.050,
+      "fps": 44.63,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.071,
+      "fps": 46.47,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.092,
+      "fps": 46.95,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.114,
+      "fps": 47.24,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.135,
+      "fps": 46.29,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.158,
+      "fps": 44.53,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.180,
+      "fps": 45.70,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.201,
+      "fps": 46.82,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.224,
+      "fps": 44.18,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.245,
+      "fps": 46.69,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.267,
+      "fps": 44.80,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.289,
+      "fps": 46.00,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.310,
+      "fps": 46.86,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.332,
+      "fps": 46.61,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.353,
+      "fps": 46.36,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.377,
+      "fps": 42.99,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.398,
+      "fps": 46.99,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.420,
+      "fps": 46.41,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.442,
+      "fps": 43.73,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.464,
+      "fps": 47.39,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.485,
+      "fps": 46.70,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.507,
+      "fps": 46.33,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.528,
+      "fps": 46.62,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.549,
+      "fps": 47.37,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.570,
+      "fps": 46.73,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.592,
+      "fps": 46.04,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    },
+    {
+      "time": 154.632,
+      "fps": 25.14,
+      "memory_mb": 4219.09,
+      "vram_mb": 0.00
+    }
+  ]
+}
