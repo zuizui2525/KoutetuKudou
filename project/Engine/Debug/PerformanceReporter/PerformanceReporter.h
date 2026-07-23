@@ -11,6 +11,8 @@
 #include <dxgi1_4.h> // DXGI 1.4 for QueryVideoMemoryInfo
 #include <psapi.h>    // for GetProcessMemoryInfo
 
+#include "SharedPerfData.h"
+
 class PerformanceReporter {
 public:
     // 統計ログに記録するFPSデータのエントリ
@@ -90,8 +92,10 @@ private:
     // 静的メンバー変数
     static ID3D12Device* device_;
     static ID3D12CommandQueue* commandQueue_;
+    static Microsoft::WRL::ComPtr<IDXGIAdapter3> dxgiAdapter3_;
     static UINT bufferWidth_;
     static UINT bufferHeight_;
+
 
     static float fpsDropThreshold_;
     static bool isEnabled_;
@@ -127,15 +131,18 @@ private:
     // トリガー制限用カウント
     static int triggerCount_;
 
-    // 常駐型ライブ同期スレッドシステム用のメンバ
-    static std::thread liveSyncThread_;
-    static std::atomic<bool> isLiveSyncRunning_;
-    static std::atomic<float> liveFps_;
-    static std::atomic<float> liveCpu_;
-    static std::atomic<float> liveVram_;
-    static void LiveSyncThreadWork();
+    // 移動平均FPS算出用
+    static std::deque<float> fpsDeltaHistory_;
+    static float fpsDeltaSum_;
+    static uint64_t totalFrameCount_;
 
-    // 制限定数
+    // 共有メモリ管理ハンドラ
+    static void* hMapFile_;
+    static ZuizuiPerf::SharedPerfData* sharedData_;
+
+    // 定数（マジックナンバー排除）
     static constexpr size_t kFpsLogLimit = 300; // 直近の約30秒分（10fps換算）
     static constexpr float kDefaultFpsDropThreshold = 30.0f;
+    static constexpr size_t kFpsHistorySampleLimit = 60; // FPS移動平均の最大サンプルフレーム数
 };
+

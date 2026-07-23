@@ -11,16 +11,16 @@
 #include <format>
 #include <algorithm>
 #include <iomanip>
-#include <shellapi.h> // シェル起動用
-#include "Engine/Base/Log/Log.h" // ゲーム内ログ出力用
+#include <shellapi.h> /* シェル起動用 */
+#include "Engine/Base/Log/Log.h" /* ゲーム内ログ出力用 */
 
-// Media Foundation 関連の初期化
+/* Media Foundation 関連の初期化 */
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
 #include <mferror.h>
 
-// WIC (Windows Imaging Component) 関連の初期化
+/* WIC (Windows Imaging Component) 関連の初期化 */
 #include <wincodec.h>
 
 #pragma comment(lib, "mfplat.lib")
@@ -29,16 +29,19 @@
 #pragma comment(lib, "Windowscodecs.lib")
 
 
-// 静的メンバ変数の実体化
+/* 静的メンバ変数の実体化 */
 ID3D12Device* PerformanceReporter::device_ = nullptr;
 ID3D12CommandQueue* PerformanceReporter::commandQueue_ = nullptr;
+Microsoft::WRL::ComPtr<IDXGIAdapter3> PerformanceReporter::dxgiAdapter3_ = nullptr;
 UINT PerformanceReporter::bufferWidth_ = 0;
 UINT PerformanceReporter::bufferHeight_ = 0;
+
 
 float PerformanceReporter::fpsDropThreshold_ = PerformanceReporter::kDefaultFpsDropThreshold;
 bool PerformanceReporter::isEnabled_ = true;
 bool PerformanceReporter::isTriggeredThisFrame_ = false;
-float PerformanceReporter::cooldownTimer_ = 0.0f;
+float PerformanceReporter::cooldownTimer_ = 3.0f; /* 起動直後3秒間は誤トリガー防止のためウォームアップ */
+
 
 std::chrono::steady_clock::time_point PerformanceReporter::loadStartTime_;
 bool PerformanceReporter::isLoading_ = false;
@@ -47,7 +50,7 @@ std::chrono::steady_clock::time_point PerformanceReporter::sessionStartTime_;
 std::chrono::steady_clock::time_point PerformanceReporter::lastFrameTime_;
 
 std::deque<PerformanceReporter::CapturedFrame> PerformanceReporter::frameRingBuffer_;
-size_t PerformanceReporter::maxRingBufferSize_ = 30; // 10fps で 3秒分 (30フレーム)
+size_t PerformanceReporter::maxRingBufferSize_ = 30; /* 10fps で 3秒分 (30フレーム) */
 float PerformanceReporter::runningTime_ = 0.0f;
 
 std::deque<PerformanceReporter::PerfLogEntry> PerformanceReporter::perfLog_;
@@ -57,13 +60,13 @@ std::atomic<bool> PerformanceReporter::isDumping_ = false;
 std::string PerformanceReporter::sessionFolderName_ = "";
 std::unordered_map<std::string, std::string> PerformanceReporter::customMetaData_;
 
-// 追加メンバ変数の実体化
+/* 追加メンバ変数の実体化 */
 int PerformanceReporter::triggerCount_ = 0;
-std::thread PerformanceReporter::liveSyncThread_;
-std::atomic<bool> PerformanceReporter::isLiveSyncRunning_ = false;
-std::atomic<float> PerformanceReporter::liveFps_ = 0.0f;
-std::atomic<float> PerformanceReporter::liveCpu_ = 0.0f;
-std::atomic<float> PerformanceReporter::liveVram_ = 0.0f;
+std::deque<float> PerformanceReporter::fpsDeltaHistory_;
+float PerformanceReporter::fpsDeltaSum_ = 0.0f;
+uint64_t PerformanceReporter::totalFrameCount_ = 0;
+void* PerformanceReporter::hMapFile_ = nullptr;
+ZuizuiPerf::SharedPerfData* PerformanceReporter::sharedData_ = nullptr;
 
 namespace {
     // 10fps 間隔でキャプチャするためのタイマー (100msに1回)
@@ -73,6 +76,9 @@ namespace {
     // クールタイム（連続ダンプ防止：15秒に延長してメモリの蓄積を防止）
     constexpr float kCooldownDuration = 15.0f;
 
+    // パフォーマンスレポート出力先のベースディレクトリ
+    const std::string kReportBaseDir = "externals/PerformanceViewer/out/performance_reports/";
+
     // サーキュラーバッファの書き込みインデックス
     size_t s_writeIndex = 0;
 
@@ -80,55 +86,20 @@ namespace {
     bool s_shouldDumpNextFrame = false;
     std::string s_triggerReason = "";
     std::string s_triggerDetail = "";
-}
 
-// 常駐スレッドの処理本体 (300ms間隔でWinsock通信を実行)
-void PerformanceReporter::LiveSyncThreadWork() {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        return;
-    }
-
-    while (isLiveSyncRunning_) {
-        // 300ms 待機
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
-        if (!isLiveSyncRunning_) break;
-
-        float time = runningTime_;
-        float fps = liveFps_.load();
-        float cpu = liveCpu_.load();
-        float vram = liveVram_.load();
-
-        SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (sock != INVALID_SOCKET) {
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_port = htons(8080);
-            inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-
-            // 送信/受信タイムアウトを 100ms に設定 (ストール防止)
-            DWORD timeout = 100;
-            setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
-            setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-
-            if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != SOCKET_ERROR) {
-                std::string req = std::format(
-                    "GET /update_live_metrics?time={:.3f}&fps={:.2f}&cpu={:.2f}&vram={:.2f} HTTP/1.1\r\n"
-                    "Host: localhost:8080\r\n"
-                    "Connection: close\r\n\r\n",
-                    time, fps, cpu, vram
-                );
-                send(sock, req.c_str(), (int)req.size(), 0);
-                
-                // ダミー受信でサーバー側のソケット切断に同調する
-                char buf[64];
-                recv(sock, buf, sizeof(buf), 0);
-            }
-            closesocket(sock);
+    // JSONの文字列エスケープ用ヘルパー
+    std::string EscapeJsonString(const std::string& input) {
+        std::string output = "";
+        for (char c : input) {
+            if (c == '"') output += "\\\"";
+            else if (c == '\\') output += "\\\\";
+            else if (c == '\n') output += "\\n";
+            else if (c == '\r') output += "\\r";
+            else if (c == '\t') output += "\\t";
+            else output += c;
         }
+        return output;
     }
-
-    WSACleanup();
 }
 
 void PerformanceReporter::Initialize(ID3D12Device* device, ID3D12CommandQueue* commandQueue, UINT width, UINT height) {
@@ -150,6 +121,11 @@ void PerformanceReporter::Initialize(ID3D12Device* device, ID3D12CommandQueue* c
     // トリガー制限の初期化
     triggerCount_ = 0;
 
+    // 移動平均FPSの初期化
+    fpsDeltaHistory_.clear();
+    fpsDeltaSum_ = 0.0f;
+    totalFrameCount_ = 0;
+
     // セッション開始時間の記録
     sessionStartTime_ = std::chrono::steady_clock::now();
     lastFrameTime_ = sessionStartTime_;
@@ -162,26 +138,115 @@ void PerformanceReporter::Initialize(ID3D12Device* device, ID3D12CommandQueue* c
     std::strftime(timeBuffer, sizeof(timeBuffer), "run_%Y%m%d_%H%M%S", &tm_info);
     sessionFolderName_ = std::string(timeBuffer);
 
+    // DXGI アダプターのキャッシング（毎フレームの QueryInterface COM オーバーヘッドを除去）
+    dxgiAdapter3_ = nullptr;
+    if (device_) {
+        Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+        if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&dxgiDevice)))) {
+            Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
+            if (SUCCEEDED(dxgiDevice->GetAdapter(&dxgiAdapter))) {
+                dxgiAdapter->QueryInterface(IID_PPV_ARGS(&dxgiAdapter3_));
+            }
+        }
+    }
+
     frameRingBuffer_.clear();
     perfLog_.clear();
     customMetaData_.clear();
 
-    // 常駐ライブ同期スレッドの起動
-    isLiveSyncRunning_ = true;
-    liveFps_ = 0.0f;
-    liveCpu_ = 0.0f;
-    liveVram_ = 0.0f;
-    liveSyncThread_ = std::thread(LiveSyncThreadWork);
-}
 
-void PerformanceReporter::Finalize() {
-    // 常駐スレッドの終了
-    isLiveSyncRunning_ = false;
-    if (liveSyncThread_.joinable()) {
-        liveSyncThread_.join();
+    // 共有メモリの作成 (プロセス間高速通信用)
+    hMapFile_ = CreateFileMappingA(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_READWRITE,
+        0,
+        sizeof(ZuizuiPerf::SharedPerfData),
+        ZuizuiPerf::kSharedMemoryName
+    );
+
+    if (hMapFile_ != NULL) {
+        sharedData_ = static_cast<ZuizuiPerf::SharedPerfData*>(
+            MapViewOfFile(hMapFile_, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ZuizuiPerf::SharedPerfData))
+        );
+
+        if (sharedData_) {
+            sharedData_->version = ZuizuiPerf::kSharedMemoryVersion;
+            sharedData_->time = 0.0f;
+            sharedData_->fps = 0.0f;
+            sharedData_->rawFps = 0.0f;
+            sharedData_->cpuMemoryMb = 0.0f;
+            sharedData_->vramMemoryMb = 0.0f;
+            sharedData_->frameCount = 0;
+            sharedData_->lastUpdated = GetTickCount64();
+        }
     }
 
+    /* ツール (PerformanceViewer.exe) の起動確認と自動起動 */
+    SOCKET checkSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    bool isServerRunning = false;
+    if (checkSock != INVALID_SOCKET) {
+        sockaddr_in checkAddr{};
+        checkAddr.sin_family = AF_INET;
+        checkAddr.sin_port = htons(8080);
+        inet_pton(AF_INET, "127.0.0.1", &checkAddr.sin_addr);
 
+        DWORD dwTimeout = 100;
+        setsockopt(checkSock, SOL_SOCKET, SO_SNDTIMEO, (char*)&dwTimeout, sizeof(dwTimeout));
+        setsockopt(checkSock, SOL_SOCKET, SO_RCVTIMEO, (char*)&dwTimeout, sizeof(dwTimeout));
+
+        if (connect(checkSock, reinterpret_cast<sockaddr*>(&checkAddr), sizeof(checkAddr)) != SOCKET_ERROR) {
+            isServerRunning = true;
+        }
+        closesocket(checkSock);
+    }
+
+    if (!isServerRunning) {
+        std::string targetExe = "";
+        std::string workDir = "";
+
+        char modulePathBuf[MAX_PATH];
+        std::string exeDir = "";
+        if (GetModuleFileNameA(NULL, modulePathBuf, MAX_PATH) > 0) {
+            exeDir = std::filesystem::path(modulePathBuf).parent_path().string();
+        }
+
+        std::vector<std::string> searchPaths = {
+            "externals/PerformanceViewer/PerformanceViewer.exe",
+            "externals/PerformanceViewer/bin/Release/PerformanceViewer.exe",
+            "PerformanceViewer.exe",
+            exeDir + "/externals/PerformanceViewer/PerformanceViewer.exe",
+            exeDir + "/externals/PerformanceViewer/bin/Release/PerformanceViewer.exe",
+            exeDir + "/../externals/PerformanceViewer/PerformanceViewer.exe",
+            exeDir + "/../../externals/PerformanceViewer/PerformanceViewer.exe"
+        };
+
+        for (const auto& pathStr : searchPaths) {
+            if (std::filesystem::exists(pathStr)) {
+                targetExe = std::filesystem::absolute(pathStr).string();
+                workDir = std::filesystem::path(targetExe).parent_path().string();
+                break;
+            }
+        }
+
+        if (!targetExe.empty()) {
+            ShellExecuteA(NULL, "open", targetExe.c_str(), NULL, workDir.c_str(), SW_SHOW);
+        }
+    }
+
+}
+
+
+void PerformanceReporter::Finalize() {
+    // 共有メモリの解放
+    if (sharedData_) {
+        UnmapViewOfFile(sharedData_);
+        sharedData_ = nullptr;
+    }
+    if (hMapFile_) {
+        CloseHandle(hMapFile_);
+        hMapFile_ = nullptr;
+    }
 
     if (dumpThread_.joinable()) {
         dumpThread_.join();
@@ -189,9 +254,11 @@ void PerformanceReporter::Finalize() {
     frameRingBuffer_.clear();
     perfLog_.clear();
     customMetaData_.clear();
+    dxgiAdapter3_ = nullptr;
     device_ = nullptr;
     commandQueue_ = nullptr;
 }
+
 
 void PerformanceReporter::Update() {
     if (!isEnabled_ || !device_) return;
@@ -204,9 +271,19 @@ void PerformanceReporter::Update() {
     if (deltaTime < 0.0001f) { deltaTime = 0.0001f; }
     if (deltaTime > 1.0f) { deltaTime = 1.0f; }
 
-    float currentFps = 1.0f / deltaTime;
+    float rawFps = 1.0f / deltaTime;
     runningTime_ = std::chrono::duration<float>(now - sessionStartTime_).count();
     s_captureTimer += deltaTime;
+    totalFrameCount_++;
+
+    // 移動平均FPSの計算 (直近 kFpsHistorySampleLimit フレームのサンプル平均)
+    fpsDeltaHistory_.push_back(deltaTime);
+    fpsDeltaSum_ += deltaTime;
+    if (fpsDeltaHistory_.size() > kFpsHistorySampleLimit) {
+        fpsDeltaSum_ -= fpsDeltaHistory_.front();
+        fpsDeltaHistory_.pop_front();
+    }
+    float averageFps = (fpsDeltaSum_ > 0.0001f) ? (static_cast<float>(fpsDeltaHistory_.size()) / fpsDeltaSum_) : rawFps;
 
     if (cooldownTimer_ > 0.0f) {
         cooldownTimer_ -= deltaTime;
@@ -219,31 +296,31 @@ void PerformanceReporter::Update() {
         cpuMemoryMB = static_cast<float>(pmc.WorkingSetSize) / (1024.0f * 1024.0f);
     }
 
-    // GPU 専用ビデオメモリ (VRAM) の計測 (IDXGIAdapter3 を使用)
+    // GPU 専用ビデオメモリ (VRAM) の計測 (キャッシュ済みの dxgiAdapter3_ を使用)
     float vramUsageMB = 0.0f;
-    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
-    if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&dxgiDevice)))) {
-        Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
-        if (SUCCEEDED(dxgiDevice->GetAdapter(&dxgiAdapter))) {
-            Microsoft::WRL::ComPtr<IDXGIAdapter3> dxgiAdapter3;
-            if (SUCCEEDED(dxgiAdapter->QueryInterface(IID_PPV_ARGS(&dxgiAdapter3)))) {
-                DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo{};
-                if (SUCCEEDED(dxgiAdapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memoryInfo))) {
-                    vramUsageMB = static_cast<float>(memoryInfo.CurrentUsage) / (1024.0f * 1024.0f);
-                }
-            }
+    if (dxgiAdapter3_) {
+        DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo{};
+        if (SUCCEEDED(dxgiAdapter3_->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &memoryInfo))) {
+            vramUsageMB = static_cast<float>(memoryInfo.CurrentUsage) / (1024.0f * 1024.0f);
         }
     }
 
-    // 共有アトミック変数に最新値を格納 (常駐同期スレッドが自動的に回収)
-    liveFps_.store(currentFps);
-    liveCpu_.store(cpuMemoryMB);
-    liveVram_.store(vramUsageMB);
 
-    // 統計ログの記録
+    // 共有メモリに直接書き込み (通信オーバーヘッド・遅延なし)
+    if (sharedData_) {
+        sharedData_->time = runningTime_;
+        sharedData_->fps = averageFps;
+        sharedData_->rawFps = rawFps;
+        sharedData_->cpuMemoryMb = cpuMemoryMB;
+        sharedData_->vramMemoryMb = vramUsageMB;
+        sharedData_->frameCount = totalFrameCount_;
+        sharedData_->lastUpdated = GetTickCount64();
+    }
+
+    /* 統計ログの記録 */
     PerfLogEntry entry;
     entry.time = runningTime_;
-    entry.fps = currentFps;
+    entry.fps = averageFps;
     entry.memory = cpuMemoryMB;
     entry.vram = vramUsageMB;
     perfLog_.push_back(entry);
@@ -252,11 +329,13 @@ void PerformanceReporter::Update() {
         perfLog_.pop_front();
     }
 
-    // 自動トリガー判定：FPSが閾値を下回った場合
-    if (cooldownTimer_ <= 0.0f && currentFps > 0.0f && currentFps < fpsDropThreshold_) {
-        std::string detail = std::format("FPS dropped to {:.2f} (Threshold: {:.2f} FPS)", currentFps, fpsDropThreshold_);
+    /* 自動トリガー判定：起動後3秒以上経過し、FPSが閾値を下回った場合 */
+    if (cooldownTimer_ <= 0.0f && runningTime_ >= 3.0f && averageFps > 0.0f && averageFps < fpsDropThreshold_) {
+        cooldownTimer_ = 10.0f; /* 連続発動防止クールダウン */
+        std::string detail = std::format("FPS dropped to {:.2f} (Threshold: {:.2f} FPS)", averageFps, fpsDropThreshold_);
         TriggerReport("FPS_DROP", detail);
     }
+
 }
 
 void PerformanceReporter::StartLoadTimer() {
@@ -271,12 +350,13 @@ void PerformanceReporter::EndLoadTimer(const std::string& loadName, float maxAll
     auto endTime = std::chrono::steady_clock::now();
     float loadDuration = std::chrono::duration<float>(endTime - loadStartTime_).count();
 
-    // ロード時間が許容値を超えた場合に自動トリガー
+    /* ロード時間が許容値を超えた場合に自動トリガー */
     if (loadDuration > maxAllowedSeconds) {
         std::string detail = std::format("Scene/Area '{}' load took {:.2f} seconds (Max Allowed: {:.2f}s)", loadName, loadDuration, maxAllowedSeconds);
         TriggerReport("LONG_LOAD", detail);
     }
 }
+
 
 void PerformanceReporter::CaptureFrame(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* backBuffer, D3D12_RESOURCE_STATES currentState) {
     if (!isEnabled_ || !device_ || !backBuffer || !cmdList) return;
@@ -471,8 +551,8 @@ void PerformanceReporter::DumpReportPackage(const std::string& reason, const std
     char folderBuffer[64];
     std::strftime(folderBuffer, sizeof(folderBuffer), "%Y%m%d_%H%M%S", &tm_info);
     
-    // out/performance_reports/run_YYYYMMDD_HHMMSS/report_YYYYMMDD_HHMMSS
-    std::string folderName = "out/performance_reports/" + sessionFolderName_ + "/report_" + std::string(folderBuffer);
+    // externals/PerformanceViewer/out/performance_reports/run_YYYYMMDD_HHMMSS/report_YYYYMMDD_HHMMSS
+    std::string folderName = kReportBaseDir + sessionFolderName_ + "/report_" + std::string(folderBuffer);
     
     std::filesystem::create_directories(folderName);
 
@@ -650,6 +730,11 @@ void PerformanceReporter::ExecuteDumpThread(DumpData data) {
             jsonOfs << "    }" << (i == data.perfLog.size() - 1 ? "" : ",") << "\n";
         }
 
+        jsonOfs << "  ],\n";
+        jsonOfs << "  \"system_logs\": [\n";
+        for (size_t i = 0; i < data.logMessages.size(); ++i) {
+            jsonOfs << "    \"" << EscapeJsonString(data.logMessages[i]) << "\"" << (i == data.logMessages.size() - 1 ? "" : ",") << "\n";
+        }
         jsonOfs << "  ]\n";
         jsonOfs << "}\n";
         jsonOfs.close();
@@ -848,12 +933,25 @@ void PerformanceReporter::ExecuteDumpThread(DumpData data) {
     if (!isServerNotified) {
         std::cout << "[PerformanceReporter] Viewer server not running. Launching new viewer instance..." << std::endl;
         
-        if (std::filesystem::exists("PerformanceViewer.exe")) {
-            ShellExecuteA(NULL, "open", "PerformanceViewer.exe", NULL, NULL, SW_SHOW);
-        } else if (std::filesystem::exists("Tools/PerformanceViewer/bin/Debug/PerformanceViewer.exe")) {
-            ShellExecuteA(NULL, "open", "Tools\\PerformanceViewer\\bin\\Debug\\PerformanceViewer.exe", NULL, NULL, SW_SHOW);
-        } else if (std::filesystem::exists("Tools/PerformanceViewer/bin/Release/PerformanceViewer.exe")) {
-            ShellExecuteA(NULL, "open", "Tools\\PerformanceViewer\\bin\\Release\\PerformanceViewer.exe", NULL, NULL, SW_SHOW);
+        std::string targetExe = "";
+        std::string workDir = "";
+        
+        if (std::filesystem::exists("externals/PerformanceViewer/PerformanceViewer.exe")) {
+            targetExe = std::filesystem::absolute("externals/PerformanceViewer/PerformanceViewer.exe").string();
+            workDir = std::filesystem::absolute("externals/PerformanceViewer").string();
+        } else if (std::filesystem::exists("externals/PerformanceViewer/bin/Debug/PerformanceViewer.exe")) {
+            targetExe = std::filesystem::absolute("externals/PerformanceViewer/bin/Debug/PerformanceViewer.exe").string();
+            workDir = std::filesystem::absolute("externals/PerformanceViewer").string();
+        } else if (std::filesystem::exists("externals/PerformanceViewer/bin/Release/PerformanceViewer.exe")) {
+            targetExe = std::filesystem::absolute("externals/PerformanceViewer/bin/Release/PerformanceViewer.exe").string();
+            workDir = std::filesystem::absolute("externals/PerformanceViewer").string();
+        } else if (std::filesystem::exists("PerformanceViewer.exe")) {
+            targetExe = std::filesystem::absolute("PerformanceViewer.exe").string();
+            workDir = std::filesystem::current_path().string();
+        }
+        
+        if (!targetExe.empty()) {
+            ShellExecuteA(NULL, "open", targetExe.c_str(), NULL, workDir.c_str(), SW_SHOW);
         } else {
             std::cout << "[PerformanceReporter] PerformanceViewer.exe was not found. Please build the PerformanceViewer project in Visual Studio." << std::endl;
         }

@@ -18,6 +18,7 @@
 
 class DxCommon {
 public:
+	~DxCommon();
 	void Initialize(HWND hwnd, int32_t width, int32_t height);
 	void BeginFrame();
 	void EndFrame();
@@ -30,7 +31,7 @@ public:
 	// --- 基本系 ---
 	ID3D12Device* GetDevice() const { return device_.Get(); }
 	ID3D12CommandQueue* GetCommandQueue() const { return commandQueue_.Get(); }
-	ID3D12CommandAllocator* GetCommandAllocator() const { return commandAllocator_.Get(); }
+	ID3D12CommandAllocator* GetCommandAllocator() const { return commandAllocators_[backBufferIndex_].Get(); }
 	ID3D12GraphicsCommandList* GetCommandList() const { return commandList_.Get(); }
 	IDXGISwapChain4* GetSwapChain() const { return swapChain_.Get(); }
 	// --- Descriptor Heaps ---
@@ -76,7 +77,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue_;
 	// CreateCommandObject();
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
-	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocator_;
+	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> commandAllocators_[2];
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList_;
 	// CreateSwapChain();
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> swapChain_;
@@ -94,12 +95,18 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvDescriptorHeap_;
 	// CreateFence();
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
+	HANDLE fenceEvent_ = nullptr;
+	uint64_t fenceValue_ = 0;
+	uint64_t fenceValues_[2] = { 0, 0 };
+	bool enableVSync_ = true;
 	// CreateDXC();
 	Microsoft::WRL::ComPtr<IDxcUtils> dxcUtils_;
 	Microsoft::WRL::ComPtr<IDxcCompiler3> dxcCompiler_;
 	Microsoft::WRL::ComPtr<IDxcIncludeHandler> includeHandler_;
 	// FPS固定
 	std::chrono::steady_clock::time_point frameStartTime_;
+	std::chrono::steady_clock::time_point targetTime_;
+	bool isFirstFrame_ = true;
 	float deltaTime_ = 0.0f;
 	// viewport
 	D3D12_VIEWPORT viewport_{};

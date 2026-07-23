@@ -69,7 +69,6 @@ void Zuizui::ImGuiEnd() {
 }
 
 void Zuizui::BeginFrame() {
-    dxCommon->FrameStart();
     dxCommon->BeginFrame();
     dxCommon->PreDraw();
 }

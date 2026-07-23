@@ -1,5 +1,6 @@
 #ifdef _USEIMGUI
 #include "Engine/Debug/PerformanceMonitorWindow.h"
+#include "Engine/Zuizui.h"
 #include "externals/imgui/imgui.h"
 #include <windows.h>
 #include <psapi.h>
@@ -31,10 +32,8 @@ void PerformanceMonitorWindow::Draw(bool* show) {
     float maxFpsVal = -1.0f;
     float midpointFpsVal = 0.0f;
 
-    // --- 通常稼働時の更新・描画 ---
-    auto currentFrameTime = std::chrono::steady_clock::now();
-    float realDeltaTime = std::chrono::duration<float>(currentFrameTime - lastFrameTime_).count();
-    lastFrameTime_ = currentFrameTime;
+    // --- エンジンの正確な DeltaTime を使用して FPS を計算 ---
+    float realDeltaTime = Zuizui::GetInstance()->GetDxCommon()->GetDeltaTime();
 
     if (realDeltaTime < 0.0001f) { realDeltaTime = 0.0001f; }
     if (realDeltaTime > 1.0f) { realDeltaTime = 1.0f; }

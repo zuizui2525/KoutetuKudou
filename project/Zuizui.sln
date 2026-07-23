@@ -9,10 +9,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ソリューション項目
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Game", "Zuizui.vcxproj", "{19246E7B-1045-46C4-BFC2-B9BB24B0FC77}"
+	ProjectSection(ProjectDependencies) = postProject
+		{371B9FA9-4C90-4AC6-A123-ACED756D6C77} = {371B9FA9-4C90-4AC6-A123-ACED756D6C77}
+		{A3D3C1F2-984F-4B1C-8DE1-1E4C868FD2F1} = {A3D3C1F2-984F-4B1C-8DE1-1E4C868FD2F1}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DirectXTex", "externals\DirectXTex\DirectXTex_Desktop_2022_Win10.vcxproj", "{371B9FA9-4C90-4AC6-A123-ACED756D6C77}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PerformanceViewer", "Tools\PerformanceViewer\PerformanceViewer.vcxproj", "{A3D3C1F2-984F-4B1C-8DE1-1E4C868FD2F1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PerformanceViewer", "externals\PerformanceViewer\PerformanceViewer.vcxproj", "{A3D3C1F2-984F-4B1C-8DE1-1E4C868FD2F1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -71,6 +71,9 @@ void App::Initialize() {
 }
 
 void App::Run() {
+    // メインループの最先頭でフレームタイマーの測定を開始（計測漏れを防止）
+    engine_->GetDxCommon()->FrameStart();
+
     // 現在のウィンドウの実際のクライアント領域サイズを取得し、サイズ変更を検知
     HWND hwnd = engine_->GetWindow()->GetHWND();
     RECT clientRect{};
