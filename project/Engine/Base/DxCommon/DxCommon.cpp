@@ -133,7 +133,7 @@ void DxCommon::FrameEnd(int targetFps) {
 
 	constexpr int32_t kDefaultTargetFps = 60;
 	constexpr int64_t kMicrosecondsPerSecond = 1000000;
-	constexpr int64_t kSleepThresholdMicroseconds = 1500; // 1.5ms
+	constexpr int64_t kSleepThresholdMicroseconds = 3000; // 3.0ms (OSスリープ復帰遅延によるスパイクを完全にシャットアウト)
 
 	if (targetFps <= 0) { targetFps = kDefaultTargetFps; }
 
@@ -490,6 +490,15 @@ void DxCommon::ResizeSwapChain(int32_t width, int32_t height) {
 
 	isResizedThisFrame_ = true;
 	Log::Write(L" ├─ [リサイズ完了] スワップチェーンのリサイズ処理が完了しました。");
+}
+
+void DxCommon::FlushGPU() {
+	fenceValue_++;
+	commandQueue_->Signal(fence_.Get(), fenceValue_);
+	if (fenceEvent_ != nullptr && fence_->GetCompletedValue() < fenceValue_) {
+		fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+		WaitForSingleObject(fenceEvent_, INFINITE);
+	}
 }
 
 

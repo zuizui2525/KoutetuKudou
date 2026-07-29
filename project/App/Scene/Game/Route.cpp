@@ -2,9 +2,13 @@
 #include "Engine/Input/Input.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
+#include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
+#include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Math/Matrix/Matrix.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
 #include "Engine/Debug/GameViewWindow.h"
+#include "Engine/Zuizui.h"
 #include <cmath>
 #include <algorithm>
 
@@ -26,7 +30,55 @@ void Route::Initialize(Input* input, CameraManager* cameraMgr) {
     goalSphere_->SetScale({ kAreaRadius * 2.0f, kAreaRadius * 2.0f, kAreaRadius * 2.0f });
     goalSphere_->SetColor({ 0.0f, 0.5f, 1.0f, 0.5f }); // 青色（半透明）
 
+    CreateBatchResources();
     Reset();
+}
+
+void Route::CreateBatchResources() {
+    auto device = EngineResource::GetEngine()->GetDevice();
+
+    // 頂点バッファ
+    size_t maxVertices = kMaxSegments * kVerticesPerSegment;
+    batchVertexResource_ = DxUtils::CreateBufferResource(device, sizeof(VertexData) * maxVertices);
+    batchVbView_.BufferLocation = batchVertexResource_->GetGPUVirtualAddress();
+    batchVbView_.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * maxVertices);
+    batchVbView_.StrideInBytes = sizeof(VertexData);
+
+    // インデックスバッファ
+    size_t maxIndices = kMaxSegments * kIndicesPerSegment;
+    batchIndexResource_ = DxUtils::CreateBufferResource(device, sizeof(uint32_t) * maxIndices);
+    batchIbView_.BufferLocation = batchIndexResource_->GetGPUVirtualAddress();
+    batchIbView_.SizeInBytes = static_cast<UINT>(sizeof(uint32_t) * maxIndices);
+    batchIbView_.Format = DXGI_FORMAT_R32_UINT;
+
+    // インデックス初期データの割り当て (セグメントごとに 0,1,2, 2,1,3)
+    uint32_t* idxGPU = nullptr;
+    batchIndexResource_->Map(0, nullptr, reinterpret_cast<void**>(&idxGPU));
+    for (uint32_t i = 0; i < static_cast<uint32_t>(kMaxSegments); ++i) {
+        idxGPU[i * 6 + 0] = i * 4 + 0;
+        idxGPU[i * 6 + 1] = i * 4 + 1;
+        idxGPU[i * 6 + 2] = i * 4 + 2;
+        idxGPU[i * 6 + 3] = i * 4 + 2;
+        idxGPU[i * 6 + 4] = i * 4 + 1;
+        idxGPU[i * 6 + 5] = i * 4 + 3;
+    }
+    batchIndexResource_->Unmap(0, nullptr);
+
+    // WVP定数バッファ
+    batchWvpResource_ = DxUtils::CreateBufferResource(device, sizeof(TransformationMatrix));
+    batchWvpResource_->Map(0, nullptr, reinterpret_cast<void**>(&batchWvpData_));
+    batchWvpData_->WVP = Math::MakeIdentity();
+    batchWvpData_->world = Math::MakeIdentity();
+    batchWvpData_->WorldInverseTranspose = Math::MakeIdentity();
+
+    // マテリアル定数バッファ
+    batchMaterialResource_ = DxUtils::CreateBufferResource(device, sizeof(Material));
+    batchMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&batchMaterialData_));
+    batchMaterialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    batchMaterialData_->enableLighting = 0;
+    batchMaterialData_->uvtransform = Math::MakeIdentity();
+    batchMaterialData_->shininess = 1.0f;
+    batchMaterialData_->environmentCoefficient = 0.0f;
 }
 
 void Route::Reset() {
@@ -76,13 +128,7 @@ void Route::Update(BaseCamera* activeCamera) {
 
                                     rawPoints_.push_back(intersectPos);
 
-                                    auto line = std::make_unique<LineObject>();
-                                    line->Initialize(0);
-                                    line->SetStartPoint(rawPoints_[rawPoints_.size() - 2]);
-                                    line->SetEndPoint(rawPoints_.back());
-                                    line->SetThickness(kLineThickness);
-                                    line->SetColor(kLineColor);
-                                    lineObjects_.push_back(std::move(line));
+                                    lineSegments_.push_back({ rawPoints_[rawPoints_.size() - 2], rawPoints_.back(), kLineThickness, kLineColor });
 
                                     // ゴールエリアに入ったら終了
                                     if (distToGoalSq <= kAreaRadius * kAreaRadius) {
@@ -125,13 +171,7 @@ void Route::Update2D(const Vector3& intersectPos) {
                 // 2点目として現在のドラッグ位置を追加
                 rawPoints_.push_back(intersectPos);
 
-                auto line = std::make_unique<LineObject>();
-                line->Initialize(0);
-                line->SetStartPoint(startPos);
-                line->SetEndPoint(intersectPos);
-                line->SetThickness(kLineThickness);
-                line->SetColor(kLineColor);
-                lineObjects_.push_back(std::move(line));
+                lineSegments_.push_back({ startPos, intersectPos, kLineThickness, kLineColor });
             } else {
                 if (!hasReachedGoal_) {
                     Vector3 diff = Math::Subtract(intersectPos, rawPoints_.back());
@@ -143,13 +183,7 @@ void Route::Update2D(const Vector3& intersectPos) {
 
                         rawPoints_.push_back(intersectPos);
 
-                        auto line = std::make_unique<LineObject>();
-                        line->Initialize(0);
-                        line->SetStartPoint(rawPoints_[rawPoints_.size() - 2]);
-                        line->SetEndPoint(rawPoints_.back());
-                        line->SetThickness(kLineThickness);
-                        line->SetColor(kLineColor);
-                        lineObjects_.push_back(std::move(line));
+                        lineSegments_.push_back({ rawPoints_[rawPoints_.size() - 2], rawPoints_.back(), kLineThickness, kLineColor });
 
                         if (distToGoalSq <= kAreaRadius * kAreaRadius) {
                             hasReachedGoal_ = true;
@@ -163,12 +197,6 @@ void Route::Update2D(const Vector3& intersectPos) {
         isDrawing_ = false;
     }
 
-    for (auto& line : lineObjects_) {
-        line->Update();
-    }
-    for (auto& line : editorGizmoLines_) {
-        line->Update();
-    }
     startSphere_->Update();
     goalSphere_->Update();
 }
@@ -179,11 +207,119 @@ void Route::UpdateSpheres() {
 }
 
 void Route::Draw() {
-    for (auto& line : editorGizmoLines_) {
-        line->Draw();
+    size_t totalSegments = editorGizmoSegments_.size() + lineSegments_.size();
+    if (totalSegments == 0) return;
+    if (totalSegments > kMaxSegments) {
+        totalSegments = kMaxSegments;
     }
-    for (const auto& line : lineObjects_) {
-        line->Draw();
+
+    // カメラ位置の取得
+    Matrix4x4 viewMat = CameraResource::GetCameraManager()->GetViewMatrix3D();
+    Matrix4x4 viewInv = Math::Inverse(viewMat);
+    Vector3 cameraPos = { viewInv.m[3][0], viewInv.m[3][1], viewInv.m[3][2] };
+
+    // WVP行列の更新
+    Matrix4x4 world = Math::MakeIdentity();
+    Matrix4x4 wvp = Math::Multiply(Math::Multiply(world, viewMat), CameraResource::GetCameraManager()->GetProjectionMatrix3D());
+    batchWvpData_->WVP = wvp;
+    batchWvpData_->world = world;
+    batchWvpData_->WorldInverseTranspose = world;
+
+    // 頂点バッファヘ書き込み
+    VertexData* vtx = nullptr;
+    batchVertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vtx));
+
+    struct BatchDrawRange {
+        Vector4 color;
+        uint32_t indexCount;
+        uint32_t startIndex;
+    };
+    std::vector<BatchDrawRange> batches;
+
+    auto processSegment = [&](const LineSegmentData& seg, size_t segIdx) {
+        Vector3 lineVec = Math::Subtract(seg.endPoint, seg.startPoint);
+        Vector3 centerPos = {
+            seg.startPoint.x + lineVec.x * 0.5f,
+            seg.startPoint.y + lineVec.y * 0.5f,
+            seg.startPoint.z + lineVec.z * 0.5f
+        };
+        Vector3 viewVec = Math::Subtract(centerPos, cameraPos);
+
+        Vector3 normal = {
+            lineVec.y * viewVec.z - lineVec.z * viewVec.y,
+            lineVec.z * viewVec.x - lineVec.x * viewVec.z,
+            lineVec.x * viewVec.y - lineVec.y * viewVec.x
+        };
+        float length = std::sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+        if (length > 0.0001f) {
+            normal.x /= length;
+            normal.y /= length;
+            normal.z /= length;
+        }
+        float halfThickness = seg.thickness * 0.5f;
+        Vector3 offset = { normal.x * halfThickness, normal.y * halfThickness, normal.z * halfThickness };
+
+        size_t baseVtx = segIdx * 4;
+        vtx[baseVtx + 0].position = { seg.startPoint.x - offset.x, seg.startPoint.y - offset.y, seg.startPoint.z - offset.z, 1.0f };
+        vtx[baseVtx + 0].normal = { 0.0f, 1.0f, 0.0f };
+        vtx[baseVtx + 0].texcoord = { 0.0f, 1.0f };
+
+        vtx[baseVtx + 1].position = { seg.endPoint.x - offset.x, seg.endPoint.y - offset.y, seg.endPoint.z - offset.z, 1.0f };
+        vtx[baseVtx + 1].normal = { 0.0f, 1.0f, 0.0f };
+        vtx[baseVtx + 1].texcoord = { 0.0f, 0.0f };
+
+        vtx[baseVtx + 2].position = { seg.startPoint.x + offset.x, seg.startPoint.y + offset.y, seg.startPoint.z + offset.z, 1.0f };
+        vtx[baseVtx + 2].normal = { 0.0f, 1.0f, 0.0f };
+        vtx[baseVtx + 2].texcoord = { 1.0f, 1.0f };
+
+        vtx[baseVtx + 3].position = { seg.endPoint.x + offset.x, seg.endPoint.y + offset.y, seg.endPoint.z + offset.z, 1.0f };
+        vtx[baseVtx + 3].normal = { 0.0f, 1.0f, 0.0f };
+        vtx[baseVtx + 3].texcoord = { 1.0f, 0.0f };
+
+        uint32_t startIndex = static_cast<uint32_t>(segIdx * kIndicesPerSegment);
+        if (batches.empty() || batches.back().color.x != seg.color.x || batches.back().color.y != seg.color.y || batches.back().color.z != seg.color.z || batches.back().color.w != seg.color.w) {
+            batches.push_back({ seg.color, kIndicesPerSegment, startIndex });
+        } else {
+            batches.back().indexCount += kIndicesPerSegment;
+        }
+    };
+
+    size_t currentIdx = 0;
+    for (const auto& seg : editorGizmoSegments_) {
+        if (currentIdx >= totalSegments) break;
+        processSegment(seg, currentIdx++);
+    }
+    for (const auto& seg : lineSegments_) {
+        if (currentIdx >= totalSegments) break;
+        processSegment(seg, currentIdx++);
+    }
+
+    batchVertexResource_->Unmap(0, nullptr);
+
+    // CommandList による一括描画発行
+    auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
+    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object3D"));
+    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object3D"));
+    commandList->IASetVertexBuffers(0, 1, &batchVbView_);
+    commandList->IASetIndexBuffer(&batchIbView_);
+    commandList->SetGraphicsRootConstantBufferView(0, batchWvpResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(1, batchMaterialResource_->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(2, CameraResource::GetCameraManager()->GetGPUVirtualAddress());
+    auto lightMgr = LightResource::GetLightManager();
+    if (lightMgr) {
+        commandList->SetGraphicsRootConstantBufferView(3, lightMgr->GetDirectionalLightGroupAddress());
+        commandList->SetGraphicsRootConstantBufferView(4, lightMgr->GetPointLightGroupAddress());
+        commandList->SetGraphicsRootConstantBufferView(5, lightMgr->GetSpotLightGroupAddress());
+    }
+    auto texMgr = TextureResource::GetTextureManager();
+    if (texMgr) {
+        commandList->SetGraphicsRootDescriptorTable(6, texMgr->GetGpuHandle("white"));
+    }
+
+    // 色ごとにマテリアル定数バッファを更新してDrawIndexedInstanced呼び出し
+    for (const auto& batch : batches) {
+        batchMaterialData_->color = batch.color;
+        commandList->DrawIndexedInstanced(batch.indexCount, 1, batch.startIndex, 0, 0);
     }
 }
 
@@ -283,13 +419,7 @@ void Route::AddGizmoRect(const Vector3& center, float width, float depth, const 
     };
 
     for (int i = 0; i < 4; ++i) {
-        auto line = std::make_unique<LineObject>();
-        line->Initialize(0);
-        line->SetStartPoint(corners[i]);
-        line->SetEndPoint(corners[(i + 1) % 4]);
-        line->SetThickness(kGizmoThickness);
-        line->SetColor(color);
-        editorGizmoLines_.push_back(std::move(line));
+        editorGizmoSegments_.push_back({ corners[i], corners[(i + 1) % 4], kGizmoThickness, color });
     }
 }
 
@@ -304,13 +434,7 @@ void Route::AddGizmoCircle(const Vector3& center, float radius, const Vector4& c
     }
 
     for (int i = 0; i < kCircleDivision; ++i) {
-        auto line = std::make_unique<LineObject>();
-        line->Initialize(0);
-        line->SetStartPoint(points[i]);
-        line->SetEndPoint(points[(i + 1) % kCircleDivision]);
-        line->SetThickness(kGizmoThickness);
-        line->SetColor(color);
-        editorGizmoLines_.push_back(std::move(line));
+        editorGizmoSegments_.push_back({ points[i], points[(i + 1) % kCircleDivision], kGizmoThickness, color });
     }
 }
 
@@ -330,7 +454,7 @@ void Route::SetupArea(int areaIndex) {
 }
 
 void Route::SetupAreaGizmos() {
-    editorGizmoLines_.clear();
+    editorGizmoSegments_.clear();
 
     // エリア境界枠（白）: Xはマップ左右外枠、Zは現在のエリア範囲
     float centerZ = (currentAreaStartZ_ + currentAreaGoalZ_) * kHalf;
@@ -346,14 +470,8 @@ void Route::SetupAreaGizmos() {
     static const float kBossSpawnLineZ = 180.0f;
     if (currentAreaIndex_ == 3) {
         // 赤い太めの横線を引く
-        auto line = std::make_unique<LineObject>();
-        line->Initialize(0);
-        line->SetStartPoint({ -kMapBoundaryX, 0.01f, kBossSpawnLineZ });
-        line->SetEndPoint({ kMapBoundaryX, 0.01f, kBossSpawnLineZ });
         static const float kBossLineThickness = 0.5f;
-        line->SetThickness(kBossLineThickness);
-        line->SetColor({ 1.0f, 0.0f, 0.0f, 1.0f }); // 赤色
-        editorGizmoLines_.push_back(std::move(line));
+        editorGizmoSegments_.push_back({ { -kMapBoundaryX, 0.01f, kBossSpawnLineZ }, { kMapBoundaryX, 0.01f, kBossSpawnLineZ }, kBossLineThickness, { 1.0f, 0.0f, 0.0f, 1.0f } });
     }
 }
 
@@ -361,19 +479,14 @@ void Route::ClearForNewArea() {
     rawPoints_.clear();
     pathPoints_.clear();
     accumDistances_.clear();
-    lineObjects_.clear();
+    lineSegments_.clear();
     totalDistance_ = 0.0f;
     isDrawing_ = false;
     hasReachedGoal_ = false;
 }
 
 void Route::UpdateLines() {
-    for (auto& line : lineObjects_) {
-        line->Update();
-    }
-    for (auto& line : editorGizmoLines_) {
-        line->Update();
-    }
+    // 一括描画方式のため毎フレームの個別のLineObject更新は不要
 }
 
 void Route::SyncFrom(const Route* other) {
@@ -387,24 +500,11 @@ void Route::SyncFrom(const Route* other) {
     accumDistances_ = other->accumDistances_;
     totalDistance_ = other->totalDistance_;
 
-    // LineObject 群 (手書きルート線) の同期
-    if (lineObjects_.size() != other->lineObjects_.size()) {
-        lineObjects_.clear();
-        for (size_t i = 0; i < other->lineObjects_.size(); ++i) {
-            auto line = std::make_unique<LineObject>();
-            line->Initialize();
-            line->SetColor(kLineColor);
-            line->SetThickness(kLineThickness);
-            lineObjects_.push_back(std::move(line));
-        }
-    }
-    // 座標の同期
-    for (size_t i = 0; i < lineObjects_.size(); ++i) {
-        lineObjects_[i]->SetStartPoint(other->lineObjects_[i]->GetStartPoint());
-        lineObjects_[i]->SetEndPoint(other->lineObjects_[i]->GetEndPoint());
-    }
+    lineSegments_ = other->lineSegments_;
+    editorGizmoSegments_ = other->editorGizmoSegments_;
 
     // 球体の同期
     startSphere_->SetPosition(other->startSphere_->GetPosition());
     goalSphere_->SetPosition(other->goalSphere_->GetPosition());
 }
+

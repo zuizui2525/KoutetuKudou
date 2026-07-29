@@ -58,8 +58,6 @@ void DrawRoutePhase::Update() {
     drawRouteCamera_->SetDestinationZoom(targetZoom);
 
     // 2. ズームカメラの更新
-    route_->UpdateSpheres(); // 球体の更新
-    route_->UpdateLines();   // ラインの更新
     drawRouteCamera_->Update(input_, route_->GetCurrentAreaStartZ(), route_->GetCurrentAreaGoalZ());
 
     // 3. 右画面（Zoomカメラ 3D空間用）のWVP計算・更新

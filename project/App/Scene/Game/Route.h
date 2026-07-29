@@ -6,6 +6,13 @@
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/3d/Sphere/SphereObject.h"
 
+struct LineSegmentData {
+    Vector3 startPoint;
+    Vector3 endPoint;
+    float thickness = 0.1f;
+    Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+};
+
 class Input;
 class CameraManager;
 class BaseCamera;
@@ -55,6 +62,7 @@ private:
     // 補間計算ヘルパー
     Vector3 CatmullRomInterpolate(const Vector3& p0, const Vector3& p1, const Vector3& p2, const Vector3& p3, float t) const;
     void BuildEqualSpacingTable();
+    void CreateBatchResources();
 
 private:
     // マジックナンバー排除のための定数
@@ -72,6 +80,10 @@ private:
     static inline const Vector4 kLineColor = { 1.0f, 1.0f, 0.0f, 1.0f }; // ルート線の色（目立つ黄色）
     static inline const float kHalf = 0.5f;
 
+    static inline const size_t kMaxSegments = 2000;                  // 一括描画の最大セグメント数
+    static inline const uint32_t kVerticesPerSegment = 4;
+    static inline const uint32_t kIndicesPerSegment = 6;
+
 private:
     Input* input_ = nullptr;
     CameraManager* cameraMgr_ = nullptr;
@@ -81,8 +93,19 @@ private:
     std::vector<float> accumDistances_;              // 各補間点の累積距離テーブル（等速化用）
     float totalDistance_ = 0.0f;                     // ルートの総距離
 
-    std::vector<std::unique_ptr<LineObject>> lineObjects_; // 描画用ラインオブジェクト配列
-    std::vector<std::unique_ptr<LineObject>> editorGizmoLines_;    // マップ枠・スタート/ゴール枠表示ライン
+    std::vector<LineSegmentData> lineSegments_;          // 手書きルートの直線セグメント
+    std::vector<LineSegmentData> editorGizmoSegments_;   // ギズモ枠線用セグメント
+
+    // 一括バッチ描画用GPUリソース
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchVertexResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchIndexResource_;
+    D3D12_VERTEX_BUFFER_VIEW batchVbView_{};
+    D3D12_INDEX_BUFFER_VIEW batchIbView_{};
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchWvpResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchMaterialResource_;
+    TransformationMatrix* batchWvpData_ = nullptr;
+    Material* batchMaterialData_ = nullptr;
 
     std::unique_ptr<SphereObject> startSphere_;
     std::unique_ptr<SphereObject> goalSphere_;

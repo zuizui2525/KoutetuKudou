@@ -27,6 +27,7 @@ public:
 	void FrameStart();
 	void FrameEnd(int targetFps);
 	void ResizeSwapChain(int32_t width, int32_t height);
+	void FlushGPU();
 public:
 	// --- 基本系 ---
 	ID3D12Device* GetDevice() const { return device_.Get(); }
