@@ -12,6 +12,8 @@ void GameOverScene::Initialize() {
     postProcess_ = SceneManager::GetInstance()->GetPostProcess();
     if (postProcess_) {
         postProcess_->SetVignetteActive(true);
+		postProcess_->SetTVNoiseActive(true); // TVノイズを有効化
+		postProcess_->SetTVNoiseStrength(0.1f); // TVノイズの強さを設定
         postProcess_->SetClearColorMode(PostClearColorMode::Red);
     }
 

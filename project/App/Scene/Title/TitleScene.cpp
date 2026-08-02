@@ -9,6 +9,8 @@ void TitleScene::Initialize() {
     postProcess_ = SceneManager::GetInstance()->GetPostProcess();
     if (postProcess_) {
 		postProcess_->SetDepthOutlineActive(true);
+		postProcess_->SetGrayscaleActive(true);
+		postProcess_->SetVignetteActive(true);
     }
 
     // 1. 各マネージャの取得
