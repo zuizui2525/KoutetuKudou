@@ -1,4 +1,5 @@
 #include "Engine/Base/DxCommon/DxCommon.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/Log/Log.h"
 #include "Engine/Base/Utils/StringUtility.h"
@@ -9,6 +10,9 @@
 #include <format>
 
 DxCommon::~DxCommon() {
+	// GPU完了を待ってから遅延解放キューを全解放
+	DeferredReleaseManager::GetInstance()->ReleaseAll();
+
 	if (fenceEvent_) {
 		CloseHandle(fenceEvent_);
 		fenceEvent_ = nullptr;
@@ -28,6 +32,8 @@ void DxCommon::Initialize(HWND hwnd, int32_t width, int32_t height) {
 	CreateDepthStencil(width, height);
 	CreateFence();
 	CreateDXC();
+	// 遅延解放マネージャの初期化
+	DeferredReleaseManager::GetInstance()->Initialize(this);
 	Log::Write(L" ├─ [DirectX12 初期化完了]");
 }
 
@@ -85,6 +91,9 @@ void DxCommon::EndFrame() {
 	fenceValue_++;
 	commandQueue_->Signal(fence_.Get(), fenceValue_);
 	fenceValues_[backBufferIndex] = fenceValue_;
+
+	// 遅延解放キューのフラッシュ（GPU完了済みリソースの安全な解放）
+	DeferredReleaseManager::GetInstance()->Flush();
 
 	// 次のバックバッファインデックスを取得
 	UINT nextBackBufferIndex = swapChain_->GetCurrentBackBufferIndex();

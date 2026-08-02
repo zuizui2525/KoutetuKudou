@@ -1,11 +1,23 @@
 #include "Engine/Graphics/Objects/3d/Cube/CubeObject.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
+
+CubeObject::~CubeObject() {
+    // GPUリソースを遅延解放キューに退避（GPUが使い終わるまで保持される）
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+}
 
 void CubeObject::Initialize(int lightingMode) {
     // 基底クラスの初期化
@@ -91,6 +103,15 @@ void CubeObject::Draw(const std::string& textureKey, const std::string& envMapKe
 void CubeObject::CreateMesh() {
     const uint32_t kVertexCount = 24;
     const uint32_t kIndexCount = 36;
+
+    // 既存のGPUリソースがあれば遅延解放キューに退避してからリソースを新規作成
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
 
     // Vertex Resource 作成
     vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * kVertexCount);

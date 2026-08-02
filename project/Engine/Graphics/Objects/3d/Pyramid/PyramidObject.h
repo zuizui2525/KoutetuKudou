@@ -11,7 +11,7 @@
 class PyramidObject : public Object3D {
 public:
     PyramidObject() = default;
-    ~PyramidObject() = default;
+    ~PyramidObject() override;
 
     void Initialize(int lightingMode = 2);
 

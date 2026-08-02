@@ -215,6 +215,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\\Graphics\\Objects\\Light\\Spot\SpotLight.cpp" />
     <ClCompile Include="Engine\\Graphics\\Objects\\Light\\Point\PointLight.cpp" />
     <ClCompile Include="Engine\Base\BaseResource.cpp" />
+    <ClCompile Include="Engine\Base\DeferredRelease\DeferredReleaseManager.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Model\ModelLoader.cpp" />
     <ClCompile Include="Engine\Graphics\PSO\Shader\ShaderCompiler.cpp" />
     <ClCompile Include="Engine\Math\Collision\Collision.cpp" />
@@ -429,6 +430,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\\Graphics\\Objects\\Light\\Spot\SpotLight.h" />
     <ClInclude Include="Engine\\Graphics\\Objects\\Light\\Point\PointLight.h" />
     <ClInclude Include="Engine\Base\BaseResource.h" />
+    <ClInclude Include="Engine\Base\DeferredRelease\DeferredReleaseManager.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Model\ModelLoader.h" />
     <ClInclude Include="Engine\Graphics\PSO\Shader\ShaderCompiler.h" />
     <ClInclude Include="Engine\Math\Collision\Collision.h" />

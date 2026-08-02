@@ -1,9 +1,21 @@
 #include "Engine/Graphics/Objects/3d/Object3D.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
 #include "Engine/Zuizui.h"
 #include <stdexcept>
 #include <typeinfo>
+
+Object3D::~Object3D() {
+    // GPUリソースを遅延解放キューに退避（GPUが使い終わるまで保持される）
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (wvpResource_) {
+        deferredMgr->Enqueue(std::move(wvpResource_));
+    }
+    if (materialResource_) {
+        deferredMgr->Enqueue(std::move(materialResource_));
+    }
+}
 
 namespace {
     const std::string kClassPrefix = "class ";

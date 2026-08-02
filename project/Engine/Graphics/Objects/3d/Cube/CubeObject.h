@@ -11,7 +11,7 @@
 class CubeObject : public Object3D {
 public:
     CubeObject() = default;
-    ~CubeObject() = default;
+    ~CubeObject() override;
 
     void Initialize(int lightingMode = 2);
 

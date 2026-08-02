@@ -45,6 +45,7 @@ public:
 	ID3D12Resource* GetDepthStencilResource() const { return depthStencilResource_.Get(); }
 	// --- その他 ---
 	ID3D12Fence* GetFence() const { return fence_.Get(); }
+	uint64_t GetFenceValue() const { return fenceValue_; }
 	IDxcUtils* GetDxcUtils() const { return dxcUtils_.Get(); }
 	IDxcCompiler3* GetDxcCompiler() const { return dxcCompiler_.Get(); }
 	IDxcIncludeHandler* GetIncludeHandler() const { return includeHandler_.Get(); }

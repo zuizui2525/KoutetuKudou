@@ -1,11 +1,23 @@
 #include "Engine/Graphics/Objects/3d/Pyramid/PyramidObject.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
+
+PyramidObject::~PyramidObject() {
+    // GPUリソースを遅延解放キューに退避（GPUが使い終わるまで保持される）
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+}
 
 void PyramidObject::Initialize(int lightingMode) {
     Object3D::Initialize(lightingMode);
@@ -74,6 +86,15 @@ void PyramidObject::Draw(const std::string& textureKey, const std::string& envMa
 void PyramidObject::CreateMesh() {
     uint32_t kVertexCount = 16; // 4 faces * 3 vertices + 4 vertices (bottom)
     uint32_t kIndexCount = 18;  // 4 faces * 3 indices + 2 triangles * 3 indices
+
+    // 既存のGPUリソースがあれば遅延解放キューに退避してからリソースを新規作成
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
 
     vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * kVertexCount);
     vbView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
