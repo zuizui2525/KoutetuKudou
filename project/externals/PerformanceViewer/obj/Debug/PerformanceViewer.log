@@ -1,4 +1,8 @@
-﻿  LINK : 前回のインクリメンタル リンクで C:\Users\casa0\OneDrive\デスクトップ\ZuizuiEngine\project\externals\PerformanceViewer\bin\Debug\PerformanceViewer.exe が見つからなかったか、ビルドされませんでした。フル リンクを行います。
+﻿  main.cpp
+C:\Users\casa0\OneDrive\デスクトップ\ZuizuiEngine\project\externals\PerformanceViewer\main.cpp(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。
+C:\Users\casa0\OneDrive\デスクトップ\ZuizuiEngine\project\Engine\Debug\PerformanceReporter\SharedPerfData.h(1,1): warning C4819: ファイルは、現在のコード ページ (932) で表示できない文字を含んでいます。データの損失を防ぐために、ファイルを Unicode 形式で保存してください。
+  (ソース ファイル 'main.cpp' をコンパイルしています)
+  
   PerformanceViewer.vcxproj -> C:\Users\casa0\OneDrive\デスクトップ\ZuizuiEngine\project\externals\PerformanceViewer\bin\Debug\PerformanceViewer.exe
   Copying PerformanceViewer.exe to project folder...
           1 個のファイルを移動しました。

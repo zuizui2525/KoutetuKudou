@@ -1,7 +1,10 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include <wrl.h>
+#include <d3d12.h>
 #include "Engine/Math/MathStructs.h"
+#include "Engine/Graphics/RenderStructs.h"
 
 class SpriteObject;
 class Stage;
@@ -38,7 +41,7 @@ private:
     static inline const Vector2 kIndicatorIconSize = { 24.0f, 24.0f }; // 自機インジケータアイコンのサイズ
     static inline const Vector2 kPillarIconSize = { 16.0f, 16.0f };     // 障害物柱アイコンのサイズ
     static inline const float kFrameThickness = 2.0f;                   // 枠線の太さ
-    static inline const float kRouteLineThickness = 1.2f;               // 手書きルート軌跡線の太さ
+    static inline const float kRouteLineThickness = 2.0f;               // 手書きルート軌跡線の太さ
 
 private:
     // 2Dスプライトリソース
@@ -48,11 +51,26 @@ private:
     std::unique_ptr<SpriteObject> indicatorIcon_;
     std::unique_ptr<SpriteObject> bossArea2D_;                        // 【新規】ボス戦エリア用の赤半透明スプライト
     std::vector<std::unique_ptr<SpriteObject>> pillarIcons_;
-    std::vector<std::unique_ptr<SpriteObject>> routeLineSprites_;
     std::unique_ptr<SpriteObject> zoomFrame2D_[4];                    // ズームカメラ視野枠
     std::unique_ptr<SpriteObject> minimapBorderFrame2D_[4];          // ミニマップ外枠
 
     // 一時的な計算情報
     CameraManager* cameraMgr_ = nullptr;
     size_t activeMiniMapLineCount_ = 0;
+
+private:
+    // 一括バッチ描画用GPUリソース
+    static inline const size_t kMaxMiniMapSegments = 2000;              // 一括描画の最大セグメント数
+    static inline const uint32_t kVerticesPerSegment = 4;
+    static inline const uint32_t kIndicesPerSegment = 6;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchVertexResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchIndexResource_;
+    D3D12_VERTEX_BUFFER_VIEW batchVbView_{};
+    D3D12_INDEX_BUFFER_VIEW batchIbView_{};
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchWvpResource_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> batchMaterialResource_;
+    TransformationMatrix* batchWvpData_ = nullptr;
+    Material* batchMaterialData_ = nullptr;
 };

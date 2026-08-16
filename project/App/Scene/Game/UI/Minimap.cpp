@@ -9,6 +9,8 @@
 #include "Engine/Zuizui.h"
 #include "App/Scene/Game/Stage/Stage.h"
 #include "App/Scene/Game/Route.h"
+#include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <cmath>
 #include <algorithm>
 
@@ -70,6 +72,49 @@ void Minimap::Initialize(Stage* stage) {
         minimapBorderFrame2D_[i]->Initialize(0);
         minimapBorderFrame2D_[i]->GetMaterialData()->color = { 0.5f, 0.5f, 0.5f, 1.0f }; // グレー
     }
+
+    // 一括描画バッチ用GPUリソースの生成
+    auto device = EngineResource::GetEngine()->GetDevice();
+
+    // 頂点バッファ
+    size_t maxVertices = kMaxMiniMapSegments * kVerticesPerSegment;
+    batchVertexResource_ = DxUtils::CreateBufferResource(device, sizeof(VertexData) * maxVertices);
+    batchVbView_.BufferLocation = batchVertexResource_->GetGPUVirtualAddress();
+    batchVbView_.SizeInBytes = static_cast<UINT>(sizeof(VertexData) * maxVertices);
+    batchVbView_.StrideInBytes = sizeof(VertexData);
+
+    // インデックスバッファ
+    size_t maxIndices = kMaxMiniMapSegments * kIndicesPerSegment;
+    batchIndexResource_ = DxUtils::CreateBufferResource(device, sizeof(uint32_t) * maxIndices);
+    batchIbView_.BufferLocation = batchIndexResource_->GetGPUVirtualAddress();
+    batchIbView_.SizeInBytes = static_cast<UINT>(sizeof(uint32_t) * maxIndices);
+    batchIbView_.Format = DXGI_FORMAT_R32_UINT;
+
+    // インデックス初期データの割り当て
+    uint32_t* idxGPU = nullptr;
+    batchIndexResource_->Map(0, nullptr, reinterpret_cast<void**>(&idxGPU));
+    for (uint32_t i = 0; i < static_cast<uint32_t>(kMaxMiniMapSegments); ++i) {
+        idxGPU[i * 6 + 0] = i * 4 + 0;
+        idxGPU[i * 6 + 1] = i * 4 + 1;
+        idxGPU[i * 6 + 2] = i * 4 + 2;
+        idxGPU[i * 6 + 3] = i * 4 + 2;
+        idxGPU[i * 6 + 4] = i * 4 + 1;
+        idxGPU[i * 6 + 5] = i * 4 + 3;
+    }
+    batchIndexResource_->Unmap(0, nullptr);
+
+    // WVP定数バッファ
+    batchWvpResource_ = DxUtils::CreateBufferResource(device, sizeof(TransformationMatrix));
+    batchWvpResource_->Map(0, nullptr, reinterpret_cast<void**>(&batchWvpData_));
+    batchWvpData_->WVP = Math::MakeIdentity();
+    batchWvpData_->world = Math::MakeIdentity();
+
+    // マテリアル定数バッファ
+    batchMaterialResource_ = DxUtils::CreateBufferResource(device, sizeof(Material));
+    batchMaterialResource_->Map(0, nullptr, reinterpret_cast<void**>(&batchMaterialData_));
+    batchMaterialData_->color = { 0.0f, 0.0f, 0.0f, 1.0f }; // ルート軌跡線は黒
+    batchMaterialData_->enableLighting = 0;
+    batchMaterialData_->uvtransform = Math::MakeIdentity();
 }
 
 /**
@@ -252,43 +297,67 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
             neededLines = densePoints.size() - 1;
         }
 
-        while (routeLineSprites_.size() < neededLines) {
-            auto lineSprite = std::make_unique<SpriteObject>();
-            lineSprite->Initialize(0);
-            routeLineSprites_.push_back(std::move(lineSprite));
+        if (neededLines > kMaxMiniMapSegments) {
+            neededLines = kMaxMiniMapSegments;
         }
 
         activeMiniMapLineCount_ = neededLines;
 
-        for (size_t i = 0; i < neededLines; ++i) {
-            Vector3 pt0 = densePoints[i];
-            Vector3 pt1 = densePoints[i + 1];
+        if (neededLines > 0) {
+            VertexData* vtx = nullptr;
+            batchVertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vtx));
 
-            float tX0 = (pt0.x - (-15.0f)) / 30.0f;
-            float px0 = offsetX + marginX + tX0 * (mapW - 2.0f * marginX);
-            float tZ0 = (pt0.z - startZ) / (goalZ - startZ);
-            float py0 = (offsetY + mapH - marginY) - tZ0 * (mapH - 2.0f * marginY);
+            float halfThickness = kRouteLineThickness * 0.5f;
 
-            float tX1 = (pt1.x - (-15.0f)) / 30.0f;
-            float px1 = offsetX + marginX + tX1 * (mapW - 2.0f * marginX);
-            float tZ1 = (pt1.z - startZ) / (goalZ - startZ);
-            float py1 = (offsetY + mapH - marginY) - tZ1 * (mapH - 2.0f * marginY);
+            for (size_t i = 0; i < neededLines; ++i) {
+                Vector3 pt0 = densePoints[i];
+                Vector3 pt1 = densePoints[i + 1];
 
-            float dx = px1 - px0;
-            float dy = py1 - py0;
-            float dist = std::sqrt(dx * dx + dy * dy);
-            if (dist < 0.001f) {
-                dist = 0.001f;
+                float tX0 = (pt0.x - (-15.0f)) / 30.0f;
+                float px0 = offsetX + marginX + tX0 * (mapW - 2.0f * marginX);
+                float tZ0 = (pt0.z - startZ) / (goalZ - startZ);
+                float py0 = (offsetY + mapH - marginY) - tZ0 * (mapH - 2.0f * marginY);
+
+                float tX1 = (pt1.x - (-15.0f)) / 30.0f;
+                float px1 = offsetX + marginX + tX1 * (mapW - 2.0f * marginX);
+                float tZ1 = (pt1.z - startZ) / (goalZ - startZ);
+                float py1 = (offsetY + mapH - marginY) - tZ1 * (mapH - 2.0f * marginY);
+
+                float dx = px1 - px0;
+                float dy = py1 - py0;
+                float dist = std::sqrt(dx * dx + dy * dy);
+                if (dist < 0.001f) {
+                    dist = 0.001f;
+                }
+
+                float angle = std::atan2(dy, dx);
+                float cos_t = std::cos(angle);
+                float sin_t = std::sin(angle);
+
+                size_t baseVtx = i * 4;
+
+                // 頂点0 (左下)
+                vtx[baseVtx + 0].position = { px0 - halfThickness * sin_t, py0 + halfThickness * cos_t, 0.0f, 1.0f };
+                vtx[baseVtx + 0].normal = { 0.0f, 0.0f, -1.0f };
+                vtx[baseVtx + 0].texcoord = { 0.0f, 1.0f };
+
+                // 頂点1 (左上)
+                vtx[baseVtx + 1].position = { px0 + halfThickness * sin_t, py0 - halfThickness * cos_t, 0.0f, 1.0f };
+                vtx[baseVtx + 1].normal = { 0.0f, 0.0f, -1.0f };
+                vtx[baseVtx + 1].texcoord = { 0.0f, 0.0f };
+
+                // 頂点2 (右下)
+                vtx[baseVtx + 2].position = { px0 + dist * cos_t - halfThickness * sin_t, py0 + dist * sin_t + halfThickness * cos_t, 0.0f, 1.0f };
+                vtx[baseVtx + 2].normal = { 0.0f, 0.0f, -1.0f };
+                vtx[baseVtx + 2].texcoord = { 1.0f, 1.0f };
+
+                // 頂点3 (右上)
+                vtx[baseVtx + 3].position = { px0 + dist * cos_t + halfThickness * sin_t, py0 + dist * sin_t - halfThickness * cos_t, 0.0f, 1.0f };
+                vtx[baseVtx + 3].normal = { 0.0f, 0.0f, -1.0f };
+                vtx[baseVtx + 3].texcoord = { 1.0f, 0.0f };
             }
 
-            float angle = std::atan2(dy, dx);
-
-            auto& lineSprite = routeLineSprites_[i];
-            lineSprite->GetMaterialData()->color = { 0.0f, 0.0f, 0.0f, 1.0f };
-            lineSprite->SetSize(dist, kRouteLineThickness);
-            lineSprite->GetTransform().rotate.z = angle;
-            lineSprite->SetPosition({ px0, py0 });
-            lineSprite->Update();
+            batchVertexResource_->Unmap(0, nullptr);
         }
     }
 
@@ -378,8 +447,35 @@ void Minimap::Draw(int currentAreaIndex) {
     startIcon_->Draw("circle_solid");
     goalIcon_->Draw("circle_solid");
 
-    for (size_t i = 0; i < activeMiniMapLineCount_; ++i) {
-        routeLineSprites_[i]->Draw("white");
+    if (activeMiniMapLineCount_ > 0) {
+        auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
+
+        float clientW = static_cast<float>(WindowApp::kClientWidth);
+        float clientH = static_cast<float>(WindowApp::kClientHeight);
+        float vpWidth = clientW * kMinimapWidthRatio;
+        float vpHeight = clientH;
+
+        // WVP行列の更新 (単位行列 * View2D * 正しいProj2D)
+        Matrix4x4 viewMat = cameraMgr_->GetViewMatrix2D();
+        Matrix4x4 projMat = Math::MakeOrthographicMatrix(0.0f, 0.0f, vpWidth, vpHeight, 0.0f, 100.0f);
+        Matrix4x4 wvp = Math::Multiply(Math::Multiply(Math::MakeIdentity(), viewMat), projMat);
+        batchWvpData_->WVP = wvp;
+        batchWvpData_->world = Math::MakeIdentity();
+
+        commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object2D"));
+        commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object2D"));
+
+        commandList->IASetVertexBuffers(0, 1, &batchVbView_);
+        commandList->IASetIndexBuffer(&batchIbView_);
+        commandList->SetGraphicsRootConstantBufferView(0, batchWvpResource_->GetGPUVirtualAddress());
+        commandList->SetGraphicsRootConstantBufferView(1, batchMaterialResource_->GetGPUVirtualAddress());
+
+        auto texMgr = TextureResource::GetTextureManager();
+        if (texMgr) {
+            commandList->SetGraphicsRootDescriptorTable(2, texMgr->GetGpuHandle("white"));
+        }
+
+        commandList->DrawIndexedInstanced(static_cast<UINT>(activeMiniMapLineCount_ * kIndicesPerSegment), 1, 0, 0, 0);
     }
 
     indicatorIcon_->Draw("circle_solid");
