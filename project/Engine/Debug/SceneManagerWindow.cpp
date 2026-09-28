@@ -4,10 +4,10 @@
 #include "externals/imgui/imgui.h"
 #include <string>
 
-void SceneManagerWindow::Draw() {
+void SceneManagerWindow::Draw(bool* show) {
     // 全シーン共通のデバッグメニュー
-    if (ImGui::Begin("Scene Manager")) {
-        ImGui::Text("Current Scene: %s", SceneManager::GetInstance()->GetCurrentSceneName().c_str());
+    if (ImGui::Begin("シーン管理###Scene Manager", show)) {
+        ImGui::Text("現在のシーン: %s", SceneManager::GetInstance()->GetCurrentSceneName().c_str());
 
         // マジックストリング回避のためのローカル定数定義
         static const std::string kDebugSceneName = "Debug";
@@ -16,19 +16,19 @@ void SceneManagerWindow::Draw() {
         static const std::string kClearSceneName = "Clear";
         static const std::string kGameOverSceneName = "GameOver";
 
-        if (ImGui::Button("Reset DebugScene")) {
+        if (ImGui::Button("デバッグシーンにリセット")) {
             SceneManager::GetInstance()->ChangeScene(kDebugSceneName);
         }
-        if (ImGui::Button("Reset TitleScene")) {
+        if (ImGui::Button("タイトルシーンにリセット")) {
             SceneManager::GetInstance()->ChangeScene(kTitleSceneName);
         }
-        if (ImGui::Button("Reset GameScene")) {
+        if (ImGui::Button("ゲームシーンにリセット")) {
             SceneManager::GetInstance()->ChangeScene(kGameSceneName);
         }
-        if (ImGui::Button("Reset ClearScene")) {
+        if (ImGui::Button("クリアシーンにリセット")) {
             SceneManager::GetInstance()->ChangeScene(kClearSceneName);
         }
-        if (ImGui::Button("Reset GameOverScene")) {
+        if (ImGui::Button("ゲームオーバーシーンにリセット")) {
             SceneManager::GetInstance()->ChangeScene(kGameOverSceneName);
         }
     }

@@ -2,6 +2,7 @@
 #include "ImguiManager.h"
 #include <cassert>
 #include <cstdint>
+#include <filesystem>
 
 namespace {
     // ImGui用のSRVスペース管理（インデックス100から20個確保：競合防止）
@@ -78,20 +79,29 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // --- 日本語フォント（Windows標準）のフォールバックロード ---
-    // マジックナンバーを排除したフォントサイズ定数定義
-    static constexpr float kFontSize = 14.5f; 
+    // --- 日本語フォントの読み込み ---
+    // マジックナンバーを排除したフォントサイズ定数定義（Mediumフォントに最適な美麗サイズ）
+    static constexpr float kFontSize = 15.5f; 
     ImFont* font = nullptr;
     const char* fontPaths[] = {
-        "C:\\Windows\\Fonts\\YuGothM.ttc", // 1. 游ゴシック（極めて美麗なモダンゴシック）
-        "C:\\Windows\\Fonts\\meiryo.ttc",  // 2. メイリオ（視認性に優れた定番フォント）
-        "C:\\Windows\\Fonts\\msgothic.ttc" // 3. ＭＳ ゴシック（100%確実に存在するセーフティフォールバック）
+        "resources/fonts/MPLUS1p-Medium.ttf",   // 0. M PLUS 1p Medium（最優先・高視認性）
+        "resources/fonts/NotoSansJP-Medium.ttf",// 1. Noto Sans JP Medium
+        "resources/fonts/MPLUS1p-Black.ttf",    // 2. 既存のフォント（フォールバック）
+        "C:\\Windows\\Fonts\\YuGothM.ttc",      // 3. 游ゴシック（フォールバック）
+        "C:\\Windows\\Fonts\\meiryo.ttc",       // 4. メイリオ（フォールバック）
+        "C:\\Windows\\Fonts\\msgothic.ttc"      // 5. ＭＳ ゴシック（セーフティフォールバック）
     };
 
+    ImFontConfig fontConfig;
+    fontConfig.OversampleH = 3;
+    fontConfig.OversampleV = 2;
+
     for (const char* path : fontPaths) {
-        font = io.Fonts->AddFontFromFileTTF(path, kFontSize, nullptr, io.Fonts->GetGlyphRangesJapanese());
-        if (font) {
-            break; // 正常に読み込めたらループを抜ける
+        if (std::filesystem::exists(path)) {
+            font = io.Fonts->AddFontFromFileTTF(path, kFontSize, &fontConfig, io.Fonts->GetGlyphRangesJapanese());
+            if (font) {
+                break; // 正常に読み込めたらループを抜ける
+            }
         }
     }
 
@@ -110,7 +120,7 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
 
     ImGui_ImplDX12_Init(&initInfo);
 
-    // --- スタイル（Unity/Unreal風モダンダーク）の適用 ---
+    // --- スタイル（視認性を向上させたハイコントラスト・モダンダーク）の適用 ---
     ImGuiStyle& style = ImGui::GetStyle();
 
     // 丸みの設定（マジックナンバー排除のためのローカル定数定義）
@@ -141,51 +151,52 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
     style.FrameBorderSize = kBorderSize;
     style.PopupBorderSize = kBorderSize;
 
-    // カラー（配色の設定：チャコールグレーと落ち着いたハイライト）
-    style.Colors[ImGuiCol_Text] = ImVec4(0.85f, 0.85f, 0.85f, 1.00f);
-    style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-    style.Colors[ImGuiCol_Border] = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
+    // カラー（配色の設定：文字を際立たせるピュアホワイトと漆黒ディープダーク）
+    style.Colors[ImGuiCol_Text] = ImVec4(0.98f, 0.98f, 0.99f, 1.00f);        // 最も鮮明なピュアホワイト
+    style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.55f, 0.55f, 0.60f, 1.00f);
+    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.07f, 1.00f);    // 深い漆黒チャコール（コントラスト極大化）
+    style.Colors[ImGuiCol_ChildBg] = ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
+    style.Colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.09f, 1.00f);
+    style.Colors[ImGuiCol_Border] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);      // 繊細で上品な枠線
     style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     
-    // フレーム
-    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.30f, 0.30f, 0.30f, 1.00f);
+    // フレーム（入力フィールド、スライダーなど：暗い背景に対して上品に浮き上がる明度）
+    style.Colors[ImGuiCol_FrameBg] = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.18f, 0.22f, 1.00f);
+    style.Colors[ImGuiCol_FrameBgActive] = ImVec4(0.22f, 0.22f, 0.26f, 1.00f);
 
     // タイトルバー
-    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
+    style.Colors[ImGuiCol_TitleBg] = ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgActive] = ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
+    style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
 
     // メニューバー
-    style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
+    style.Colors[ImGuiCol_MenuBarBg] = ImVec4(0.05f, 0.05f, 0.06f, 1.00f);
 
     // スクロールバー
-    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.22f, 0.22f, 0.26f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.30f, 0.30f, 0.36f, 1.00f);
+    style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.38f, 0.38f, 0.44f, 1.00f);
 
     // ボタン
-    style.Colors[ImGuiCol_Button] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
-    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+    style.Colors[ImGuiCol_Button] = ImVec4(0.14f, 0.15f, 0.18f, 1.00f);
+    style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.24f, 0.30f, 1.00f);
+    style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.28f, 0.30f, 0.38f, 1.00f);
 
-    // ヘッダー
-    style.Colors[ImGuiCol_Header] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
-    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
+    // ヘッダー（選択項目、ツリーノードなど）
+    style.Colors[ImGuiCol_Header] = ImVec4(0.14f, 0.16f, 0.20f, 1.00f);
+    style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.24f, 0.30f, 1.00f);
+    style.Colors[ImGuiCol_HeaderActive] = ImVec4(0.26f, 0.30f, 0.38f, 1.00f);
 
     // ドッキング / タブ
-    style.Colors[ImGuiCol_DockingPreview] = ImVec4(0.30f, 0.50f, 0.80f, 0.50f);
-    style.Colors[ImGuiCol_Tab] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-    style.Colors[ImGuiCol_TabActive] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
+    style.Colors[ImGuiCol_DockingPreview] = ImVec4(0.26f, 0.59f, 0.98f, 0.50f);
+    style.Colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
+    style.Colors[ImGuiCol_Tab] = ImVec4(0.07f, 0.07f, 0.09f, 1.00f);
+    style.Colors[ImGuiCol_TabHovered] = ImVec4(0.18f, 0.20f, 0.26f, 1.00f);
+    style.Colors[ImGuiCol_TabActive] = ImVec4(0.14f, 0.16f, 0.22f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocused] = ImVec4(0.05f, 0.05f, 0.06f, 1.00f);
+    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.09f, 0.09f, 0.12f, 1.00f);
 
     initialized_ = true;
 }

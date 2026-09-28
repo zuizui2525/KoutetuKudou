@@ -30,6 +30,10 @@ public:
     bool MousePress(int button) const;
     bool MouseRelease(int button) const;
 
+    float GetMouseDeltaX() const { return static_cast<float>(mouseState_.lX); }
+    float GetMouseDeltaY() const { return static_cast<float>(mouseState_.lY); }
+    float GetMouseWheel() const { return static_cast<float>(mouseState_.lZ); }
+
 private:
     Microsoft::WRL::ComPtr<IDirectInput8> directInput_;
     Microsoft::WRL::ComPtr<IDirectInputDevice8> keyboard_;

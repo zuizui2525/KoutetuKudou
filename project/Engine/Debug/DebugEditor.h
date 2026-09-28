@@ -2,7 +2,6 @@
 #pragma once
 #include <memory>
 #include <windows.h>
-#include "Engine/Debug/PopAnimation.h"
 
 struct ID3D12GraphicsCommandList;
 
@@ -23,8 +22,8 @@ public:
 
     // GameViewWindow が表示されているかどうかを取得（App.cppのバッチング制御用）
     bool IsGameViewVisible() const { return isGameViewVisible_; }
-    bool IsReplayViewVisible() const { return isReplayViewVisible_; }
-    bool IsReplayEnabled() const { return enableReplay_; }
+    bool IsPaused() const { return isPaused_; }
+    void SetPause(bool paused) { isPaused_ = paused; }
 
 private:
     void DrawMenuBar(HWND hwnd);
@@ -37,17 +36,15 @@ private:
     // 各ウィンドウの表示・非表示フラグ
     bool showGameView_ = true;
     bool showPerfMonitor_ = true;
-    bool showReplayView_ = true;
+    bool showHierarchy_ = true;
+    bool showInspector_ = true;
+    bool showSceneManager_ = true;
     bool isGameViewVisible_ = false;
-    bool isReplayViewVisible_ = false;
-    bool enableReplay_ = true;
 
     // ウィンドウ状態管理のメンバ変数
     bool isFullscreen_ = false;
     WINDOWPLACEMENT wpPrev_ = { sizeof(WINDOWPLACEMENT) };
     AspectType currentAspect_ = AspectType::Aspect16_9_Low;
-
-    PopAnimation replayPopAnim_;
-    bool wasReplayPlaying_ = false;
+    bool isPaused_ = false;
 };
 #endif

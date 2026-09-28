@@ -20,6 +20,11 @@ HRESULT PSOManager::Initialize(
     // 登録処理
     RegisterPreset("Object3D", object3DPreset);
 
+    // Object3D_Alpha用プリセット作成
+    PSOPreset object3DAlphaPreset = PSOPreset::CreateObject3DAlphaPreset(
+        device_, dxcUtils, dxcCompiler, includeHandler);
+    RegisterPreset("Object3D_Alpha", object3DAlphaPreset);
+
     // Particle用プリセット作成
     PSOPreset particlePreset = PSOPreset::CreateParticlePreset(
         device_, dxcUtils, dxcCompiler, includeHandler);

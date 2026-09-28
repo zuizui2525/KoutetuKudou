@@ -299,70 +299,74 @@ void PostProcess::SetClearColorMode(PostClearColorMode mode) {
 
 void PostProcess::ImGuiControl() {
 #ifdef _USEIMGUI
-    ImGui::Begin("PostEffect");
+    if (!showWindow_) {
+        return;
+    }
+
+    if (ImGui::Begin("ポストエフェクト###PostEffect", &showWindow_)) {
     
-    if (ImGui::TreeNode("Select")) {
+    if (ImGui::TreeNode("エフェクト選択###Select")) {
         bool boxActive = IsBoxFilterActive();
-        if (ImGui::Checkbox("BoxFilter", &boxActive)) {
+        if (ImGui::Checkbox("ボックスフィルター (BoxFilter)", &boxActive)) {
             SetBoxFilterActive(boxActive);
         }
         
         bool grayActive = IsGrayscaleActive();
-        if (ImGui::Checkbox("Grayscale", &grayActive)) {
+        if (ImGui::Checkbox("グレースケール (Grayscale)", &grayActive)) {
             SetGrayscaleActive(grayActive);
         }
         
         bool sepiaActive = IsSepiaActive();
-        if (ImGui::Checkbox("Sepia", &sepiaActive)) {
+        if (ImGui::Checkbox("セピア (Sepia)", &sepiaActive)) {
             SetSepiaActive(sepiaActive);
         }
         
         bool vignetteActive = IsVignetteActive();
-        if (ImGui::Checkbox("Vignette", &vignetteActive)) {
+        if (ImGui::Checkbox("ビネット (Vignette)", &vignetteActive)) {
             SetVignetteActive(vignetteActive);
         }
         
         bool gaussActive = IsGaussianBlurActive();
-        if (ImGui::Checkbox("GaussianFilter", &gaussActive)) {
+        if (ImGui::Checkbox("ガウスぼかし (GaussianFilter)", &gaussActive)) {
             SetGaussianBlurActive(gaussActive);
         }
 
         bool underwaterActive = IsUnderwaterActive();
-        if (ImGui::Checkbox("Underwater", &underwaterActive)) {
+        if (ImGui::Checkbox("水中エフェクト (Underwater)", &underwaterActive)) {
             SetUnderwaterActive(underwaterActive);
         }
         
         bool depthOutlineActive = IsDepthOutlineActive();
-        if (ImGui::Checkbox("DepthOutline", &depthOutlineActive)) {
+        if (ImGui::Checkbox("深度輪郭線 (DepthOutline)", &depthOutlineActive)) {
             SetDepthOutlineActive(depthOutlineActive);
         }
 
         bool radialBlurActive = IsRadialBlurActive();
-        if (ImGui::Checkbox("RadialBlur", &radialBlurActive)) {
+        if (ImGui::Checkbox("放射ブラー (RadialBlur)", &radialBlurActive)) {
             SetRadialBlurActive(radialBlurActive);
         }
 
         bool dissolveActive = IsDissolveActive();
-        if (ImGui::Checkbox("Dissolve", &dissolveActive)) {
+        if (ImGui::Checkbox("ディゾルブ (Dissolve)", &dissolveActive)) {
             SetDissolveActive(dissolveActive);
         }
 
         bool tvNoiseActive = IsTVNoiseActive();
-        if (ImGui::Checkbox("TV Noise", &tvNoiseActive)) {
+        if (ImGui::Checkbox("TVノイズ (TV Noise)", &tvNoiseActive)) {
             SetTVNoiseActive(tvNoiseActive);
         }
         
         ImGui::Separator();
-        ImGui::Text("ClearColor Mode:");
+        ImGui::Text("背景クリアカラー:");
         PostClearColorMode clearMode = GetClearColorMode();
         int colorVal = static_cast<int>(clearMode);
-        if (ImGui::RadioButton("Blue (Default)", &colorVal, 0)) {
+        if (ImGui::RadioButton("青色 (デフォルト)", &colorVal, 0)) {
             SetClearColorMode(PostClearColorMode::Blue);
         }
-        if (ImGui::RadioButton("Red (Debug)", &colorVal, 1)) {
+        if (ImGui::RadioButton("赤色 (デバッグ)", &colorVal, 1)) {
             SetClearColorMode(PostClearColorMode::Red);
         }
-        if (ImGui::RadioButton("Black (Debug)", &colorVal, 2)) {
+        if (ImGui::RadioButton("黒色 (デバッグ)", &colorVal, 2)) {
             SetClearColorMode(PostClearColorMode::Black);
         }
 
@@ -399,6 +403,7 @@ void PostProcess::ImGuiControl() {
         if (pass->IsActive()) {
             pass->ImGuiControl();
         }
+    }
     }
     
     ImGui::End();

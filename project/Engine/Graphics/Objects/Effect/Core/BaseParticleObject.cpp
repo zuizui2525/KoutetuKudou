@@ -124,6 +124,9 @@ void BaseParticleObject::Update() {
         billBoardMatrix.m[3][2] = 0.0f;
     }
 
+    // ビュープロジェクション行列をループ前に事前計算してオーバーヘッドを完全に排除
+    Matrix4x4 viewProj = Math::Multiply(cameraMgr->GetViewMatrix3D(), cameraMgr->GetProjectionMatrix3D());
+
     for (size_t i = 0; i < particles_.size(); ) {
         auto& p = particles_[i];
 
@@ -211,7 +214,7 @@ void BaseParticleObject::Update() {
 
         particleWorldMatrix = Math::Multiply(particleWorldMatrix, managerWorldMatrix);
 
-        Matrix4x4 worldViewProjection = Math::Multiply(particleWorldMatrix, Math::Multiply(cameraMgr->GetViewMatrix3D(), cameraMgr->GetProjectionMatrix3D()));
+        Matrix4x4 worldViewProjection = Math::Multiply(particleWorldMatrix, viewProj);
 
         // 加速度（重力など）を速度に加算
         p.velocity.x += setting_.acceleration.x * kDeltaTime_;
@@ -413,6 +416,9 @@ void BaseParticleObject::UpdateMatrices() {
         billBoardMatrix.m[3][2] = 0.0f;
     }
 
+    // ビュープロジェクション行列をループ前に事前計算
+    Matrix4x4 viewProj = Math::Multiply(cameraMgr->GetViewMatrix3D(), cameraMgr->GetProjectionMatrix3D());
+
     for (size_t i = 0; i < particles_.size(); ++i) {
         auto& p = particles_[i];
 
@@ -434,7 +440,7 @@ void BaseParticleObject::UpdateMatrices() {
 
         particleWorldMatrix = Math::Multiply(particleWorldMatrix, managerWorldMatrix);
 
-        Matrix4x4 worldViewProjection = Math::Multiply(particleWorldMatrix, Math::Multiply(cameraMgr->GetViewMatrix3D(), cameraMgr->GetProjectionMatrix3D()));
+        Matrix4x4 worldViewProjection = Math::Multiply(particleWorldMatrix, viewProj);
 
         if (numInstance_ < numMaxInstance_) {
             instanceData_[numInstance_].world = particleWorldMatrix;

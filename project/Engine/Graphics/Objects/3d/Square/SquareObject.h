@@ -19,7 +19,7 @@ public:
     void Update();
 
     // 描画処理
-    void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "");
+    void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "", const std::string& psoKey = "Object3D");
 
     // Getter
     Vector2 GetSize() const { return size_; }

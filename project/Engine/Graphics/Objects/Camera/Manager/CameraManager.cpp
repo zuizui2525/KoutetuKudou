@@ -56,24 +56,26 @@ void CameraManager::Update() {
 
 void CameraManager::ImGuiControl() {
 #ifdef _USEIMGUI
-    ImGui::Begin("Camera List");
-
-    for (auto& [name, camera] : cameras_) {
-        bool isActive = (activeCamera_ == camera.get());
-
-        // 1. ラベルを作成 (例: "MainCamera (Active)")
-        std::string label = name + (isActive ? " (Active)" : "");
-
-        // 2. ラジオボタンを縦に並べる (SameLineを呼ばない)
-        // ##name をつけることで、内部IDを固定し、表示文字列が変わっても挙動を安定させる
-        if (ImGui::RadioButton((label + "##" + name).c_str(), isActive)) {
-            SetActiveCamera(name);
-        }
-
-
-        ImGui::Separator(); // カメラごとに区切り線を入れると見やすい
+    if (!showWindow_) {
+        return;
     }
 
+    if (ImGui::Begin("カメラ一覧###Camera List", &showWindow_)) {
+        for (auto& [name, camera] : cameras_) {
+            bool isActive = (activeCamera_ == camera.get());
+
+            // 1. ラベルを作成 (例: "MainCamera (アクティブ)")
+            std::string label = name + (isActive ? " (アクティブ)" : "");
+
+            // 2. ラジオボタンを縦に並べる (SameLineを呼ばない)
+            // ##name をつけることで、内部IDを固定し、表示文字列が変わっても挙動を安定させる
+            if (ImGui::RadioButton((label + "##" + name).c_str(), isActive)) {
+                SetActiveCamera(name);
+            }
+
+            ImGui::Separator(); // カメラごとに区切り線を入れると見やすい
+        }
+    }
     ImGui::End();
 #endif
 }
@@ -115,12 +117,17 @@ void CameraManager::AddCamera(const std::string& name, std::shared_ptr<BaseCamer
     }
 }
  
-void CameraManager::SetActiveCamera(const std::string& name) {
+void CameraManager::SetActiveCamera(const std::string& name, bool log) {
+    // 既にそのカメラがアクティブなら何もしない
+    if (GetActiveCameraName() == name) return;
+
     // 指定された名前のカメラがマップに存在するか確認
     auto it = cameras_.find(name);
     if (it != cameras_.end()) {
         activeCamera_ = it->second.get();
-        Log::Write(std::format(L" ├─ 【アクティブカメラ切替】 「{}」カメラがアクティブになりました。", ConvertString(name)));
+        if (log) {
+            Log::Write(std::format(L" ├─ 【アクティブカメラ切替】 「{}」カメラがアクティブになりました。", ConvertString(name)));
+        }
     }
 }
 

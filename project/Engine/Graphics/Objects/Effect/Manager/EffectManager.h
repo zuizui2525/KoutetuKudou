@@ -17,6 +17,11 @@ public:
 
     void ImGuiControl(const std::string& name);
 
+    // --- ウィンドウ表示制御 ---
+    static bool* GetShowListWindowPtr() { return &showListWindow_; }
+    static bool IsListWindowOpen() { return showListWindow_; }
+    static void SetListWindowOpen(bool open) { showListWindow_ = open; }
+
     // エフェクト設定の登録
     void RegisterEffect(const EffectSetting& setting);
 
@@ -44,4 +49,5 @@ private:
 
     std::unordered_map<std::string, std::unique_ptr<BaseParticleObject>> effectMap_;
     bool isWindowOpen_ = false;
+    static inline bool showListWindow_ = true;
 };

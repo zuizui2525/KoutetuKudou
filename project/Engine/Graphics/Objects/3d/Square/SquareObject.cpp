@@ -42,13 +42,13 @@ void SquareObject::Update() {
     materialData_->uvtransform = uv;
 }
 
-void SquareObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
+void SquareObject::Draw(const std::string& textureKey, const std::string& envMapKey, const std::string& psoKey) {
     if (!isVisible_) return;
     // コマンドリスト
     auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
     // パイプラインの選択
-    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object3D"));
-    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object3D"));
+    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature(psoKey));
+    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO(psoKey));
     // VBV, IBV設定
     commandList->IASetVertexBuffers(0, 1, &vbView_);
     commandList->IASetIndexBuffer(&ibView_);

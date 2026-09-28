@@ -1,4 +1,5 @@
 #include "Engine/Base/DxCommon/DxCommon.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/Log/Log.h"
 #include "Engine/Base/Utils/StringUtility.h"
@@ -7,6 +8,16 @@
 #include <iostream>
 #include <thread>
 #include <format>
+
+DxCommon::~DxCommon() {
+	// GPU完了を待ってから遅延解放キューを全解放
+	DeferredReleaseManager::GetInstance()->ReleaseAll();
+
+	if (fenceEvent_) {
+		CloseHandle(fenceEvent_);
+		fenceEvent_ = nullptr;
+	}
+}
 
 void DxCommon::Initialize(HWND hwnd, int32_t width, int32_t height) {
 	Log::Write(L" ├─ [DirectX12 初期化開始]");
@@ -21,6 +32,8 @@ void DxCommon::Initialize(HWND hwnd, int32_t width, int32_t height) {
 	CreateDepthStencil(width, height);
 	CreateFence();
 	CreateDXC();
+	// 遅延解放マネージャの初期化
+	DeferredReleaseManager::GetInstance()->Initialize(this);
 	Log::Write(L" ├─ [DirectX12 初期化完了]");
 }
 
@@ -70,25 +83,31 @@ void DxCommon::EndFrame() {
 	ID3D12CommandList* commandLists[] = { commandList_.Get() };
 	commandQueue_->ExecuteCommandLists(1, commandLists);
 
-	swapChain_->Present(1, 0);
+	// VSync同期 (enableVSync_ が true の場合は 1、そうでない場合は 0)
+	UINT syncInterval = enableVSync_ ? 1 : 0;
+	swapChain_->Present(syncInterval, 0);
 
-	static uint64_t fenceValue = 0;
-	fenceValue++;
-	commandQueue_->Signal(fence_.Get(), fenceValue);
-	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if (fenceEvent == nullptr) {
-		assert(false && "Failed to create fence event.");
-		return;
-	}
-	if (fence_->GetCompletedValue() < fenceValue) {
-		fence_->SetEventOnCompletion(fenceValue, fenceEvent);
-		WaitForSingleObject(fenceEvent, INFINITE);
-	}
-	CloseHandle(fenceEvent);
+	// 現在のフレームの実行完了フェンス値を書き込み
+	fenceValue_++;
+	commandQueue_->Signal(fence_.Get(), fenceValue_);
+	fenceValues_[backBufferIndex] = fenceValue_;
 
-	hr = commandAllocator_->Reset();
+	// 遅延解放キューのフラッシュ（GPU完了済みリソースの安全な解放）
+	DeferredReleaseManager::GetInstance()->Flush();
+
+	// 次のバックバッファインデックスを取得
+	UINT nextBackBufferIndex = swapChain_->GetCurrentBackBufferIndex();
+
+	// 次のバックバッファの過去のGPU描画処理が完了しているかのみチェック＆非同期待機（完全並列化！）
+	if (fence_->GetCompletedValue() < fenceValues_[nextBackBufferIndex]) {
+		fence_->SetEventOnCompletion(fenceValues_[nextBackBufferIndex], fenceEvent_);
+		WaitForSingleObject(fenceEvent_, INFINITE);
+	}
+
+	// 次のフレームで使用する CommandAllocator と CommandList をリセット
+	hr = commandAllocators_[nextBackBufferIndex]->Reset();
 	assert(SUCCEEDED(hr));
-	hr = commandList_->Reset(commandAllocator_.Get(), nullptr);
+	hr = commandList_->Reset(commandAllocators_[nextBackBufferIndex].Get(), nullptr);
 	assert(SUCCEEDED(hr));
 }
 
@@ -117,24 +136,52 @@ void DxCommon::FrameStart() {
 	frameStartTime_ = std::chrono::steady_clock::now();
 }
 
-// FPS固定＋経過時間更新
+// FPS固定＋経過時間更新 (アンカー目標時刻・アキュムレータ制御)
 void DxCommon::FrameEnd(int targetFps) {
 	using namespace std::chrono;
 
-	if (targetFps <= 0) { targetFps = 60; }
+	constexpr int32_t kDefaultTargetFps = 60;
+	constexpr int64_t kMicrosecondsPerSecond = 1000000;
+	constexpr int64_t kSleepThresholdMicroseconds = 3000; // 3.0ms (OSスリープ復帰遅延によるスパイクを完全にシャットアウト)
 
-	// 目標フレーム時間（60FPS ＝ 16666マイクロ秒）
-	const microseconds targetFrameTime(1000000 / targetFps);
+	if (targetFps <= 0) { targetFps = kDefaultTargetFps; }
 
-	// 60FPS以上出ている（＝フレーム時間が16.66msより短い）場合のみ、空ループで精密に待機してクランプする
-	while (duration_cast<microseconds>(steady_clock::now() - frameStartTime_) < targetFrameTime) {
-		// スリープや yield を使わず、純粋にループを回して待つ（スレッドの休止遅延による30FPS低下を防ぐため）
+	const microseconds targetFrameTime(kMicrosecondsPerSecond / targetFps);
+	auto now = steady_clock::now();
+
+	// 初回フレーム時は現在時刻でアンカー初期化
+	if (isFirstFrame_) {
+		targetTime_ = now;
+		isFirstFrame_ = false;
 	}
 
-	// 待機完了後の経過時間で deltaTime_ を更新
+	// 絶対目標時刻を正確に +16666us ずつ加算
+	targetTime_ += targetFrameTime;
+
+	// シーン切り替えや長時間ブロック発生時のアキュムレータリセット保護
+	if (now > targetTime_ + targetFrameTime * 2) {
+		targetTime_ = now;
+	}
+
+	// 休止できる時間がある場合は 1ms スリープで CPU 使用率を低減
+	while (targetTime_ - steady_clock::now() > microseconds(kSleepThresholdMicroseconds)) {
+		std::this_thread::sleep_for(milliseconds(1));
+	}
+
+	// 残りミリ秒未満は精密スピンスリープで目標時刻 targetTime_ にピッタリ固定
+	while (steady_clock::now() < targetTime_) {
+		// 精密吸着固定
+	}
+
+	// 経過時間で deltaTime_ を更新 (60.0FPS を超えさせない最終保証)
 	auto finalTime = steady_clock::now();
 	auto finalElapsed = duration_cast<microseconds>(finalTime - frameStartTime_);
-	deltaTime_ = static_cast<float>(finalElapsed.count()) / 1'000'000.0f;
+	constexpr float kSecondsPerMicrosecond = 1.0f / 1000000.0f;
+	float calculatedDelta = static_cast<float>(finalElapsed.count()) * kSecondsPerMicrosecond;
+
+	// 1秒 / 60.0FPS = 0.016666667f (60.0FPS を超える微小 DeltaTime を完全にクランプ)
+	constexpr float kMinDeltaTimeFor60Fps = 1.0f / 60.0f;
+	deltaTime_ = (calculatedDelta < kMinDeltaTimeFor60Fps) ? kMinDeltaTimeFor60Fps : calculatedDelta;
 }
 
 void DxCommon::InitializeViewport(int32_t width, int32_t height) {
@@ -263,18 +310,20 @@ void DxCommon::CreateCommandObject() {
 	}
 	assert(SUCCEEDED(hr));
 
-	hr = device_->CreateCommandAllocator(
-		D3D12_COMMAND_LIST_TYPE_DIRECT,
-		IID_PPV_ARGS(commandAllocator_.GetAddressOf()));
-	if (FAILED(hr)) {
-		Log::Write(std::format(L" │   ├─ [エラー] コマンドアロケータの生成に失敗しました: {}", GetErrorMessage(hr)));
+	for (UINT i = 0; i < backBufferCount_; ++i) {
+		hr = device_->CreateCommandAllocator(
+			D3D12_COMMAND_LIST_TYPE_DIRECT,
+			IID_PPV_ARGS(commandAllocators_[i].GetAddressOf()));
+		if (FAILED(hr)) {
+			Log::Write(std::format(L" │   ├─ [エラー] コマンドアロケータの生成に失敗しました: {}", GetErrorMessage(hr)));
+		}
+		assert(SUCCEEDED(hr));
 	}
-	assert(SUCCEEDED(hr));
 
 	hr = device_->CreateCommandList(
 		0,
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
-		commandAllocator_.Get(),
+		commandAllocators_[0].Get(),
 		nullptr,
 		IID_PPV_ARGS(commandList_.GetAddressOf()));
 	if (FAILED(hr)) {
@@ -354,15 +403,19 @@ void DxCommon::CreateDepthStencil(int32_t width, int32_t height) {
 }
 
 void DxCommon::CreateFence() {
-	uint64_t fenceValue = 0;
+	fenceValue_ = 0;
+	fenceValues_[0] = 0;
+	fenceValues_[1] = 0;
 	HRESULT hr = device_->CreateFence(
-		fenceValue,
+		fenceValue_,
 		D3D12_FENCE_FLAG_NONE,
 		IID_PPV_ARGS(fence_.GetAddressOf()));
 	assert(SUCCEEDED(hr));
 
-	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	assert(fenceEvent != nullptr);
+	if (!fenceEvent_) {
+		fenceEvent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
+		assert(fenceEvent_ != nullptr);
+	}
 }
 
 void DxCommon::CreateDXC() {
@@ -382,16 +435,11 @@ void DxCommon::ResizeSwapChain(int32_t width, int32_t height) {
 		static_cast<int32_t>(viewport_.Width), static_cast<int32_t>(viewport_.Height), width, height));
 
 	// 1. GPUの実行完了を待機 (安全なバッファ解放のため)
-	static uint64_t fenceValue = 0;
-	fenceValue++;
-	commandQueue_->Signal(fence_.Get(), fenceValue);
-	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	if (fenceEvent != nullptr) {
-		if (fence_->GetCompletedValue() < fenceValue) {
-			fence_->SetEventOnCompletion(fenceValue, fenceEvent);
-			WaitForSingleObject(fenceEvent, INFINITE);
-		}
-		CloseHandle(fenceEvent);
+	fenceValue_++;
+	commandQueue_->Signal(fence_.Get(), fenceValue_);
+	if (fenceEvent_ != nullptr && fence_->GetCompletedValue() < fenceValue_) {
+		fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+		WaitForSingleObject(fenceEvent_, INFINITE);
 	}
 
 	// 2. コマンドリストが開いている場合、一度クローズする
@@ -444,12 +492,22 @@ void DxCommon::ResizeSwapChain(int32_t width, int32_t height) {
 
 	// 8. コマンドリストを元のオープン状態に戻す
 	if (wasOpen) {
-		commandAllocator_->Reset();
-		commandList_->Reset(commandAllocator_.Get(), nullptr);
+		UINT backIdx = swapChain_->GetCurrentBackBufferIndex();
+		commandAllocators_[backIdx]->Reset();
+		commandList_->Reset(commandAllocators_[backIdx].Get(), nullptr);
 	}
 
 	isResizedThisFrame_ = true;
 	Log::Write(L" ├─ [リサイズ完了] スワップチェーンのリサイズ処理が完了しました。");
+}
+
+void DxCommon::FlushGPU() {
+	fenceValue_++;
+	commandQueue_->Signal(fence_.Get(), fenceValue_);
+	if (fenceEvent_ != nullptr && fence_->GetCompletedValue() < fenceValue_) {
+		fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
+		WaitForSingleObject(fenceEvent_, INFINITE);
+	}
 }
 
 

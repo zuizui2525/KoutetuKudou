@@ -20,6 +20,12 @@ public:
         IDxcCompiler3* dxcCompiler,
         IDxcIncludeHandler* includeHandler);
 
+    static PSOPreset CreateObject3DAlphaPreset(
+        ID3D12Device* device,
+        IDxcUtils* dxcUtils,
+        IDxcCompiler3* dxcCompiler,
+        IDxcIncludeHandler* includeHandler);
+
     // Particle用のプリセット作成関数
     static PSOPreset CreateParticlePreset(
         ID3D12Device* device,

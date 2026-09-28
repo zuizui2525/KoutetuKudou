@@ -1,4 +1,6 @@
 #include "App/Scene/Core/SceneManager.h"
+#include "Engine/Zuizui.h"
+#include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
@@ -30,6 +32,13 @@ void SceneManager::Update() {
         // 工場がセットされていない場合はエラー（または早期リターン）
         if (!sceneFactory_) return;
 
+        // シーン切り替え直前に GPU の完了を同期待機（古いリソース描画中の破棄クラッシュ OBJECT_DELETED を防止）
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                dxCommon->FlushGPU();
+            }
+        }
+
         // 開始前に空行を挿入して可読性を向上
         Log::Write(L"");
 
@@ -41,9 +50,10 @@ void SceneManager::Update() {
         nextScene_ = sceneFactory_->CreateScene(nextSceneName_);
 
         if (nextScene_) {
-            // ライトとカメラのリセット
+            // ライトとカメラおよびシーン階層（選択状態）のリセット
             CameraResource::GetCameraManager()->Clear();
             LightResource::GetLightManager()->Clear();
+            SceneHierarchy::GetInstance()->Clear();
 
             // ポストプロセスのエフェクトおよびクリアカラーのリセット（シーン遷移時の自動解除）
             if (postProcess_) {

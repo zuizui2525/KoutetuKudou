@@ -10,6 +10,7 @@ class Zuizui;
 
 class Object3D : public Base3D, public IGameObject {
 public:
+    virtual ~Object3D();
     virtual void Initialize(int lightingMode = 1);
     void Update() override {}
 

@@ -1,7 +1,6 @@
 #include "Engine/Zuizui.h"
 #include "ImguiManager.h"
 #include "Engine/Debug/DebugEditor.h"
-#include "Engine/Debug/ReplaySystem.h"
 
 Zuizui* Zuizui::instance = nullptr;
 
@@ -34,8 +33,6 @@ void Zuizui::Initialize(const wchar_t* title, const int32_t width, const int32_t
     debugEditor = std::make_unique<DebugEditor>();
     debugEditor->Initialize();
     
-    // リプレイシステムの初期化
-    ReplaySystem::GetInstance()->Initialize(dxCommon->GetDevice(), dxCommon->GetSrvHeap(), width, height);
 #endif
 
     Log::Write(L"========================================= [エンジン起動完了] =========================================");
@@ -44,7 +41,6 @@ void Zuizui::Initialize(const wchar_t* title, const int32_t width, const int32_t
 void Zuizui::Finalize() {
     Log::Write(L"========================================= [エンジン終了処理開始] =========================================");
 #ifdef _USEIMGUI
-    ReplaySystem::GetInstance()->Finalize();
     imGui->Shutdown();
 #endif
     // 明示的に開放 (COM オブジェクトをすべて先に破棄する)
@@ -73,7 +69,6 @@ void Zuizui::ImGuiEnd() {
 }
 
 void Zuizui::BeginFrame() {
-    dxCommon->FrameStart();
     dxCommon->BeginFrame();
     dxCommon->PreDraw();
 }

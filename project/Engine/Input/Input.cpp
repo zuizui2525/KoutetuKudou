@@ -3,9 +3,6 @@
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Base/Log/Log.h"
 #include "App/Scene/Core/SceneManager.h"
-#ifdef _USEIMGUI
-#include "Engine/Debug/ReplaySystem.h"
-#endif
 #include <cassert>
 #include <cstring>
 #include <format>
@@ -153,24 +150,7 @@ void Input::Update() {
         mouse_->GetDeviceState(sizeof(mouseState_), &mouseState_);
     }
 
-    // キーボードの入力状態変化（エッジトリガー）を検知してログ出力
-    for (int i = 0; i < 256; ++i) {
-        if ((key_[i] & 0x80) && !(preKey_[i] & 0x80)) {
-            Log::Write(std::format("[入力] {}キーが押されました", GetKeyName(i)));
-        } else if (!(key_[i] & 0x80) && (preKey_[i] & 0x80)) {
-            Log::Write(std::format("[入力] {}キーが離されました", GetKeyName(i)));
-        }
-    }
 
-    // マウスボタンの入力状態変化（エッジトリガー）を検知してログ出力
-    constexpr int kMaxMouseButtons = 8;
-    for (int i = 0; i < kMaxMouseButtons; ++i) {
-        if ((mouseState_.rgbButtons[i] & 0x80) && !(preMouseState_.rgbButtons[i] & 0x80)) {
-            Log::Write(std::format("[入力] {}が押されました", GetMouseButtonName(i)));
-        } else if (!(mouseState_.rgbButtons[i] & 0x80) && (preMouseState_.rgbButtons[i] & 0x80)) {
-            Log::Write(std::format("[入力] {}が離されました", GetMouseButtonName(i)));
-        }
-    }
 }
 
 // ==== キーボード ====

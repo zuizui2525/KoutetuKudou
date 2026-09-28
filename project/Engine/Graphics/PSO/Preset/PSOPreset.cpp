@@ -94,6 +94,72 @@ PSOPreset PSOPreset::CreateObject3DPreset(
     return preset;
 }
 
+PSOPreset PSOPreset::CreateObject3DAlphaPreset(
+    ID3D12Device* device,
+    IDxcUtils* dxcUtils,
+    IDxcCompiler3* dxcCompiler,
+    IDxcIncludeHandler* includeHandler) {
+
+    PSOPreset preset;
+
+    // 1. RootSignature (Object3Dと同じ)
+    RootSignatureBuilder rs;
+    rs.AddCBV(0, D3D12_SHADER_VISIBILITY_VERTEX);
+    rs.AddCBV(0, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddCBV(1, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddCBV(2, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddCBV(3, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddCBV(4, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddSRV(0, D3D12_SHADER_VISIBILITY_PIXEL);
+    rs.AddSRV(1, D3D12_SHADER_VISIBILITY_PIXEL);
+    
+    D3D12_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+    sampler.MaxAnisotropy = 16;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    rs.AddSampler(sampler, 0);
+
+    preset.rootSignature = rs.Build(device);
+    assert(preset.rootSignature && "RootSignature creation failed!");
+
+    // 2. InputLayout
+    preset.ilBuilder_.Add("POSITION", DXGI_FORMAT_R32G32B32A32_FLOAT);
+    preset.ilBuilder_.Add("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT);
+    preset.ilBuilder_.Add("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT);
+    preset.inputLayoutDesc = preset.ilBuilder_.Build();
+
+    // 3. Blend State (アルファブレンド有効)
+    BlendStateBuilder blendBuilder;
+    blendBuilder.SetBlendMode(kBlendModeNormal);
+    preset.blendDesc = blendBuilder.Build();
+
+    // 4. Rasterizer State
+    RasterizerStateBuilder rsb;
+    rsb.SetCullMode(CullMode::Back);
+    preset.rasterizerDesc = rsb.Build();
+
+    // 5. Depth Stencil State (深度テスト有効、深度書き込み無効)
+    DepthStencilStateBuilder dsb;
+    dsb.SetDepthEnable(true);
+    dsb.SetDepthWriteMask(D3D12_DEPTH_WRITE_MASK_ZERO); // 深度書き込み無効
+    preset.depthStencilDesc = dsb.GetDesc();
+
+    // 6. Shader (Object3dと同じ)
+    bool vsResult = preset.shaderProgram.CompileVS(
+        L"resources/Shader/Object3d/Object3d.VS.hlsl",
+        dxcUtils, dxcCompiler, includeHandler
+    );
+    assert(vsResult && "Vertex Shader Compile Failed! Check filepath or code.");
+
+    bool psResult = preset.shaderProgram.CompilePS(
+        L"resources/Shader/Object3d/Object3d.PS.hlsl",
+        dxcUtils, dxcCompiler, includeHandler
+    );
+    assert(psResult && "Pixel Shader Compile Failed! Check filepath or code.");
+
+    return preset;
+}
+
 PSOPreset PSOPreset::CreateParticlePreset(
     ID3D12Device* device,
     IDxcUtils* dxcUtils,

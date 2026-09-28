@@ -32,13 +32,13 @@ struct WaterDropEffectSetting : public EffectSetting {
         velocityAlignmentScale = 0.03f; // 線をもっと短く
 
         isEmitter = true;         
-        emitFrequency = 0.015f;   // 雨の密度
+        emitFrequency = 0.08f;   // 雨の密度（負荷軽減のため頻度を低下）
 
         killAtY = 0.05f; // 地面（Y=0付近）で確実に消滅させる
 
         // 落下中にさらに小さな水滴を落とす
         trailEffectName = "DropletTrail";
-        trailFrequency = 0.15f; 
+        trailFrequency = 0.4f; // トレイル生成間隔を広げて負荷を低減
 
         // 地面に落ちた瞬間にメインの波紋を発生させる
         onDeathEffectName = "RippleSplash,RippleRing,RippleSplashParticles";
@@ -175,8 +175,8 @@ struct RippleSplashParticlesEffectSetting : public EffectSetting {
         textureName = "white";
         meshType = "cube";
 
-        emitCountMin = 10;
-        emitCountMax = 15;
+        emitCountMin = 3; // パーティクル数を減らして負荷を低減
+        emitCountMax = 5;
         lifeTimeMin = 0.3f;
         lifeTimeMax = 0.6f;
 

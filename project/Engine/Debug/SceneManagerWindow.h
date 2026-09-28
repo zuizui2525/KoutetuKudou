@@ -6,6 +6,6 @@ public:
     SceneManagerWindow() = default;
     ~SceneManagerWindow() = default;
 
-    void Draw();
+    void Draw(bool* show = nullptr);
 };
 #endif

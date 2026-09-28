@@ -30,6 +30,7 @@ void ResourceLoader::LoadTextures() {
 	texMgr->LoadTexture("white", "resources/Textures/white.png");
 	texMgr->LoadTexture("monsterBall", "resources/Textures/monsterBall.png");
 	texMgr->LoadTexture("circle", "resources/Textures/circle.png");
+	texMgr->LoadTexture("circle_solid", "resources/Textures/circle_solid.png");
 	texMgr->LoadTexture("reticle", "resources/Textures/reticle.png");
 	texMgr->LoadTexture("uvChecker", "resources/Textures/uvChecker.png");
 	texMgr->LoadTexture("skyboxTex", "resources/Textures/skybox.dds");
@@ -39,6 +40,7 @@ void ResourceLoader::LoadTextures() {
 	texMgr->LoadTexture("noise0", "resources/Textures/noise0.png");
 	texMgr->LoadTexture("noise1", "resources/Textures/noise1.png");
 	texMgr->LoadTexture("noise2", "resources/Textures/noise2.png");
+	texMgr->LoadTexture("minimap_bg", "resources/Textures/minimap_bg.png");
 }
 
 void ResourceLoader::LoadModels() {

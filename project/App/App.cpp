@@ -1,6 +1,5 @@
 #include "App/App.h"
 #include "Engine/Debug/DebugEditor.h"
-#include "Engine/Debug/ReplaySystem.h"
 #include "App/Scene/Core/SceneManager.h"
 #include "App/Scene/Core/SceneFactory.h"
 #include "App/Load/ResourceLoader.h"
@@ -11,6 +10,7 @@
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Base/Log/Log.h"
 #include <psapi.h> // メモリ取得用（追加）
+
 
 #pragma comment(lib, "psapi.lib") // 追加
 
@@ -58,12 +58,12 @@ void App::Initialize() {
     postProcess_->Initialize();
 
     SceneManager::GetInstance()->SetPostProcess(postProcess_.get());
+
 }
 
 void App::Run() {
-#ifdef _USEIMGUI
-    ReplaySystem::GetInstance()->ClearGarbage();
-#endif
+    // メインループの最先頭でフレームタイマーの測定を開始（計測漏れを防止）
+    engine_->GetDxCommon()->FrameStart();
 
     // 現在のウィンドウの実際のクライアント領域サイズを取得し、サイズ変更を検知
     HWND hwnd = engine_->GetWindow()->GetHWND();
@@ -78,20 +78,17 @@ void App::Run() {
     if (currentWidth > 0 && currentHeight > 0 && 
         (currentWidth != lastWidth || currentHeight != lastHeight)) {
         
-        // 1. スワップチェーンと深度バッファのリサイズ
+        // 1. スワップチェーンと深度バッファ（DSV）のリサイズ
         engine_->GetDxCommon()->ResizeSwapChain(currentWidth, currentHeight);
 
-        // 2. ポストプロセスレンダーテクスチャのリサイズ
+        // 2. ポストプロセス（RTV）も同期リサイズして、D3D12の「RTVとDSVの寸法一致制約」を充足
         postProcess_->Resize(currentWidth, currentHeight);
 
-        // 3. カメラのプロジェクションアスペクト比の動的更新
-        float aspect = static_cast<float>(currentWidth) / static_cast<float>(currentHeight);
-        cameraMgr_->UpdateAllProjection(aspect);
-
-#ifdef _USEIMGUI
-        // 4. リプレイシステムのリサイズ通知
-        ReplaySystem::GetInstance()->OnResize(currentWidth, currentHeight);
-#endif
+        // 3. カメラのプロジェクションアスペクト比はゲーム基準の 16:9 に固定（歪み防止）
+        constexpr float kGameAspectWidth = 16.0f;
+        constexpr float kGameAspectHeight = 9.0f;
+        constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
+        cameraMgr_->UpdateAllProjection(kGameAspectRatio);
 
         lastWidth = currentWidth;
         lastHeight = currentHeight;
@@ -127,17 +124,15 @@ void App::Run() {
     constexpr float kSpikeFpsThreshold = 30.0f;
     constexpr float kSpikeWarningCooldownMax = 5.0f; // クールタイムは5秒間
 
+#ifdef _USEIMGUI
     if (currentFps < kSpikeFpsThreshold && spikeWarningCooldown <= 0.0f) {
         Log::Write(std::format("[警告] ★高負荷スパイク検知: FPSが一時的に低下しました ({:.1f} FPS) | 物理メモリ使用量: {:.2f} MB | フレーム時間: {:.4f} 秒", currentFps, currentMem, deltaTime));
         spikeWarningCooldown = kSpikeWarningCooldownMax;
     }
-
-    bool isGameViewVisible = false;
-    bool isPaused = false;
-
-#ifdef _USEIMGUI
-    isPaused = ReplaySystem::GetInstance()->IsPaused();
 #endif
+
+    bool isPaused = false;
+    bool isGameViewVisible = false;
 
     // --- ImGui ---
 #ifdef _USEIMGUI
@@ -149,6 +144,7 @@ void App::Run() {
     engine_->ImGuiEnd();
     if (auto debugEditor = engine_->GetDebugEditor()) {
         isGameViewVisible = debugEditor->IsGameViewVisible();
+        isPaused = debugEditor->IsPaused();
     }
 #endif
 
@@ -178,7 +174,9 @@ void App::Run() {
         sWasPaused = isPaused;
     }
 
+
     // --- 更新 ---
+
     input_->Update();
     
     if (!isPaused) {
@@ -236,24 +234,6 @@ void App::Run() {
             postProcess_->Draw();
         }
     }
-
-#ifdef _USEIMGUI
-    // 一時停止中でなく、かつリプレイ機能が有効な場合のみリプレイバッファを記録
-    bool isReplayEnabled = true;
-    if (auto debugEditor = engine_->GetDebugEditor()) {
-        isReplayEnabled = debugEditor->IsReplayEnabled();
-    }
-
-    if (!isPaused && isReplayEnabled) {
-        ReplaySystem::GetInstance()->RecordFrame(
-            engine_->GetDxCommon()->GetCommandList(),
-            postProcess_->GetFinalResource(),
-            postProcess_->GetFinalSrvGpuHandle(),
-            currentFps,
-            currentMem
-        );
-    }
-#endif
 
     engine_->EndFrame();
 }

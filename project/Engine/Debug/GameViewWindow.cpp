@@ -6,7 +6,6 @@
 #ifdef _USEIMGUI
 #include "Engine/Graphics/PostProcess/PostProcess.h"
 #include "App/Scene/Core/SceneManager.h"
-#include "Engine/Debug/ReplaySystem.h"
 #include "externals/imgui/imgui.h"
 #include "externals/imgui/ImGuizmo.h"
 #include "Engine/Debug/SceneHierarchy.h"
@@ -52,27 +51,31 @@ GameViewWindow::GameViewWindow()
 void GameViewWindow::Draw(bool* show, bool* isVisible) {
     *isVisible = false;
     
-    if (ImGui::Begin("Game View", show)) {
+    if (ImGui::Begin("ゲーム画面###Game View", show)) {
         *isVisible = true;
 
-        // 1. ギズモ操作モード切り替えUI
+        // 1. ギズモ操作モード切り替えUI（ImGuizmo OPERATION 定数）
+        constexpr int kGizmoOpTranslate = 7;
+        constexpr int kGizmoOpRotate = 120;
+        constexpr int kGizmoOpScale = 896;
+
         int currentOp = gizmoOperation_;
         bool opChanged = false;
 
-        ImGui::Text("Gizmo Mode:");
+        ImGui::Text("ギズモ操作:");
         ImGui::SameLine();
-        if (ImGui::RadioButton("Translate", currentOp == 7)) {
-            currentOp = 7;
+        if (ImGui::RadioButton("移動", currentOp == kGizmoOpTranslate)) {
+            currentOp = kGizmoOpTranslate;
             opChanged = true;
         }
         ImGui::SameLine();
-        if (ImGui::RadioButton("Rotate", currentOp == 120)) {
-            currentOp = 120;
+        if (ImGui::RadioButton("回転", currentOp == kGizmoOpRotate)) {
+            currentOp = kGizmoOpRotate;
             opChanged = true;
         }
         ImGui::SameLine();
-        if (ImGui::RadioButton("Scale", currentOp == 896)) {
-            currentOp = 896;
+        if (ImGui::RadioButton("拡縮", currentOp == kGizmoOpScale)) {
+            currentOp = kGizmoOpScale;
             opChanged = true;
         }
 
@@ -91,25 +94,17 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             // 子ウィンドウのサイズを取得し、アスペクト比を維持したサイズを計算
             ImVec2 contentSize = ImGui::GetContentRegionAvail();
             
-            // 現在のウィンドウの実際のクライアントアスペクト比を動的に計算して同期
-            HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
-            RECT clientRect{};
-            GetClientRect(hwnd, &clientRect);
-            float screenWidth = static_cast<float>(clientRect.right - clientRect.left);
-            float screenHeight = static_cast<float>(clientRect.bottom - clientRect.top);
-            
-            // ゼロ除算を防止する安全設計
-            float currentAspectRatio = 16.0f / 9.0f;
-            if (screenHeight > 0.0f) {
-                currentAspectRatio = screenWidth / screenHeight;
-            }
+            // ゲーム画面の本来のアスペクト比（16:9）を定数定義（マジックナンバー排除）
+            constexpr float kGameAspectWidth = 16.0f;
+            constexpr float kGameAspectHeight = 9.0f;
+            constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
             
             float width = contentSize.x;
-            float height = contentSize.x / currentAspectRatio;
+            float height = contentSize.x / kGameAspectRatio;
             
             if (height > contentSize.y) {
                 height = contentSize.y;
-                width = contentSize.y * currentAspectRatio;
+                width = contentSize.y * kGameAspectRatio;
             }
             
             // 中央揃え用のパディング計算
@@ -408,37 +403,12 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             // 中央座標の計算
             ImVec2 center = ImVec2(imgPosMin.x + width * 0.5f, imgPosMin.y + height * 0.5f);
 
-            // ポーズ状態の監視と演出トリガー
-            bool currentPaused = ReplaySystem::GetInstance()->IsPaused();
-            if (currentPaused != wasPaused_) {
-                if (ReplaySystem::GetInstance()->GetRecordCount() > 0) {
-                    popAnim_.Trigger(currentPaused ? PopAnimation::Type::Pause : PopAnimation::Type::Play);
-                }
-                wasPaused_ = currentPaused;
-            }
-
             // アニメーションの更新と描画
             popAnim_.Update(ImGui::GetIO().DeltaTime);
             popAnim_.Draw(ImGui::GetWindowDrawList(), center);
 
-            // 画像領域のタップ（左クリック）でゲームの再生/一時停止をトグル
-            // 左クリックでの一時停止機能が有効な場合のみ実行する
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                if (isClickPauseEnabled_) {
-                    bool isPaused = ReplaySystem::GetInstance()->IsPaused();
-                    ReplaySystem::GetInstance()->SetPause(!isPaused);
-                }
-            }
+            // リプレイシステム削除に伴い、クリックポーズおよびポーズ中オーバーレイ表示は無効化されました
 
-            // 一時停止中はYouTube風のポーズ画面（半透明グレーアウト）を表示
-            if (ReplaySystem::GetInstance()->IsPaused()) {
-                ImVec2 rectMin = ImGui::GetItemRectMin();
-                ImVec2 rectMax = ImGui::GetItemRectMax();
-
-                // 1. 半透明グレーのオーバーレイ（透明度を下げて視認性を向上：120 ➡ 80）
-                constexpr ImU32 kOverlayColor = IM_COL32(20, 20, 20, 80);
-                ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, kOverlayColor);
-            }
         } else {
             ImGui::Text("No Active PostProcess");
         }
@@ -479,13 +449,24 @@ Vector2 GameViewWindow::GetGameViewSize() {
 Vector2 GameViewWindow::GetMousePosition() {
 #ifdef _USEIMGUI
     ImVec2 mousePos = ImGui::GetMousePos();
-    return Vector2{ mousePos.x - sGameViewPosMin_.x, mousePos.y - sGameViewPosMin_.y };
+    Vector2 localPos = Vector2{ mousePos.x - sGameViewPosMin_.x, mousePos.y - sGameViewPosMin_.y };
+    if (sGameViewSize_.x > 0.0f && sGameViewSize_.y > 0.0f) {
+        localPos.x = std::clamp(localPos.x, 0.0f, sGameViewSize_.x);
+        localPos.y = std::clamp(localPos.y, 0.0f, sGameViewSize_.y);
+    }
+    return localPos;
 #else
     // ウィンドウのクライアント領域上のマウス座標を取得
     HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
     POINT point;
     if (GetCursorPos(&point) && ScreenToClient(hwnd, &point)) {
-        return Vector2{ static_cast<float>(point.x), static_cast<float>(point.y) };
+        Vector2 localPos = Vector2{ static_cast<float>(point.x), static_cast<float>(point.y) };
+        Vector2 viewSize = GetGameViewSize();
+        if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
+            localPos.x = std::clamp(localPos.x, 0.0f, viewSize.x);
+            localPos.y = std::clamp(localPos.y, 0.0f, viewSize.y);
+        }
+        return localPos;
     }
     return Vector2{ 0.0f, 0.0f };
 #endif
