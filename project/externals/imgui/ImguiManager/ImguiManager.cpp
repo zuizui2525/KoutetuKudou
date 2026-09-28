@@ -79,29 +79,41 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    // --- 日本語フォントの読み込み ---
-    // マジックナンバーを排除したフォントサイズ定数定義（Mediumフォントに最適な美麗サイズ）
-    static constexpr float kFontSize = 15.5f; 
+    // --- フォントの読み込み ---
+    // x16y32pxGridGazer に最適な整数フォントサイズ定数（マジックナンバー排除）
+    static constexpr float kFontSize = 16.0f; 
+
+    // 1. プライマリフォント
+    const char* primaryFontPath = "resources/fonts/HigashiOme-Gothic-1.3i.ttf";
+    ImFontConfig fontConfig;
+    fontConfig.PixelSnapH = true; // ピクセル境界に吸着して輪郭の滲みを防止
+    fontConfig.OversampleH = 1;   // ピクセルフォントのシャープなエッジを保持
+    fontConfig.OversampleV = 1;
+
     ImFont* font = nullptr;
-    const char* fontPaths[] = {
-        "resources/fonts/MPLUS1p-Medium.ttf",   // 0. M PLUS 1p Medium（最優先・高視認性）
-        "resources/fonts/NotoSansJP-Medium.ttf",// 1. Noto Sans JP Medium
-        "resources/fonts/MPLUS1p-Black.ttf",    // 2. 既存のフォント（フォールバック）
-        "C:\\Windows\\Fonts\\YuGothM.ttc",      // 3. 游ゴシック（フォールバック）
-        "C:\\Windows\\Fonts\\meiryo.ttc",       // 4. メイリオ（フォールバック）
-        "C:\\Windows\\Fonts\\msgothic.ttc"      // 5. ＭＳ ゴシック（セーフティフォールバック）
+    if (std::filesystem::exists(primaryFontPath)) {
+        // 英数字・記号をプライマリフォントから読み込み
+        font = io.Fonts->AddFontFromFileTTF(primaryFontPath, kFontSize, &fontConfig, io.Fonts->GetGlyphRangesDefault());
+    }
+
+    // 2. 日本語グリフの合成（x16y32pxGridGazer に含まれない ひらがな・漢字 のためのマージ設定）
+    const char* japaneseFontPaths[] = {
+        "C:\\Windows\\Fonts\\YuGothM.ttc",       // 游ゴシック Medium（細身でモダン）
+        "C:\\Windows\\Fonts\\meiryo.ttc",        // メイリオ
+        "resources/fonts/MPLUS1p-Medium.ttf",    // M PLUS 1p Medium
+        "C:\\Windows\\Fonts\\msgothic.ttc"       // ＭＳ ゴシック
     };
 
-    ImFontConfig fontConfig;
-    fontConfig.OversampleH = 3;
-    fontConfig.OversampleV = 2;
+    ImFontConfig jpFontConfig;
+    jpFontConfig.MergeMode = (font != nullptr); // プライマリフォントがある場合は合成、無ければ単体としてロード
+    jpFontConfig.PixelSnapH = true;
+    jpFontConfig.OversampleH = 2;
+    jpFontConfig.OversampleV = 1;
 
-    for (const char* path : fontPaths) {
-        if (std::filesystem::exists(path)) {
-            font = io.Fonts->AddFontFromFileTTF(path, kFontSize, &fontConfig, io.Fonts->GetGlyphRangesJapanese());
-            if (font) {
-                break; // 正常に読み込めたらループを抜ける
-            }
+    for (const char* jpPath : japaneseFontPaths) {
+        if (std::filesystem::exists(jpPath)) {
+            io.Fonts->AddFontFromFileTTF(jpPath, kFontSize, &jpFontConfig, io.Fonts->GetGlyphRangesJapanese());
+            break;
         }
     }
 

@@ -40,6 +40,10 @@ public:
     bool HasCamera(const std::string& name) const {
         return cameras_.find(name) != cameras_.end();
     }
+    BaseCamera* GetCamera(const std::string& name) {
+        auto it = cameras_.find(name);
+        return (it != cameras_.end()) ? it->second.get() : nullptr;
+    }
 
     // --- 3D行列ゲッター (アクティブカメラから取得) ---
     const Matrix4x4& GetViewMatrix3D() const {

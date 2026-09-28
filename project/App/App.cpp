@@ -14,8 +14,10 @@
 
 #pragma comment(lib, "psapi.lib") // 追加
 
-
-
+namespace {
+    const std::string kZoomCameraName = "Zoom";
+    const std::string kEditorCameraName = "Editor";
+}
 void App::Initialize() {
     // システム
     engine_ = Zuizui::GetInstance();
@@ -90,6 +92,20 @@ void App::Run() {
         constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
         cameraMgr_->UpdateAllProjection(kGameAspectRatio);
 
+        // 4. "Zoom" カメラ（右画面70%表示）が存在する場合、分割比率（0.7）を反映したアスペクト比を再設定
+        constexpr float kSplitRightRatio = 0.7f;
+        if (auto* zoomCam = cameraMgr_->GetCamera(kZoomCameraName)) {
+            zoomCam->UpdateProjection(kGameAspectRatio * kSplitRightRatio);
+        }
+
+        // 5. 2Dプロジェクション行列もリサイズ後の実解像度に同期
+        cameraMgr_->SetProjectionMatrix2D(Math::MakeOrthographicMatrix(
+            0.0f, 0.0f,
+            static_cast<float>(currentWidth),
+            static_cast<float>(currentHeight),
+            0.0f, 100.0f
+        ));
+
         lastWidth = currentWidth;
         lastHeight = currentHeight;
     }
@@ -154,17 +170,18 @@ void App::Run() {
 
     if (isPaused != sWasPaused) {
         if (isPaused) {
-            // ポーズになった瞬間に、現在アクティブなカメラの名前を記憶し、"Editor" をアクティブにする
+            // ポーズになった瞬間に、現在アクティブなカメラの名前を記憶する
             sPrevActiveCamera = cameraMgr_->GetActiveCameraName();
-            if (cameraMgr_->HasCamera("Editor")) {
-                cameraMgr_->SetActiveCamera("Editor");
+            // "Zoom" カメラ（ルート描画・敵配置モード）の場合は、ポーズ中もZoomカメラの視点・画角を維持する
+            if (sPrevActiveCamera != kZoomCameraName && cameraMgr_->HasCamera(kEditorCameraName)) {
+                cameraMgr_->SetActiveCamera(kEditorCameraName);
                 if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetActiveCamera())) {
                     dc->SetActive(true);
                 }
             }
         } else {
             // ポーズが解除された瞬間に、記憶していたカメラに戻す
-            if (!sPrevActiveCamera.empty() && cameraMgr_->HasCamera(sPrevActiveCamera)) {
+            if (sPrevActiveCamera != kZoomCameraName && !sPrevActiveCamera.empty() && cameraMgr_->HasCamera(sPrevActiveCamera)) {
                 if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetActiveCamera())) {
                     dc->SetActive(false);
                 }
@@ -188,6 +205,11 @@ void App::Run() {
         // ポーズ中の更新処理：
         // Game View が表示されている場合のみ、オブジェクト編集やカメラ見回しを反映させる
         if (isGameViewVisible) {
+            // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
+            if (cameraMgr_->GetActiveCameraName() == kZoomCameraName) {
+                SceneManager::GetInstance()->Update();
+            }
+
             cameraMgr_->Update();
             lightMgr_->Update();
 

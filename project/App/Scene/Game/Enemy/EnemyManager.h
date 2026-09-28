@@ -41,6 +41,7 @@ private:
     // 衝突判定ヘルパー関数群
     bool IsCollision(const AABB& aabb, const Sphere& sphere) const;
     bool IsCollidingAABB(const Vector3& pos1, const Vector3& size1, const Vector3& pos2, const Vector3& size2) const;
+    static bool IsIntersectingCircleXZ(const Vector3& segStart, const Vector3& segEnd, const Vector3& circleCenter, float radius);
 
 private:
     // 湧きトリガーデータ
@@ -75,4 +76,6 @@ private:
     std::vector<SpawnTrigger> spawnTriggers_;                 // 湧きトリガー配列
     float lastSpawnZ_ = 0.0f;                                 // 最後に定期湧きしたZ座標
     bool hasBossSpawned_ = false;                             // ボス出現済みフラグ
+    Vector3 prevPlayerPos_ = { 0.0f, 0.0f, 0.0f };             // 前フレームの自機位置 (すり抜け防止)
+    bool hasPrevPlayerPos_ = false;                           // 前フレーム位置が記録されているか
 };

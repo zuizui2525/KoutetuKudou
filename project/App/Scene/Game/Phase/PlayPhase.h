@@ -11,6 +11,7 @@ class Player;
 class EnemyManager;
 class PlayCamera;
 class Reticle;
+class StageEditor;
 
 /**
  * @brief ルート自動走行および戦闘を管理するプレイフェーズクラス
@@ -27,7 +28,8 @@ public:
         PlayCamera* playCamera,
         Reticle* reticle,
         float& ioCurrentDistance,
-        std::function<void()> onAreaCleared
+        std::function<void()> onAreaCleared,
+        StageEditor* stageEditor = nullptr
     );
     ~PlayPhase() override = default;
 
@@ -51,6 +53,7 @@ private:
     EnemyManager* enemyManager_ = nullptr;
     PlayCamera* playCamera_ = nullptr;
     Reticle* reticle_ = nullptr;
+    StageEditor* stageEditor_ = nullptr;
     
     float& currentDistance_; // GameSceneの現在距離の参照
     std::function<void()> onAreaCleared_;

@@ -43,6 +43,9 @@ private:
     static inline const Vector2 kPillarIconSize = { 16.0f, 16.0f };     // 障害物柱アイコンのサイズ
     static inline const float kFrameThickness = 2.0f;                   // 枠線の太さ
     static inline const float kRouteLineThickness = 2.0f;               // 手書きルート軌跡線の太さ
+    static inline const float kMapInnerMarginRatio = 0.1f;              // ミニマップ内側マージン比率
+    static inline const float kWorldMinX = -15.0f;                      // ルート描画ワールドX最小値
+    static inline const float kWorldWidthX = 30.0f;                     // ルート描画ワールドX幅
 
 private:
     // 2Dスプライトリソース

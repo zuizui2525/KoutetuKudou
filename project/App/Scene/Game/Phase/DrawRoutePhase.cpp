@@ -87,6 +87,8 @@ void DrawRoutePhase::Update() {
 
     // 5. ステージエディタの更新（描画フェーズ中のみ有効）
     if (stageEditor_) {
+        constexpr float kSplitLeftRatio = 0.3f;
+        stageEditor_->SetViewportRatio(kSplitLeftRatio, kSplitRightRatio);
         stageEditor_->Update();
     }
 }
@@ -151,13 +153,8 @@ void DrawRoutePhase::Draw() {
     cursorIndicatorZoom_->Draw();
 
     // エディタで配置された敵サークルの描画
-    if (stageEditor_ && stageEditor_->GetEnemies()) {
-        const auto* editorEnemies = stageEditor_->GetEnemies();
-        for (const auto& enemy : *editorEnemies) {
-            if (enemy) {
-                enemy->Draw();
-            }
-        }
+    if (stageEditor_) {
+        stageEditor_->Draw3D();
     }
 }
 

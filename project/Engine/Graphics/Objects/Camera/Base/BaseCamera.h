@@ -23,6 +23,8 @@ public:
         useTarget_ = true;  
     }  
     void DisableTarget() { useTarget_ = false; }  
+    const Vector3& GetTarget() const { return target_; }
+    bool IsUseTarget() const { return useTarget_; }  
 
     // 行列取得  
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }  

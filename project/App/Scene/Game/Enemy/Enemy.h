@@ -38,10 +38,10 @@ public:
         Boss         // ボス
     };
 
-    void SetEnemyType(EnemyType type) { enemyType_ = type; }
+    void SetEnemyType(EnemyType type);
     EnemyType GetEnemyType() const { return enemyType_; }
 
-    void SetSpawnRadius(float radius) { spawnRadius_ = radius; }
+    void SetSpawnRadius(float radius);
     float GetSpawnRadius() const { return spawnRadius_; }
 
     void SetSpawnCount(int count) { spawnCount_ = count; }
@@ -49,6 +49,10 @@ public:
 
     void SetHangTime(float seconds) { hangTime_ = seconds; }
     float GetHangTime() const { return hangTime_; }
+
+    void SetSelectedInEditor(bool selected);
+    bool IsSelectedInEditor() const { return isSelectedInEditor_; }
+    void UpdateSpawnVisual();
 
     bool IsVisualOnlyBullet() const { return isVisualOnlyBullet_; }
     void SetVisualOnlyBullet(bool visualOnly) { isVisualOnlyBullet_ = visualOnly; }
@@ -97,11 +101,19 @@ private:
     static inline const Vector3 kBodyColliderSize = { 1.0f, 1.0f, 1.0f };
     static inline const Vector3 kHeadColliderSize = { 0.6f, 0.6f, 0.6f };
 
+    // エディタ湧き範囲可視化用定数 (マジックナンバー排除)
+    static inline const Vector4 kNormalSpawnColor = { 1.0f, 0.25f, 0.25f, 0.55f };       // 通常突進（赤）
+    static inline const Vector4 kStationarySpawnColor = { 1.0f, 0.65f, 0.15f, 0.55f };   // 固定砲台（橙）
+    static inline const Vector4 kSwarmSpawnColor = { 0.2f, 0.85f, 1.0f, 0.55f };         // 追従群生（青/シアン）
+    static inline const Vector4 kBossSpawnColor = { 0.95f, 0.2f, 0.95f, 0.7f };          // ボス（紫）
+    static inline const Vector3 kSpawnCenterMarkerScale = { 0.6f, 0.6f, 0.6f };           // 中心マーカーサイズ
+
 private:
-    std::unique_ptr<CubeObject> cube_;                 // 胴体モデル
+    std::unique_ptr<CubeObject> cube_;                 // 胴体モデル（エディタ時は中心マーカー）
     std::unique_ptr<CubeObject> headCube_;             // 頭部モデル
     std::unique_ptr<PartCollider> bodyCollider_;       // 胴体コライダー
     std::unique_ptr<PartCollider> headCollider_;       // 頭部コライダー
+    bool isSelectedInEditor_ = false;                  // エディタ選択中フラグ
     Player* targetPlayer_ = nullptr;                   // 自機へのポインタ
 
     // 移動および射撃の制御用タイマーと状態
