@@ -41,19 +41,21 @@ namespace {
 }
 
 void Object3D::Initialize(int lightingMode) {
+    if (!sEngine || !sEngine->GetDevice()) return;
+
     // WVPリソース作成
     wvpResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(TransformationMatrix));
-    if (!wvpResource_) throw std::runtime_error("Failed to create wvpResource_");
+    if (!wvpResource_) return;
     HRESULT hr = wvpResource_->Map(0, nullptr, reinterpret_cast<void**>(&wvpData_));
-    if (FAILED(hr) || !wvpData_) throw std::runtime_error("Failed to map wvpResource_");
+    if (FAILED(hr) || !wvpData_) return;
     wvpData_->WVP = Math::MakeIdentity();
     wvpData_->world = Math::MakeIdentity();
 
     // Materialリソース作成
     materialResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(Material));
-    if (!materialResource_) throw std::runtime_error("Failed to create materialResource_");
+    if (!materialResource_) return;
     hr = materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
-    if (FAILED(hr) || !materialData_) throw std::runtime_error("Failed to map materialResource_");
+    if (FAILED(hr) || !materialData_) return;
     materialData_->color = { 1,1,1,1 };
     materialData_->enableLighting = lightingMode;
     materialData_->uvtransform = Math::MakeIdentity();

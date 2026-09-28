@@ -11,6 +11,7 @@ class Stage;
 class Route;
 class Input;
 class CameraManager;
+class StageEditor;
 
 /**
  * @brief 2Dミニマップの描画およびルート描画モード時の入力を管理するクラス
@@ -23,8 +24,8 @@ public:
     // 初期化処理
     void Initialize(Stage* stage);
 
-    // 更新処理 (線の手書き入力、LoL風カメラ移動、各スプライトの位置計算)
-    void Update(Input* input, Route* route, Stage* stage, Vector3& ioTargetZoom);
+    // 更新処理 (線の手書き入力、LoL風カメラ移動、各スプライトの位置計算、敵配置操作)
+    void Update(Input* input, Route* route, Stage* stage, Vector3& ioTargetZoom, StageEditor* stageEditor = nullptr);
 
     // 描画処理 (左ビューポート設定、スプライト一括描画)
     void Draw(int currentAreaIndex);

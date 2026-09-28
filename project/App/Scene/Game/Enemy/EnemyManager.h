@@ -45,9 +45,13 @@ private:
 private:
     // 湧きトリガーデータ
     struct SpawnTrigger {
-        float z;        // 湧き判定Z座標
-        int count;      // 湧く数
-        bool triggered; // 湧いたかフラグ
+        Vector3 pos;               // スポーン中心座標
+        float z;                   // 湧き判定Z座標
+        int count = 1;             // 湧く数
+        float radius = 5.0f;       // 発生範囲
+        float hangTime = 3.0f;     // 並走時間
+        Enemy::EnemyType type = Enemy::EnemyType::Normal; // 敵タイプ
+        bool triggered = false;    // 湧いたかフラグ
     };
 
     // マジックナンバー排除のための定数

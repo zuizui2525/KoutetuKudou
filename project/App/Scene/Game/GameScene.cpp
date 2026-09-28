@@ -184,6 +184,12 @@ void GameScene::StartGame() {
 
     // 3. 動的湧きデータの初期設定 (エリア開始ごとに構築)
     if (isEnemyEnabled_) {
+#ifdef _USEIMGUI
+        if (stageEditor_) {
+            stageEditor_->SetSelectedIndex(-1);
+            stageEditor_->SetEditMode(StageEditor::EditMode::None);
+        }
+#endif
         enemyManager_->SetupSpawnTriggers(enemyManager_->GetEnemies(), startPlayerPos.z);
     }
 

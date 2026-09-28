@@ -31,12 +31,37 @@ public:
     void SetTargetPlayer(Player* player) { targetPlayer_ = player; }
 
 public:
+    enum class EnemyType {
+        Normal,      // 従来の突進型
+        Stationary,  // 静止砲撃型 (演出用弾・当たり判定なし)
+        Swarm,       // 小型並走群れ型 (並走追従し数秒後攻撃)
+        Boss         // ボス
+    };
+
+    void SetEnemyType(EnemyType type) { enemyType_ = type; }
+    EnemyType GetEnemyType() const { return enemyType_; }
+
+    void SetSpawnRadius(float radius) { spawnRadius_ = radius; }
+    float GetSpawnRadius() const { return spawnRadius_; }
+
+    void SetSpawnCount(int count) { spawnCount_ = count; }
+    int GetSpawnCount() const { return spawnCount_; }
+
+    void SetHangTime(float seconds) { hangTime_ = seconds; }
+    float GetHangTime() const { return hangTime_; }
+
+    bool IsVisualOnlyBullet() const { return isVisualOnlyBullet_; }
+    void SetVisualOnlyBullet(bool visualOnly) { isVisualOnlyBullet_ = visualOnly; }
+
     enum class AiState {
         Approach,          // プレイヤーの視界に入るように接近
         TargetLock,        // 視界に入り、画面中央へ移動するためのチャージ蓄積
         MoveToCenter,      // プレイヤーの進行方向真正面ラインへ素早く移動
         AttackCharge,      // 中央到達後、攻撃チャージ
-        UnavoidableAttack  // 回避困難な弾を発射
+        UnavoidableAttack, // 回避困難な弾を発射
+        StationaryShooting,// 静止砲撃（見た目のみ射撃）
+        SwarmHanging,      // 小型群れの並走追従
+        SwarmAttacking     // 小型群れの突撃/攻撃
     };
 
     void SetAiState(AiState state) { aiState_ = state; }
@@ -85,12 +110,18 @@ private:
     int shotTimer_ = 0;
 
     // AIステート関連のメンバ変数
+    EnemyType enemyType_ = EnemyType::Normal;
     AiState aiState_ = AiState::Approach;
     float toCenterGauge_ = 0.0f;
     float attackGauge_ = 0.0f;
     bool isBoss_ = false;
     bool isSpawnPoint_ = false;                      // エディタ用の出現サークルかどうか
     int hitFlashTimer_ = 0;                          // 被弾時の黄色フラッシュタイマー
+    float spawnRadius_ = 5.0f;                       // 発生範囲（半径）
+    int spawnCount_ = 1;                             // 発生個数
+    float hangTime_ = 3.0f;                          // 小型群れ型の並走時間（秒）
+    float hangTimer_ = 0.0f;                         // 小型群れ型の並走経過タイマー
+    bool isVisualOnlyBullet_ = false;                // 演出専用弾フラグ（当たり判定なし）
 
     // AI用定数
     static inline const float kApproachLookDistance = 15.0f; // プレイヤーの何メートル前方に入ったら視界内とするか

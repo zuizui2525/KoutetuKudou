@@ -24,6 +24,8 @@ public:
 
     // Setter
     void Kill() { isActive_ = false; }
+    bool IsVisualOnly() const { return isVisualOnly_; }
+    void SetVisualOnly(bool visualOnly) { isVisualOnly_ = visualOnly; }
 
 private:
     // マジックナンバー排除のための定数
@@ -36,6 +38,7 @@ private:
     std::unique_ptr<CubeObject> cube_;
     Vector3 velocity_;
     bool isActive_ = true;
+    bool isVisualOnly_ = false;
     int lifeTimer_ = 0;
     std::string effectName_ = "Fire";
 };

@@ -2,6 +2,8 @@
 #include "App/Scene/Game/Player/Player.h"
 #include "Engine/Math/Matrix/Matrix.h"
 
+#include <chrono>
+
 Enemy::Enemy() {
     cube_ = std::make_unique<CubeObject>();
     headCube_ = std::make_unique<CubeObject>();
@@ -9,9 +11,9 @@ Enemy::Enemy() {
     headCollider_ = std::make_unique<PartCollider>();
     bulletEffectName_ = kBulletEffectName;
     
-    // 乱数シードの設定
-    std::random_device seed_gen;
-    randomEngine_ = std::mt19937(seed_gen());
+    // 安全な乱数シードの設定 (std::random_deviceのシステム例外回避)
+    auto seed = static_cast<unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    randomEngine_ = std::mt19937(seed);
 }
 
 void Enemy::Initialize() {
@@ -54,6 +56,8 @@ void Enemy::Initialize() {
 }
 
 void Enemy::Update() {
+    if (!cube_ || !headCube_ || !bodyCollider_ || !headCollider_) return;
+
     if (isSpawnPoint_) {
         cube_->Update();
         headCube_->Update();
@@ -163,6 +167,47 @@ void Enemy::Update() {
         pos.x = (rand() % 2 == 0) ? -kRetreatOffsetX : kRetreatOffsetX;
         break;
     }
+    case AiState::StationaryShooting: {
+        // 静止砲撃型: 移動せず、定位置で演出専用弾を定期射撃
+        shotTimer_++;
+        static const int kStationaryShotInterval = 60; // 60フレームごとに射撃
+        if (shotTimer_ >= kStationaryShotInterval) {
+            shotTimer_ = 0;
+            Vector3 bulletPos = pos + Vector3{ 0.0f, 0.0f, -1.0f };
+            Vector3 bulletDir = Math::Normalize(Math::Subtract(playerPos, bulletPos));
+            static const float kStationaryBulletSpeed = 0.2f;
+            Vector3 bulletVel = Math::Multiply(kStationaryBulletSpeed, bulletDir);
+
+            auto bullet = std::make_unique<Bullet>(bulletPos, bulletVel, kBulletEffectName);
+            bullet->SetVisualOnly(true); // ★演出用弾（当たり判定なし）
+            bullets_.push_back(std::move(bullet));
+        }
+        break;
+    }
+    case AiState::SwarmHanging: {
+        // 小型並走群れ型: プレイヤーと並走し近傍を漂う
+        pos.z += Player::GetAutoSpeed();
+        
+        static const float kHangOscillationSpeed = 0.05f;
+        static const float kHangOscillationAmp = 0.02f;
+        hangTimer_ += 1.0f / 60.0f; // 1フレーム1/60秒経過
+        pos.x += std::sin(hangTimer_ * 10.0f) * kHangOscillationAmp;
+
+        // 指定並走時間を超えたら攻撃状態へ移行
+        if (hangTimer_ >= hangTime_) {
+            aiState_ = AiState::SwarmAttacking;
+        }
+        break;
+    }
+    case AiState::SwarmAttacking: {
+        // 小型並走群れ型: 数秒後、プレイヤーに向かって突撃
+        static const float kSwarmAttackSpeed = 0.25f;
+        Vector3 dir = Math::Normalize(Math::Subtract(playerPos, pos));
+        pos.x += dir.x * kSwarmAttackSpeed;
+        pos.y += dir.y * kSwarmAttackSpeed;
+        pos.z += dir.z * kSwarmAttackSpeed;
+        break;
+    }
     }
 
     // 移動限界制限
@@ -191,6 +236,8 @@ void Enemy::Update() {
 }
 
 void Enemy::Draw() {
+    if (!cube_ || !headCube_) return;
+
     if (isSpawnPoint_) {
         cube_->Draw(kTextureKey, kEnvMapKey);
         return;

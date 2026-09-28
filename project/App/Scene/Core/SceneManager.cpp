@@ -50,9 +50,10 @@ void SceneManager::Update() {
         nextScene_ = sceneFactory_->CreateScene(nextSceneName_);
 
         if (nextScene_) {
-            // ライトとカメラのリセット
+            // ライトとカメラおよびシーン階層（選択状態）のリセット
             CameraResource::GetCameraManager()->Clear();
             LightResource::GetLightManager()->Clear();
+            SceneHierarchy::GetInstance()->Clear();
 
             // ポストプロセスのエフェクトおよびクリアカラーのリセット（シーン遷移時の自動解除）
             if (postProcess_) {

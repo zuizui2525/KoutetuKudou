@@ -54,7 +54,7 @@ void DrawRoutePhase::Update() {
 
     // 1. 2Dミニマップの更新
     Vector3 targetZoom = drawRouteCamera_->GetDestinationZoom();
-    minimap_->Update(input_, route_, stage_, targetZoom);
+    minimap_->Update(input_, route_, stage_, targetZoom, stageEditor_);
     drawRouteCamera_->SetDestinationZoom(targetZoom);
 
     // 2. ズームカメラの更新
@@ -143,6 +143,16 @@ void DrawRoutePhase::Draw() {
     stage_->Draw(true, false, dummyPlayerPos);
     route_->Draw();
     cursorIndicatorZoom_->Draw();
+
+    // エディタで配置された敵サークルの描画
+    if (stageEditor_ && stageEditor_->GetEnemies()) {
+        const auto* editorEnemies = stageEditor_->GetEnemies();
+        for (const auto& enemy : *editorEnemies) {
+            if (enemy) {
+                enemy->Draw();
+            }
+        }
+    }
 }
 
 void DrawRoutePhase::ImGuiControl() {

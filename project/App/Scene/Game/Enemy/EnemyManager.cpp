@@ -5,6 +5,7 @@
 #include "Engine/Math/Collision/Collision.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "App/Scene/Core/SceneManager.h"
+#include "Engine/Debug/SceneHierarchy.h"
 
 #include <cmath>
 #include <algorithm>
@@ -24,6 +25,9 @@ void EnemyManager::Initialize(Input* input, PlayCamera* playCamera) {
 }
 
 void EnemyManager::Reset() {
+#ifdef _USEIMGUI
+    SceneHierarchy::GetInstance()->SetSelected(nullptr);
+#endif
     enemies_.clear();
     spawnTriggers_.clear();
     lastSpawnZ_ = 0.0f;
@@ -40,14 +44,19 @@ void EnemyManager::SetupSpawnTriggers(const std::vector<std::unique_ptr<Enemy>>&
     for (const auto& enemy : editorEnemies) {
         if (enemy->IsSpawnPoint()) {
             SpawnTrigger trigger;
+            trigger.pos = enemy->GetPosition();
             trigger.z = enemy->GetPosition().z;
-            trigger.count = static_cast<int>(enemy->GetSize().x);
-            if (trigger.count < 1) trigger.count = 1;
-            if (trigger.count > 5) trigger.count = 5;
+            trigger.count = enemy->GetSpawnCount();
+            trigger.radius = enemy->GetSpawnRadius();
+            trigger.hangTime = enemy->GetHangTime();
+            trigger.type = enemy->GetEnemyType();
             trigger.triggered = false;
             spawnTriggers_.push_back(trigger);
         }
     }
+#ifdef _USEIMGUI
+    SceneHierarchy::GetInstance()->SetSelected(nullptr);
+#endif
     enemies_.clear(); // エディタ用ダミーサークルをクリア
     lastSpawnZ_ = startPlayerZ;
     hasBossSpawned_ = false;
@@ -66,25 +75,42 @@ void EnemyManager::Update(Player* player) {
             trigger.triggered = true;
 
             for (int i = 0; i < trigger.count; ++i) {
-                Vector3 rightVec = { tangent.z, 0.0f, -tangent.x };
-                float spawnDistBack = -10.0f - static_cast<float>(i) * 3.0f;
-                float spawnDistSide = (i % 2 == 0 ? 10.0f : -10.0f) + (static_cast<float>(i / 2) * 1.5f);
-                
-                Vector3 spawnPos = Math::Add(
-                    playerPos, 
-                    Math::Add(
-                        Math::Multiply(spawnDistBack, tangent),
-                        Math::Multiply(spawnDistSide, rightVec)
-                    )
-                );
-
                 auto enemy = std::make_unique<Enemy>();
                 enemy->Initialize();
                 enemy->SetSpawnPoint(false);
-                enemy->SetPosition(spawnPos);
+                enemy->SetEnemyType(trigger.type);
                 enemy->SetTargetPlayer(player);
-                enemy->SetAiState(Enemy::AiState::Approach);
-                
+                enemy->SetHangTime(trigger.hangTime);
+
+                if (trigger.type == Enemy::EnemyType::Stationary) {
+                    // 静止砲撃型: 指定された設置座標そのまま
+                    enemy->SetPosition(trigger.pos);
+                    enemy->SetAiState(Enemy::AiState::StationaryShooting);
+                } else if (trigger.type == Enemy::EnemyType::Swarm) {
+                    // 小型並走群れ型: 範囲内（radius）に少しランダムオフセット
+                    float angle = (static_cast<float>(rand()) / RAND_MAX) * 3.14159f * 2.0f;
+                    float r = (static_cast<float>(rand()) / RAND_MAX) * trigger.radius;
+                    Vector3 offset = { std::cos(angle) * r, 0.0f, std::sin(angle) * r };
+                    enemy->SetPosition(Math::Add(trigger.pos, offset));
+                    enemy->SetSize({ 0.4f, 0.4f, 0.4f }); // 小型化
+                    enemy->SetAiState(Enemy::AiState::SwarmHanging);
+                } else {
+                    // 通常突進型
+                    Vector3 rightVec = { tangent.z, 0.0f, -tangent.x };
+                    float spawnDistBack = -10.0f - static_cast<float>(i) * 3.0f;
+                    float spawnDistSide = (i % 2 == 0 ? 10.0f : -10.0f) + (static_cast<float>(i / 2) * 1.5f);
+                    
+                    Vector3 spawnPos = Math::Add(
+                        playerPos, 
+                        Math::Add(
+                            Math::Multiply(spawnDistBack, tangent),
+                            Math::Multiply(spawnDistSide, rightVec)
+                        )
+                    );
+                    enemy->SetPosition(spawnPos);
+                    enemy->SetAiState(Enemy::AiState::Approach);
+                }
+
                 enemies_.push_back(std::move(enemy));
             }
         }
@@ -164,7 +190,7 @@ void EnemyManager::Update(Player* player) {
     for (auto& enemy : enemies_) {
         const auto& enemyBullets = enemy->GetBullets();
         for (auto& bullet : enemyBullets) {
-            if (!bullet->IsActive()) continue;
+            if (!bullet->IsActive() || bullet->IsVisualOnly()) continue;
 
             Sphere bulletSphere;
             bulletSphere.center = bullet->GetPosition();

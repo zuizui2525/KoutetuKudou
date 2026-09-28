@@ -11,6 +11,8 @@
 #include "App/Scene/Game/Route.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
+#include "App/Scene/Game/Stage/StageEditor.h"
+#include "Engine/Debug/SceneHierarchy.h"
 #include <cmath>
 #include <algorithm>
 
@@ -124,7 +126,7 @@ void Minimap::Initialize(Stage* stage) {
  * @param stage ステージ情報
  * @param ioTargetZoom [in, out] ズームカメラの注視座標（ドラッグで更新・移動するため）
  */
-void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTargetZoom) {
+void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTargetZoom, StageEditor* stageEditor) {
     if (!route || !cameraMgr_) {
         cameraMgr_ = CameraResource::GetCameraManager();
     }
@@ -140,6 +142,46 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
         scaledMousePos.x = (mousePos.x / viewSize.x) * clientW;
         scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
     }
+
+#ifdef _USEIMGUI
+    // --- 2Dマップ上でのエディタマウス操作 ---
+    if (stageEditor && scaledMousePos.x <= clientW * kMinimapWidthRatio) {
+        float normX = scaledMousePos.x / (clientW * kMinimapWidthRatio);
+        float normY = scaledMousePos.y / clientH;
+
+        float startZ = route->GetCurrentAreaStartZ();
+        float goalZ = route->GetCurrentAreaGoalZ();
+        float worldZ = startZ + (goalZ - startZ) * normY;
+        float worldX = (normX - 0.5f) * 40.0f; // 2Dミニマップ横幅マップスケール
+
+        auto editMode = stageEditor->GetEditMode();
+
+        // 1. 配置モード時: マウスホイールで発生範囲（半径）を拡縮
+        if (editMode == StageEditor::EditMode::Placing) {
+            float wheel = input->GetMouseWheel();
+            if (wheel != 0.0f) {
+                float currentR = stageEditor->GetPendingRadius();
+                currentR += (wheel > 0.0f ? 0.5f : -0.5f);
+                if (currentR < 1.0f) currentR = 1.0f;
+                if (currentR > 20.0f) currentR = 20.0f;
+                stageEditor->SetPendingRadius(currentR);
+            }
+        }
+
+        // 2. 左クリック押下時のアクション
+        if (input->MouseTrigger(0)) { // 左クリック
+            if (editMode == StageEditor::EditMode::Placing) {
+                stageEditor->AddEnemyFrom2D(
+                    { worldX, 0.0f, worldZ },
+                    stageEditor->GetPendingType(),
+                    stageEditor->GetPendingCount(),
+                    stageEditor->GetPendingRadius(),
+                    stageEditor->GetPendingHangTime()
+                );
+            }
+        }
+    }
+#endif
 
     float vpWidth = clientW * kMinimapWidthRatio;
     float vpHeight = clientH;
