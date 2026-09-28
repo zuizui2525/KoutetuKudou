@@ -58,6 +58,9 @@ public:
 	DXGI_FORMAT GetRtvFormat() const { return rtvFormat_; }
 	// FPS固定
 	float GetDeltaTime() const { return deltaTime_; }
+	// ビューポート・シザー情報
+	D3D12_VIEWPORT GetViewport() const { return viewport_; }
+	D3D12_RECT GetScissorRect() const { return scissorRect_; }
 private:
 	void InitializeViewport(int32_t width, int32_t height);
 	void InitializeScissorRect(int32_t width, int32_t height);

@@ -36,6 +36,9 @@ private:
     // 各ウィンドウの表示・非表示フラグ
     bool showGameView_ = true;
     bool showPerfMonitor_ = true;
+    bool showHierarchy_ = true;
+    bool showInspector_ = true;
+    bool showSceneManager_ = true;
     bool isGameViewVisible_ = false;
 
     // ウィンドウ状態管理のメンバ変数

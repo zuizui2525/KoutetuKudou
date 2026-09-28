@@ -49,8 +49,11 @@ void DrawRoutePhase::Initialize() {
 }
 
 void DrawRoutePhase::Update() {
-    float clientW = static_cast<float>(WindowApp::kClientWidth);
-    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    auto dxCommon = Zuizui::GetInstance()->GetDxCommon();
+    float clientW = dxCommon ? dxCommon->GetViewport().Width : static_cast<float>(WindowApp::kClientWidth);
+    float clientH = dxCommon ? dxCommon->GetViewport().Height : static_cast<float>(WindowApp::kClientHeight);
+
+    constexpr float kSplitRightRatio = 0.7f;
 
     // 1. 2Dミニマップの更新
     Vector3 targetZoom = drawRouteCamera_->GetDestinationZoom();
@@ -61,7 +64,7 @@ void DrawRoutePhase::Update() {
     drawRouteCamera_->Update(input_, route_->GetCurrentAreaStartZ(), route_->GetCurrentAreaGoalZ());
 
     // 3. 右画面（Zoomカメラ 3D空間用）のWVP計算・更新
-    drawRouteCamera_->GetCamera()->UpdateProjection((clientW * 0.7f) / clientH); // 右70%用アスペクト比を設定
+    drawRouteCamera_->GetCamera()->UpdateProjection((clientW * kSplitRightRatio) / clientH); // 右画面用アスペクト比を設定
     stage_->Update();
 
     // 3D赤丸インジケータ（右画面の床用）の更新
@@ -90,13 +93,17 @@ void DrawRoutePhase::Update() {
 
 void DrawRoutePhase::Draw() {
     // 画面分割（スプリットビュー）の描画
-    float clientW = static_cast<float>(WindowApp::kClientWidth);
-    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    auto dxCommon = Zuizui::GetInstance()->GetDxCommon();
+    float clientW = dxCommon ? dxCommon->GetViewport().Width : static_cast<float>(WindowApp::kClientWidth);
+    float clientH = dxCommon ? dxCommon->GetViewport().Height : static_cast<float>(WindowApp::kClientHeight);
+
+    constexpr float kSplitLeftRatio = 0.3f;
+    constexpr float kSplitRightRatio = 0.7f;
 
     // ビューポート・シザーの定義
     // 左側 (30%)
     D3D12_VIEWPORT vpLeft{};
-    vpLeft.Width = clientW * 0.3f;
+    vpLeft.Width = clientW * kSplitLeftRatio;
     vpLeft.Height = clientH;
     vpLeft.TopLeftX = 0.0f;
     vpLeft.TopLeftY = 0.0f;
@@ -111,9 +118,9 @@ void DrawRoutePhase::Draw() {
 
     // 右側 (70%)
     D3D12_VIEWPORT vpRight{};
-    vpRight.Width = clientW * 0.7f;
+    vpRight.Width = clientW * kSplitRightRatio;
     vpRight.Height = clientH;
-    vpRight.TopLeftX = clientW * 0.3f;
+    vpRight.TopLeftX = clientW * kSplitLeftRatio;
     vpRight.TopLeftY = 0.0f;
     vpRight.MinDepth = 0.0f;
     vpRight.MaxDepth = 1.0f;
@@ -124,7 +131,6 @@ void DrawRoutePhase::Draw() {
     scRight.top = 0;
     scRight.bottom = static_cast<LONG>(clientH);
 
-    auto dxCommon = Zuizui::GetInstance()->GetDxCommon();
     auto commandList = dxCommon->GetCommandList();
 
     // 1. 左画面の描画（2Dミニマップ）
@@ -157,21 +163,28 @@ void DrawRoutePhase::Draw() {
 
 void DrawRoutePhase::ImGuiControl() {
 #ifdef _USEIMGUI
-    ImGui::Begin("Route Editor");
-    ImGui::Text("Mouse drag to draw route on ground.");
-    ImGui::Text("Has Reached Goal: %s", route_->HasReachedGoal() ? "Yes" : "No");
-    
-    if (route_->HasReachedGoal()) {
-        if (ImGui::Button("Start Game")) {
-            if (onStartGame_) {
-                onStartGame_();
-                return;
+    if (!showRouteEditor_ || *showRouteEditor_) {
+        if (ImGui::Begin("ルートエディタ###Route Editor", showRouteEditor_)) {
+            ImGui::Text("マウスドラッグで地面にルートを描画");
+            ImGui::Text("ゴール到達: %s", route_->HasReachedGoal() ? "到達済み" : "未到達");
+            
+            if (route_->HasReachedGoal()) {
+                if (ImGui::Button("ゲーム開始")) {
+                    if (onStartGame_) {
+                        ImGui::End();
+                        onStartGame_();
+                        if (stageEditor_) {
+                            stageEditor_->ImGuiControl();
+                        }
+                        return;
+                    }
+                }
+            } else {
+                ImGui::TextDisabled("黄色のスタート球から青色のゴール球までドラッグしてください。");
             }
         }
-    } else {
-        ImGui::TextDisabled("Drag from yellow start sphere to blue goal sphere.");
+        ImGui::End();
     }
-    ImGui::End();
 
     if (stageEditor_) {
         stageEditor_->ImGuiControl();

@@ -138,12 +138,29 @@ void EffectManager::StopEffect(const std::string& name) {
 
 void EffectManager::ImGuiControl(const std::string& name) {
 #ifdef _USEIMGUI
-    ImGui::Begin((name + " List").c_str());
-    ImGui::Checkbox((name + " Settings").c_str(), &isWindowOpen_);
-    ImGui::End();
+    (void)name;
 
+    // 1. エフェクト一覧ウィンドウ
+    if (showListWindow_) {
+        if (ImGui::Begin("エフェクト一覧###Effects List", &showListWindow_)) {
+            ImGui::Checkbox("エフェクト詳細設定", &isWindowOpen_);
+        }
+        ImGui::End();
+    }
+
+    // 2. エフェクト詳細設定ウィンドウ（個別コントロール）
     if (isWindowOpen_) {
-        if (ImGui::Begin((name + " Control").c_str(), &isWindowOpen_)) {
+        if (ImGui::Begin("エフェクト詳細設定###Effects Control", &isWindowOpen_)) {
+            // スライダー調整用定数（マジックナンバー排除）
+            constexpr float kFloatDragSpeed = 0.1f;
+            constexpr float kScaleDragSpeed = 0.05f;
+            constexpr float kLifeTimeMinLimit = 0.1f;
+            constexpr float kLifeTimeMaxLimit = 10.0f;
+            constexpr float kFreqMinLimit = 0.1f;
+            constexpr float kFreqMaxLimit = 10.0f;
+            constexpr int kEmitCountMinLimit = 1;
+            constexpr int kEmitCountMaxLimit = 100;
+
             for (auto& pair : effectMap_) {
                 std::string effectName = pair.first;
                 EffectSetting& setting = pair.second->GetSettingRef();
@@ -151,43 +168,43 @@ void EffectManager::ImGuiControl(const std::string& name) {
                 if (ImGui::CollapsingHeader(effectName.c_str())) {
                     std::string label = "##" + effectName;
                     
-                    ImGui::Text("Base Settings");
+                    ImGui::Text("基本設定");
                     int emitMin = setting.emitCountMin;
                     int emitMax = setting.emitCountMax;
-                    if(ImGui::DragInt(("Emit Count Min" + label).c_str(), &emitMin, 1, 1, 100)) setting.emitCountMin = emitMin;
-                    if(ImGui::DragInt(("Emit Count Max" + label).c_str(), &emitMax, 1, 1, 100)) setting.emitCountMax = emitMax;
-                    ImGui::DragFloat(("LifeTime Min" + label).c_str(), &setting.lifeTimeMin, 0.1f, 0.1f, 10.0f);
-                    ImGui::DragFloat(("LifeTime Max" + label).c_str(), &setting.lifeTimeMax, 0.1f, 0.1f, 10.0f);
+                    if (ImGui::DragInt(("最小放出数" + label).c_str(), &emitMin, 1, kEmitCountMinLimit, kEmitCountMaxLimit)) setting.emitCountMin = emitMin;
+                    if (ImGui::DragInt(("最大放出数" + label).c_str(), &emitMax, 1, kEmitCountMinLimit, kEmitCountMaxLimit)) setting.emitCountMax = emitMax;
+                    ImGui::DragFloat(("最小寿命 (秒)" + label).c_str(), &setting.lifeTimeMin, kFloatDragSpeed, kLifeTimeMinLimit, kLifeTimeMaxLimit);
+                    ImGui::DragFloat(("最大寿命 (秒)" + label).c_str(), &setting.lifeTimeMax, kFloatDragSpeed, kLifeTimeMinLimit, kLifeTimeMaxLimit);
 
-                    ImGui::SeparatorText("Transform");
-                    ImGui::DragFloat3(("Position Offset" + label).c_str(), &setting.positionOffset.x, 0.1f);
-                    ImGui::DragFloat3(("Spawn Area Min" + label).c_str(), &setting.spawnAreaMin.x, 0.1f);
-                    ImGui::DragFloat3(("Spawn Area Max" + label).c_str(), &setting.spawnAreaMax.x, 0.1f);
-                    ImGui::DragFloat3(("Velocity Min" + label).c_str(), &setting.velocityMin.x, 0.1f);
-                    ImGui::DragFloat3(("Velocity Max" + label).c_str(), &setting.velocityMax.x, 0.1f);
-                    ImGui::DragFloat3(("Scale Start Min" + label).c_str(), &setting.scaleMin.x, 0.05f);
-                    ImGui::DragFloat3(("Scale Start Max" + label).c_str(), &setting.scaleMax.x, 0.05f);
-                    ImGui::DragFloat3(("Scale End Min" + label).c_str(), &setting.scaleEndMin.x, 0.05f);
-                    ImGui::DragFloat3(("Scale End Max" + label).c_str(), &setting.scaleEndMax.x, 0.05f);
-                    ImGui::DragFloat3(("Rotation Min" + label).c_str(), &setting.rotationMin.x, 0.1f);
-                    ImGui::DragFloat3(("Rotation Max" + label).c_str(), &setting.rotationMax.x, 0.1f);
+                    ImGui::SeparatorText("トランスフォーム (座標・サイズ・回転)");
+                    ImGui::DragFloat3(("位置オフセット" + label).c_str(), &setting.positionOffset.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("生成範囲 (最小)" + label).c_str(), &setting.spawnAreaMin.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("生成範囲 (最大)" + label).c_str(), &setting.spawnAreaMax.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("最小初速" + label).c_str(), &setting.velocityMin.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("最大初速" + label).c_str(), &setting.velocityMax.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("開始スケール (最小)" + label).c_str(), &setting.scaleMin.x, kScaleDragSpeed);
+                    ImGui::DragFloat3(("開始スケール (最大)" + label).c_str(), &setting.scaleMax.x, kScaleDragSpeed);
+                    ImGui::DragFloat3(("終了スケール (最小)" + label).c_str(), &setting.scaleEndMin.x, kScaleDragSpeed);
+                    ImGui::DragFloat3(("終了スケール (最大)" + label).c_str(), &setting.scaleEndMax.x, kScaleDragSpeed);
+                    ImGui::DragFloat3(("最小回転角" + label).c_str(), &setting.rotationMin.x, kFloatDragSpeed);
+                    ImGui::DragFloat3(("最大回転角" + label).c_str(), &setting.rotationMax.x, kFloatDragSpeed);
 
-                    ImGui::SeparatorText("Features");
-                    ImGui::Checkbox(("Billboard" + label).c_str(), &setting.isBillboard);
-                    ImGui::Checkbox(("Emitter Mode" + label).c_str(), &setting.isEmitter);
+                    ImGui::SeparatorText("特殊機能設定");
+                    ImGui::Checkbox(("ビルボード (常にカメラを向く)" + label).c_str(), &setting.isBillboard);
+                    ImGui::Checkbox(("エミッターモード (継続放出)" + label).c_str(), &setting.isEmitter);
                     if (setting.isEmitter) {
-                        ImGui::DragFloat(("Emit Frequency" + label).c_str(), &setting.emitFrequency, 0.1f, 0.1f, 10.0f);
+                        ImGui::DragFloat(("放出周期 (秒)" + label).c_str(), &setting.emitFrequency, kFloatDragSpeed, kFreqMinLimit, kFreqMaxLimit);
                     }
 
-                    ImGui::SeparatorText("Color");
-                    ImGui::ColorEdit4(("Color Start Min" + label).c_str(), &setting.colorStartMin.x);
-                    ImGui::ColorEdit4(("Color Start Max" + label).c_str(), &setting.colorStartMax.x);
-                    ImGui::ColorEdit4(("Color End Min" + label).c_str(), &setting.colorEndMin.x);
-                    ImGui::ColorEdit4(("Color End Max" + label).c_str(), &setting.colorEndMax.x);
+                    ImGui::SeparatorText("カラーグラデーション");
+                    ImGui::ColorEdit4(("開始色 (最小)" + label).c_str(), &setting.colorStartMin.x);
+                    ImGui::ColorEdit4(("開始色 (最大)" + label).c_str(), &setting.colorStartMax.x);
+                    ImGui::ColorEdit4(("終了色 (最小)" + label).c_str(), &setting.colorEndMin.x);
+                    ImGui::ColorEdit4(("終了色 (最大)" + label).c_str(), &setting.colorEndMax.x);
                 }
             }
+            ImGui::End();
         }
-        ImGui::End();
     }
 #endif
 }

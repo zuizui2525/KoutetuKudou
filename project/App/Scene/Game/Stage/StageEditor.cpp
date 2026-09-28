@@ -79,55 +79,55 @@ void StageEditor::ImGuiControl() {
 #ifdef _USEIMGUI
     if (!showStageEditor_ || !enemies_) return;
 
-    ImGui::Begin("Enemy Editor");
+    if (ImGui::Begin("敵エディタ###Enemy Editor", &showStageEditor_)) {
 
     // 1. モード選択
-    ImGui::Text("Operation Mode:");
+    ImGui::Text("操作モード:");
     int modeInt = static_cast<int>(editMode_);
-    if (ImGui::RadioButton("None (Normal)", &modeInt, 0)) editMode_ = EditMode::None;
+    if (ImGui::RadioButton("通常 (None)", &modeInt, 0)) editMode_ = EditMode::None;
     ImGui::SameLine();
-    if (ImGui::RadioButton("Place Mode", &modeInt, 1)) editMode_ = EditMode::Placing;
+    if (ImGui::RadioButton("配置モード (Place)", &modeInt, 1)) editMode_ = EditMode::Placing;
     ImGui::SameLine();
-    if (ImGui::RadioButton("Delete Mode", &modeInt, 2)) editMode_ = EditMode::Deleting;
+    if (ImGui::RadioButton("削除モード (Delete)", &modeInt, 2)) editMode_ = EditMode::Deleting;
     ImGui::SameLine();
-    if (ImGui::RadioButton("Edit Mode", &modeInt, 3)) editMode_ = EditMode::Editing;
+    if (ImGui::RadioButton("編集モード (Edit)", &modeInt, 3)) editMode_ = EditMode::Editing;
 
     ImGui::Separator();
 
     // 2. 配置設定 (Placing用)
-    ImGui::Text("Placement Settings:");
-    const char* typeNames[] = { "Normal (Rush)", "Stationary (Visual Bullet)", "Swarm (Follow & Attack)" };
+    ImGui::Text("配置パラメータ設定:");
+    const char* typeNames[] = { "通常突進 (Normal)", "固定砲台 (Stationary)", "追従群生 (Swarm)" };
     int currentTypeIdx = static_cast<int>(pendingType_);
-    if (ImGui::Combo("Enemy Type", &currentTypeIdx, typeNames, IM_ARRAYSIZE(typeNames))) {
+    if (ImGui::Combo("敵タイプ", &currentTypeIdx, typeNames, IM_ARRAYSIZE(typeNames))) {
         pendingType_ = static_cast<Enemy::EnemyType>(currentTypeIdx);
     }
 
-    ImGui::SliderInt("Spawn Count", &pendingCount_, 1, 10);
-    ImGui::SliderFloat("Spawn Radius", &pendingRadius_, 1.0f, 20.0f);
+    ImGui::SliderInt("スポーン数", &pendingCount_, 1, 10);
+    ImGui::SliderFloat("スポーン半径", &pendingRadius_, 1.0f, 20.0f);
     if (pendingType_ == Enemy::EnemyType::Swarm) {
-        ImGui::SliderFloat("Hang Time (sec)", &pendingHangTime_, 1.0f, 10.0f);
+        ImGui::SliderFloat("滞空時間 (秒)", &pendingHangTime_, 1.0f, 10.0f);
     }
 
     if (editMode_ == EditMode::Placing) {
-        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "Status: Left-click on 2D Map to Place!");
-        ImGui::Text("Use Mouse Wheel to Resize Radius before clicking.");
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "状態: 2Dマップ上を左クリックして敵を配置！");
+        ImGui::Text("クリック前にマウスホイールで半径を調整できます。");
     } else {
-        if (ImGui::Button("Start Placement (Set & Place)")) {
+        if (ImGui::Button("配置開始 (クリックで配置)")) {
             editMode_ = EditMode::Placing;
         }
     }
 
     ImGui::Separator();
-    ImGui::Text("Enemies List:");
+    ImGui::Text("配置済み敵リスト:");
 
     // 敵のリスト表示
     for (int i = 0; i < static_cast<int>(enemies_->size()); ++i) {
         auto& e = (*enemies_)[i];
-        std::string typeStr = "Normal";
-        if (e->GetEnemyType() == Enemy::EnemyType::Stationary) typeStr = "Stationary";
-        else if (e->GetEnemyType() == Enemy::EnemyType::Swarm) typeStr = "Swarm";
+        std::string typeStr = "通常";
+        if (e->GetEnemyType() == Enemy::EnemyType::Stationary) typeStr = "固定";
+        else if (e->GetEnemyType() == Enemy::EnemyType::Swarm) typeStr = "群生";
 
-        std::string label = "Point " + std::to_string(i) + " [" + typeStr + " (cnt:" + std::to_string(e->GetSpawnCount()) + ")]";
+        std::string label = "ポイント " + std::to_string(i) + " [" + typeStr + " (数:" + std::to_string(e->GetSpawnCount()) + ")]";
         bool isSelected = (selectedEnemyIndex_ == i);
         if (ImGui::Selectable(label.c_str(), isSelected)) {
             selectedEnemyIndex_ = i;
@@ -139,50 +139,51 @@ void StageEditor::ImGuiControl() {
     // 選択中の敵の編集
     if (selectedEnemyIndex_ >= 0 && selectedEnemyIndex_ < static_cast<int>(enemies_->size())) {
         ImGui::Separator();
-        ImGui::Text("Selected Point Details:");
+        ImGui::Text("選択中の敵の詳細設定:");
         auto& enemy = (*enemies_)[selectedEnemyIndex_];
 
         Vector3 pos = enemy->GetPosition();
-        if (ImGui::DragFloat3("Position", &pos.x, 0.1f)) {
+        if (ImGui::DragFloat3("座標", &pos.x, 0.1f)) {
             enemy->SetPosition(pos);
         }
 
         int typeIdx = static_cast<int>(enemy->GetEnemyType());
-        if (ImGui::Combo("Selected Type", &typeIdx, typeNames, IM_ARRAYSIZE(typeNames))) {
+        if (ImGui::Combo("敵タイプ##Selected", &typeIdx, typeNames, IM_ARRAYSIZE(typeNames))) {
             enemy->SetEnemyType(static_cast<Enemy::EnemyType>(typeIdx));
         }
 
         int count = enemy->GetSpawnCount();
-        if (ImGui::SliderInt("Selected Count", &count, 1, 10)) {
+        if (ImGui::SliderInt("スポーン数##Selected", &count, 1, 10)) {
             enemy->SetSpawnCount(count);
         }
 
         float radius = enemy->GetSpawnRadius();
-        if (ImGui::SliderFloat("Selected Radius", &radius, 1.0f, 20.0f)) {
+        if (ImGui::SliderFloat("スポーン半径##Selected", &radius, 1.0f, 20.0f)) {
             enemy->SetSpawnRadius(radius);
             enemy->SetSize({ radius * 2.0f, 0.1f, radius * 2.0f });
         }
 
         if (enemy->GetEnemyType() == Enemy::EnemyType::Swarm) {
             float hang = enemy->GetHangTime();
-            if (ImGui::SliderFloat("Selected Hang Time", &hang, 1.0f, 10.0f)) {
+            if (ImGui::SliderFloat("滞空時間##Selected", &hang, 1.0f, 10.0f)) {
                 enemy->SetHangTime(hang);
             }
         }
 
-        if (ImGui::Button("Delete Selected")) {
+        if (ImGui::Button("選択中の敵を削除")) {
             DeleteEnemy(selectedEnemyIndex_);
         }
     }
 
     // セーブ・ロード
     ImGui::Separator();
-    if (ImGui::Button("Save Stage")) {
+    if (ImGui::Button("ステージ保存")) {
         SaveStage(kStageFilePath);
     }
     ImGui::SameLine();
-    if (ImGui::Button("Load Stage")) {
+    if (ImGui::Button("ステージ読込")) {
         LoadStage(kStageFilePath);
+    }
     }
     ImGui::End();
 #endif

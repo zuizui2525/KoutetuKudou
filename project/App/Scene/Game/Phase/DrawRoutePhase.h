@@ -35,6 +35,8 @@ public:
     void Draw() override;
     void ImGuiControl() override;
 
+    void SetShowRouteEditorPtr(bool* showRouteEditor) { showRouteEditor_ = showRouteEditor; }
+
 private:
     Input* input_ = nullptr;
     CameraManager* cameraMgr_ = nullptr;
@@ -45,4 +47,5 @@ private:
     SphereObject* cursorIndicatorZoom_ = nullptr;
     StageEditor* stageEditor_ = nullptr;
     std::function<void()> onStartGame_;
+    bool* showRouteEditor_ = nullptr;
 };

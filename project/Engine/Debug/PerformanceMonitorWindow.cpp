@@ -13,7 +13,7 @@ PerformanceMonitorWindow::PerformanceMonitorWindow() {
 }
 
 void PerformanceMonitorWindow::Draw(bool* show) {
-    if (!ImGui::Begin("Performance Monitor", show)) {
+    if (!ImGui::Begin("パフォーマンス監視###Performance Monitor", show)) {
         ImGui::End();
         return;
     }
@@ -103,8 +103,8 @@ void PerformanceMonitorWindow::Draw(bool* show) {
     ImGui::SameLine();
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), " Mid: %.1f", midpointFpsVal);
 
-    ImGui::Text("Latency: %.2f ms", displayMs);
-    ImGui::Text("Memory: %.1f MB", displayMem);
+    ImGui::Text("レイテンシ: %.2f ms", displayMs);
+    ImGui::Text("メモリ使用量: %.1f MB", displayMem);
 
     ImGui::Separator();
     
@@ -120,7 +120,7 @@ void PerformanceMonitorWindow::Draw(bool* show) {
     float graphMaxMem = maxMem + 50.0f; // 50MBの余白
 
     // グラフ描画開始
-    ImGui::Text("Performance Graph");
+    ImGui::Text("パフォーマンス推移グラフ");
 
     // マージンとサイズの定義（マジックナンバー排除）
     constexpr float kLeftMargin = 50.0f;

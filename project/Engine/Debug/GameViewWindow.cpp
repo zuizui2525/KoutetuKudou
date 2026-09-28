@@ -51,27 +51,31 @@ GameViewWindow::GameViewWindow()
 void GameViewWindow::Draw(bool* show, bool* isVisible) {
     *isVisible = false;
     
-    if (ImGui::Begin("Game View", show)) {
+    if (ImGui::Begin("ゲーム画面###Game View", show)) {
         *isVisible = true;
 
-        // 1. ギズモ操作モード切り替えUI
+        // 1. ギズモ操作モード切り替えUI（ImGuizmo OPERATION 定数）
+        constexpr int kGizmoOpTranslate = 7;
+        constexpr int kGizmoOpRotate = 120;
+        constexpr int kGizmoOpScale = 896;
+
         int currentOp = gizmoOperation_;
         bool opChanged = false;
 
-        ImGui::Text("Gizmo Mode:");
+        ImGui::Text("ギズモ操作:");
         ImGui::SameLine();
-        if (ImGui::RadioButton("Translate", currentOp == 7)) {
-            currentOp = 7;
+        if (ImGui::RadioButton("移動", currentOp == kGizmoOpTranslate)) {
+            currentOp = kGizmoOpTranslate;
             opChanged = true;
         }
         ImGui::SameLine();
-        if (ImGui::RadioButton("Rotate", currentOp == 120)) {
-            currentOp = 120;
+        if (ImGui::RadioButton("回転", currentOp == kGizmoOpRotate)) {
+            currentOp = kGizmoOpRotate;
             opChanged = true;
         }
         ImGui::SameLine();
-        if (ImGui::RadioButton("Scale", currentOp == 896)) {
-            currentOp = 896;
+        if (ImGui::RadioButton("拡縮", currentOp == kGizmoOpScale)) {
+            currentOp = kGizmoOpScale;
             opChanged = true;
         }
 
@@ -90,25 +94,17 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             // 子ウィンドウのサイズを取得し、アスペクト比を維持したサイズを計算
             ImVec2 contentSize = ImGui::GetContentRegionAvail();
             
-            // 現在のウィンドウの実際のクライアントアスペクト比を動的に計算して同期
-            HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
-            RECT clientRect{};
-            GetClientRect(hwnd, &clientRect);
-            float screenWidth = static_cast<float>(clientRect.right - clientRect.left);
-            float screenHeight = static_cast<float>(clientRect.bottom - clientRect.top);
-            
-            // ゼロ除算を防止する安全設計
-            float currentAspectRatio = 16.0f / 9.0f;
-            if (screenHeight > 0.0f) {
-                currentAspectRatio = screenWidth / screenHeight;
-            }
+            // ゲーム画面の本来のアスペクト比（16:9）を定数定義（マジックナンバー排除）
+            constexpr float kGameAspectWidth = 16.0f;
+            constexpr float kGameAspectHeight = 9.0f;
+            constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
             
             float width = contentSize.x;
-            float height = contentSize.x / currentAspectRatio;
+            float height = contentSize.x / kGameAspectRatio;
             
             if (height > contentSize.y) {
                 height = contentSize.y;
-                width = contentSize.y * currentAspectRatio;
+                width = contentSize.y * kGameAspectRatio;
             }
             
             // 中央揃え用のパディング計算

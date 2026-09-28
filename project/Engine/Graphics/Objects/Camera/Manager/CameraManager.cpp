@@ -56,24 +56,26 @@ void CameraManager::Update() {
 
 void CameraManager::ImGuiControl() {
 #ifdef _USEIMGUI
-    ImGui::Begin("Camera List");
-
-    for (auto& [name, camera] : cameras_) {
-        bool isActive = (activeCamera_ == camera.get());
-
-        // 1. ラベルを作成 (例: "MainCamera (Active)")
-        std::string label = name + (isActive ? " (Active)" : "");
-
-        // 2. ラジオボタンを縦に並べる (SameLineを呼ばない)
-        // ##name をつけることで、内部IDを固定し、表示文字列が変わっても挙動を安定させる
-        if (ImGui::RadioButton((label + "##" + name).c_str(), isActive)) {
-            SetActiveCamera(name);
-        }
-
-
-        ImGui::Separator(); // カメラごとに区切り線を入れると見やすい
+    if (!showWindow_) {
+        return;
     }
 
+    if (ImGui::Begin("カメラ一覧###Camera List", &showWindow_)) {
+        for (auto& [name, camera] : cameras_) {
+            bool isActive = (activeCamera_ == camera.get());
+
+            // 1. ラベルを作成 (例: "MainCamera (アクティブ)")
+            std::string label = name + (isActive ? " (アクティブ)" : "");
+
+            // 2. ラジオボタンを縦に並べる (SameLineを呼ばない)
+            // ##name をつけることで、内部IDを固定し、表示文字列が変わっても挙動を安定させる
+            if (ImGui::RadioButton((label + "##" + name).c_str(), isActive)) {
+                SetActiveCamera(name);
+            }
+
+            ImGui::Separator(); // カメラごとに区切り線を入れると見やすい
+        }
+    }
     ImGui::End();
 #endif
 }

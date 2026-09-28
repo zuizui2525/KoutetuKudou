@@ -65,6 +65,11 @@ public:
     /// </summary>
     void ImGuiControl();
 
+    // --- ウィンドウ表示制御 ---
+    static bool* GetShowWindowPtr() { return &showWindow_; }
+    static bool IsWindowOpen() { return showWindow_; }
+    static void SetWindowOpen(bool open) { showWindow_ = open; }
+
     /// <summary>
     /// 背景クリアカラーモード設定
     /// </summary>
@@ -153,6 +158,8 @@ public:
     float GetTVNoiseStrength() const;
 
 private:
+    static inline bool showWindow_ = true;
+
     std::unique_ptr<RenderTexture> renderTexture_;
     std::unique_ptr<RenderTexture> renderTextureTemp_; // ピンポン用の中間テクスチャ
     PostClearColorMode clearColorMode_ = PostClearColorMode::Blue;

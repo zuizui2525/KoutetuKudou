@@ -232,7 +232,7 @@ void GameScene::TransitionToPlay() {
 }
 
 void GameScene::TransitionToDraw() {
-    currentPhase_ = std::make_unique<DrawRoutePhase>(
+    auto drawPhase = std::make_unique<DrawRoutePhase>(
         input_,
         cameraMgr_,
         route_.get(),
@@ -243,6 +243,8 @@ void GameScene::TransitionToDraw() {
         stageEditor_.get(),
         [this]() { StartGame(); }
     );
+    drawPhase->SetShowRouteEditorPtr(&showRouteEditor_);
+    currentPhase_ = std::move(drawPhase);
     currentPhase_->Initialize();
 }
 

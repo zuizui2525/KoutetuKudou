@@ -12,10 +12,15 @@
 #include "externals/imgui/imgui.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
+#include "Engine/Graphics/PostProcess/PostProcess.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 
 DebugEditor::DebugEditor()
     : showGameView_(true),
       showPerfMonitor_(true),
+      showHierarchy_(true),
+      showInspector_(true),
+      showSceneManager_(true),
       isGameViewVisible_(false),
       isFullscreen_(false),
       currentAspect_(AspectType::Aspect16_9_Low),
@@ -57,60 +62,66 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
     }
 
     // Scene Manager
-    sceneManagerWindow_->Draw();
+    if (showSceneManager_) {
+        sceneManagerWindow_->Draw(&showSceneManager_);
+    }
 
     // Hierarchy (左側)
-    if (ImGui::Begin("Hierarchy")) {
-        const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
-        IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
+    if (showHierarchy_) {
+        if (ImGui::Begin("階層###Hierarchy", &showHierarchy_)) {
+            const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
+            IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
 
-        for (auto* obj : objects) {
-            // 表示フラグ用のチェックボックス
-            bool isVisible = obj->IsVisible();
-            std::string chkLabel = "##visible_" + obj->GetName();
-            if (ImGui::Checkbox(chkLabel.c_str(), &isVisible)) {
-                obj->SetVisible(isVisible);
-            }
-            ImGui::SameLine();
+            for (auto* obj : objects) {
+                // 表示フラグ用のチェックボックス
+                bool isVisible = obj->IsVisible();
+                std::string chkLabel = "##visible_" + obj->GetName();
+                if (ImGui::Checkbox(chkLabel.c_str(), &isVisible)) {
+                    obj->SetVisible(isVisible);
+                }
+                ImGui::SameLine();
 
-            // 選択状態
-            bool isSelected = (obj == selected);
-            ImGui::Selectable(obj->GetName().c_str(), isSelected);
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                SceneHierarchy::GetInstance()->SetSelected(obj);
-                gameViewWindow_->SetGizmoOperation(7); // TRANSLATE
-            } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
-                SceneHierarchy::GetInstance()->SetSelected(obj);
-                gameViewWindow_->SetGizmoOperation(120); // ROTATE
-            } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-                SceneHierarchy::GetInstance()->SetSelected(obj);
-                gameViewWindow_->SetGizmoOperation(896); // SCALE
+                // 選択状態
+                bool isSelected = (obj == selected);
+                ImGui::Selectable(obj->GetName().c_str(), isSelected);
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                    SceneHierarchy::GetInstance()->SetSelected(obj);
+                    gameViewWindow_->SetGizmoOperation(7); // TRANSLATE
+                } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
+                    SceneHierarchy::GetInstance()->SetSelected(obj);
+                    gameViewWindow_->SetGizmoOperation(120); // ROTATE
+                } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                    SceneHierarchy::GetInstance()->SetSelected(obj);
+                    gameViewWindow_->SetGizmoOperation(896); // SCALE
+                }
             }
         }
+        ImGui::End();
     }
-    ImGui::End();
 
     // Inspector (右側)
-    if (ImGui::Begin("Inspector")) {
-        IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
-        if (selected) {
-            // 名前の編集
-            constexpr int kNameBufferSize = 128;
-            char nameBuf[kNameBufferSize];
-            strcpy_s(nameBuf, selected->GetName().c_str());
-            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-                selected->SetName(nameBuf);
+    if (showInspector_) {
+        if (ImGui::Begin("インスペクター###Inspector", &showInspector_)) {
+            IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
+            if (selected) {
+                // 名前の編集
+                constexpr int kNameBufferSize = 128;
+                char nameBuf[kNameBufferSize];
+                strcpy_s(nameBuf, selected->GetName().c_str());
+                if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    selected->SetName(nameBuf);
+                }
+
+                ImGui::Separator();
+
+                // 各種オブジェクト固有のインスペクター描画
+                selected->DrawInspector();
+            } else {
+                ImGui::Text("オブジェクトが選択されていません。");
             }
-
-            ImGui::Separator();
-
-            // 各種オブジェクト固有のインスペクター描画
-            selected->DrawInspector();
-        } else {
-            ImGui::Text("No object selected.");
         }
+        ImGui::End();
     }
-    ImGui::End();
 }
 
 void DebugEditor::DrawMenuBar(HWND hwnd) {
@@ -118,30 +129,36 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         ImGui::Text("ZuizuiEngine");
         ImGui::Separator();
         
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Exit", "Alt+F4")) {
+        if (ImGui::BeginMenu("ファイル###File")) {
+            if (ImGui::MenuItem("終了", "Alt+F4")) {
                 PostQuitMessage(0);
             }
             ImGui::EndMenu();
         }
         
-        if (ImGui::BeginMenu("View")) {
-            ImGui::MenuItem("Game View", nullptr, &showGameView_);
-            ImGui::MenuItem("Console", nullptr, Log::GetShowConsolePtr());
-            ImGui::MenuItem("Performance Monitor", nullptr, &showPerfMonitor_);
+        if (ImGui::BeginMenu("表示###View")) {
+            ImGui::MenuItem("ゲーム画面", nullptr, &showGameView_);
+            ImGui::MenuItem("階層", nullptr, &showHierarchy_);
+            ImGui::MenuItem("インスペクター", nullptr, &showInspector_);
+            ImGui::MenuItem("コンソール", nullptr, Log::GetShowConsolePtr());
+            ImGui::MenuItem("シーン管理", nullptr, &showSceneManager_);
+            ImGui::MenuItem("カメラ一覧", nullptr, CameraManager::GetShowWindowPtr());
+            ImGui::MenuItem("ポストエフェクト", nullptr, PostProcess::GetShowWindowPtr());
+            ImGui::MenuItem("エフェクト一覧", nullptr, EffectManager::GetShowListWindowPtr());
+            ImGui::MenuItem("パフォーマンス監視", nullptr, &showPerfMonitor_);
             
             GameScene* gameScene = dynamic_cast<GameScene*>(SceneManager::GetInstance()->GetCurrentScene());
             if (gameScene) {
                 ImGui::Separator();
-                ImGui::MenuItem("Stage Editor", nullptr, gameScene->GetShowStageEditorPtr());
-                ImGui::MenuItem("Route Editor", nullptr, gameScene->GetShowRouteEditorPtr());
+                ImGui::MenuItem("ルートエディタ", nullptr, gameScene->GetShowRouteEditorPtr());
+                ImGui::MenuItem("敵エディタ", nullptr, gameScene->GetShowStageEditorPtr());
             }
 
             ImGui::EndMenu();
         }
         
-        if (ImGui::BeginMenu("Window")) {
-            if (ImGui::MenuItem("Fullscreen", "F11", &isFullscreen_)) {
+        if (ImGui::BeginMenu("ウィンドウ###Window")) {
+            if (ImGui::MenuItem("フルスクリーン", "F11", &isFullscreen_)) {
                 DWORD dwStyle = GetWindowLong(hwnd, GWL_STYLE);
                 
                 // 元のサイズ変更不可のウィンドウスタイルをローカル定数定義（マジックナンバー排除）
@@ -203,7 +220,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::Separator();
 
             // アスペクト比変更メニュー
-            if (!isFullscreen_ && ImGui::BeginMenu("Aspect Ratio")) {
+            if (!isFullscreen_ && ImGui::BeginMenu("アスペクト比###Aspect Ratio")) {
                 const DWORD kOriginalStyle = WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
                 
                 auto ChangeWindowSize = [&](int32_t width, int32_t height) {
@@ -241,13 +258,13 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             
             ImGui::Separator();
             
-            if (ImGui::MenuItem("Maximize")) {
+            if (ImGui::MenuItem("最大化")) {
                 ShowWindow(hwnd, SW_MAXIMIZE);
             }
-            if (ImGui::MenuItem("Minimize")) {
+            if (ImGui::MenuItem("最小化")) {
                 ShowWindow(hwnd, SW_MINIMIZE);
             }
-            if (ImGui::MenuItem("Restore")) {
+            if (ImGui::MenuItem("元のサイズに戻す")) {
                 ShowWindow(hwnd, SW_RESTORE);
             }
             
@@ -261,11 +278,11 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         ImGui::SameLine(centerPos);
 
         if (isPaused_) {
-            if (ImGui::Button("Play ▶")) {
+            if (ImGui::Button("再生 ▶")) {
                 isPaused_ = false;
             }
         } else {
-            if (ImGui::Button("Pause ||")) {
+            if (ImGui::Button("一時停止 ||")) {
                 isPaused_ = true;
             }
         }
@@ -273,13 +290,13 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         if (gameViewWindow_) {
             ImGui::SameLine();
             bool enable = gameViewWindow_->IsClickPauseEnabled();
-            if (ImGui::Checkbox("Click Pause", &enable)) {
+            if (ImGui::Checkbox("クリック一時停止", &enable)) {
                 gameViewWindow_->SetClickPauseEnabled(enable);
             }
 
             ImGui::SameLine();
             bool showGizmo = gameViewWindow_->IsShowGizmo();
-            if (ImGui::Checkbox("Use Gizmo", &showGizmo)) {
+            if (ImGui::Checkbox("ギズモ表示", &showGizmo)) {
                 gameViewWindow_->SetShowGizmo(showGizmo);
             }
         }

@@ -164,16 +164,16 @@ void Log::DrawConsoleWindow(float maxTimestamp) {
 #ifdef _USEIMGUI
     if (!showConsole_) return;
 
-    if (ImGui::Begin("Console", &showConsole_)) {
+    if (ImGui::Begin("コンソール###Console", &showConsole_)) {
         static bool filterReplayRangeOnly = false;
 
         // リプレイ範囲フィルター UI（ReplaySystem削除に伴い常に無効化表示）
         ImGui::SameLine();
         ImGui::BeginDisabled();
-        ImGui::Checkbox("Replay Range Only", &filterReplayRangeOnly);
+        ImGui::Checkbox("リプレイ範囲のみ", &filterReplayRangeOnly);
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "[Replay Removed]");
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "[リプレイ機能削除済み]");
 
         ImGui::Separator();
 

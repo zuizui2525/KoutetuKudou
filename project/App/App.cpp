@@ -10,7 +10,6 @@
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Base/Log/Log.h"
 #include <psapi.h> // メモリ取得用（追加）
-#include "Engine/Debug/PerformanceReporter/PerformanceReporter.h"
 
 
 #pragma comment(lib, "psapi.lib") // 追加
@@ -60,14 +59,6 @@ void App::Initialize() {
 
     SceneManager::GetInstance()->SetPostProcess(postProcess_.get());
 
-    // パフォーマンスレポーターの初期化
-    auto dxCommon = engine_->GetDxCommon();
-    PerformanceReporter::Initialize(
-        dxCommon->GetDevice(),
-        dxCommon->GetCommandQueue(),
-        static_cast<UINT>(WindowApp::kClientWidth),
-        static_cast<UINT>(WindowApp::kClientHeight)
-    );
 }
 
 void App::Run() {
@@ -87,16 +78,17 @@ void App::Run() {
     if (currentWidth > 0 && currentHeight > 0 && 
         (currentWidth != lastWidth || currentHeight != lastHeight)) {
         
-        // 1. スワップチェーンと深度バッファのリサイズ
+        // 1. スワップチェーンと深度バッファ（DSV）のリサイズ
         engine_->GetDxCommon()->ResizeSwapChain(currentWidth, currentHeight);
 
-        // 2. ポストプロセスレンダーテクスチャのリサイズ
+        // 2. ポストプロセス（RTV）も同期リサイズして、D3D12の「RTVとDSVの寸法一致制約」を充足
         postProcess_->Resize(currentWidth, currentHeight);
 
-        // 3. カメラのプロジェクションアスペクト比の動的更新
-        float aspect = static_cast<float>(currentWidth) / static_cast<float>(currentHeight);
-        cameraMgr_->UpdateAllProjection(aspect);
-
+        // 3. カメラのプロジェクションアスペクト比はゲーム基準の 16:9 に固定（歪み防止）
+        constexpr float kGameAspectWidth = 16.0f;
+        constexpr float kGameAspectHeight = 9.0f;
+        constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
+        cameraMgr_->UpdateAllProjection(kGameAspectRatio);
 
         lastWidth = currentWidth;
         lastHeight = currentHeight;
@@ -184,16 +176,6 @@ void App::Run() {
 
 
     // --- 更新 ---
-    // パフォーマンスレポーターの更新
-#ifdef _USEIMGUI
-    PerformanceReporter::SetMetaData("Active3DObjects", std::to_string(SceneHierarchy::GetInstance()->GetObjects().size()));
-#endif
-    PerformanceReporter::Update();
-
-    // デバッグキー（0キー）による手動トリガー
-    if (input_->Trigger(DIK_0)) {
-        PerformanceReporter::TriggerReport("MANUAL_TRIGGER", "User triggered report via '0' key");
-    }
 
     input_->Update();
     
@@ -252,22 +234,11 @@ void App::Run() {
             postProcess_->Draw();
         }
     }
-    // 描画完了後の最終ポストプロセスリソースをキャプチャ (PIXEL_SHADER_RESOURCE 状態)
-    // ※EndFrame() の前に呼ぶことで、同一のコマンドリスト上で安全かつ正確に画像コピーを実行できます。
-    if (shouldDraw) {
-        auto dxCommon = engine_->GetDxCommon();
-        PerformanceReporter::CaptureFrame(
-            dxCommon->GetCommandList(), 
-            postProcess_->GetFinalResource(), 
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-        );
-    }
 
     engine_->EndFrame();
 }
 
 void App::Finalize() {
-    PerformanceReporter::Finalize();
     SceneManager::GetInstance()->ClearCurrentScene();
     EffectManager::GetInstance()->Finalize();
 	engine_->Finalize();

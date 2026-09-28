@@ -20,6 +20,11 @@ public:
     void ImGuiControl();
     void Clear();
 
+    // --- ウィンドウ表示制御 ---
+    static bool* GetShowWindowPtr() { return &showWindow_; }
+    static bool IsWindowOpen() { return showWindow_; }
+    static void SetWindowOpen(bool open) { showWindow_ = open; }
+
     // --- カメラ管理 ---
     void AddCamera(const std::string& name, std::shared_ptr<BaseCamera> camera);
     void SetActiveCamera(const std::string& name, bool log = true);
@@ -72,6 +77,8 @@ public:
     void UpdateAllProjection(float aspect);
 
 private:
+    static inline bool showWindow_ = true;
+
     std::map<std::string, std::shared_ptr<BaseCamera>> cameras_;
     BaseCamera* activeCamera_ = nullptr;
 
