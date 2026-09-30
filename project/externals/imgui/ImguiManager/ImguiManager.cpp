@@ -96,7 +96,7 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
         font = io.Fonts->AddFontFromFileTTF(primaryFontPath, kFontSize, &fontConfig, io.Fonts->GetGlyphRangesDefault());
     }
 
-    // 2. 日本語グリフの合成（x16y32pxGridGazer に含まれない ひらがな・漢字 のためのマージ設定）
+    // 2. 日本語グリフの合成
     const char* japaneseFontPaths[] = {
         "C:\\Windows\\Fonts\\YuGothM.ttc",       // 游ゴシック Medium（細身でモダン）
         "C:\\Windows\\Fonts\\meiryo.ttc",        // メイリオ

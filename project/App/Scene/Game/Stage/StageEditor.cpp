@@ -11,6 +11,15 @@
 #include <fstream>
 #include <sstream>
 #include <direct.h> // CreateDirectoryA用
+#include <filesystem>
+#include <algorithm>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <commdlg.h>
+#pragma comment(lib, "Comdlg32.lib")
 
 namespace {
     // 3Dラベル・バッジ描画用の色定数 (マジックナンバー排除)
@@ -48,6 +57,7 @@ void StageEditor::Initialize() {
     showSpawnCircles_ = true;
     show3DLabels_ = true;
     showDuringPlay_ = true;
+    RefreshStageFileList();
 }
 
 void StageEditor::SetSelectedIndex(int index) {
@@ -608,26 +618,341 @@ void StageEditor::ImGuiControl() {
         }
     }
 
-    // セーブ・ロード
+    // -------------------------------------------------------------
+    // セーブ & ロード / ファイル指定配置
+    // -------------------------------------------------------------
     ImGui::Separator();
-    if (ImGui::Button("ステージ保存")) {
-        SaveStage(kStageFilePath);
+    ImGui::Text("【ステージ保存・読込・ファイル指定配置】");
+
+    // 保存先フォルダ指定
+    if (ImGui::InputText("保存先フォルダ", stageDir_, kMaxPathLength)) {
+        RefreshStageFileList();
     }
     ImGui::SameLine();
-    if (ImGui::Button("ステージ読込")) {
-        LoadStage(kStageFilePath);
+    if (ImGui::Button("フォルダ参照...")) {
+        std::string selectedPath;
+        if (OpenFileDialog(selectedPath, kJsonFileFilter, stageDir_)) {
+            std::filesystem::path p(selectedPath);
+            std::string parentDir = p.parent_path().string();
+            std::replace(parentDir.begin(), parentDir.end(), '\\', '/');
+            if (!parentDir.empty() && parentDir.back() != '/') {
+                parentDir += '/';
+            }
+            strncpy_s(stageDir_, parentDir.c_str(), kMaxPathLength - 1);
+            strncpy_s(stageFileName_, p.filename().string().c_str(), kMaxPathLength - 1);
+            RefreshStageFileList();
+        }
     }
+
+    // ステージ名指定
+    ImGui::InputText("ステージ名", stageFileName_, kMaxPathLength);
+    ImGui::SameLine();
+    if (ImGui::Button("一覧更新")) {
+        RefreshStageFileList();
+    }
+
+    // 既存ステージ一覧コンボボックス
+    if (!availableStages_.empty()) {
+        std::vector<const char*> items;
+        items.reserve(availableStages_.size());
+        for (const auto& s : availableStages_) {
+            items.push_back(s.c_str());
+        }
+        if (ImGui::Combo("既存ステージ一覧", &selectedStageFileIndex_, items.data(), static_cast<int>(items.size()))) {
+            if (selectedStageFileIndex_ >= 0 && selectedStageFileIndex_ < static_cast<int>(availableStages_.size())) {
+                strncpy_s(stageFileName_, availableStages_[selectedStageFileIndex_].c_str(), kMaxPathLength - 1);
+            }
+        }
+    } else {
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "（フォルダ内に .json ファイルは見つかりません）");
+    }
+
+    // 操作ボタン
+    std::string currentFullPath = GetCurrentStagePath();
+    if (ImGui::Button("指定名でステージ保存")) {
+        SaveStage(currentFullPath);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("指定名で読込 (全置換)")) {
+        LoadStage(currentFullPath);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("指定名で追加配置 (マージ)")) {
+        Vector3 offset = { 0.0f, 0.0f, 0.0f };
+        if (useCameraTargetOffset_) {
+            if (auto cam = CameraResource::GetCameraManager()->GetActiveCamera()) {
+                offset = cam->GetTarget();
+                offset.y = kGroundLevelY;
+            }
+        }
+        ImportStage(currentFullPath, offset);
+    }
+
+    // ファイル直接指定して配置（別ファイルや任意パスのJSONを配置）
+    ImGui::Spacing();
+    ImGui::Text("ファイル直接指定して配置:");
+    ImGui::InputText("対象ファイル", directFilePath_, kMaxPathLength);
+    ImGui::SameLine();
+    if (ImGui::Button("ファイル参照...")) {
+        std::string selectedPath;
+        if (OpenFileDialog(selectedPath, kJsonFileFilter, stageDir_)) {
+            strncpy_s(directFilePath_, selectedPath.c_str(), kMaxPathLength - 1);
+        }
+    }
+
+    ImGui::Checkbox("カメラ注視点位置にオフセットして配置する", &useCameraTargetOffset_);
+    if (ImGui::Button("このファイルから配置 (全置換)")) {
+        if (directFilePath_[0] != '\0') {
+            LoadStage(directFilePath_);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("このファイルから追加配置 (マージ)")) {
+        if (directFilePath_[0] != '\0') {
+            Vector3 offset = { 0.0f, 0.0f, 0.0f };
+            if (useCameraTargetOffset_) {
+                if (auto cam = CameraResource::GetCameraManager()->GetActiveCamera()) {
+                    offset = cam->GetTarget();
+                    offset.y = kGroundLevelY;
+                }
+            }
+            ImportStage(directFilePath_, offset);
+        }
+    }
+
+    // 操作結果ステータスメッセージ表示
+    if (!lastOperationStatus_.empty()) {
+        ImVec4 statusColor = (lastOperationStatus_.find("失敗") != std::string::npos) ?
+            ImVec4(1.0f, 0.4f, 0.4f, 1.0f) : ImVec4(0.3f, 1.0f, 0.5f, 1.0f);
+        ImGui::TextColored(statusColor, "%s", lastOperationStatus_.c_str());
+    }
+
     }
     ImGui::End();
 #endif
 }
 
+bool StageEditor::OpenFileDialog(std::string& outPath, const char* filter, const char* initialDir) {
+    char szFile[kMaxPathLength] = { 0 };
+    OPENFILENAMEA ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.lpstrFilter = filter;
+    ofn.nFilterIndex = 1;
+    ofn.lpstrInitialDir = initialDir;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+    auto currentPath = std::filesystem::current_path();
+    bool result = false;
+    if (GetOpenFileNameA(&ofn) == TRUE) {
+        outPath = szFile;
+        std::replace(outPath.begin(), outPath.end(), '\\', '/');
+        result = true;
+    }
+    std::filesystem::current_path(currentPath);
+    return result;
+}
+
+bool StageEditor::SaveFileDialog(std::string& outPath, const char* filter, const char* initialDir) {
+    char szFile[kMaxPathLength] = { 0 };
+    OPENFILENAMEA ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = nullptr;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.lpstrFilter = filter;
+    ofn.nFilterIndex = 1;
+    ofn.lpstrInitialDir = initialDir;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+
+    auto currentPath = std::filesystem::current_path();
+    bool result = false;
+    if (GetSaveFileNameA(&ofn) == TRUE) {
+        outPath = szFile;
+        std::replace(outPath.begin(), outPath.end(), '\\', '/');
+        result = true;
+    }
+    std::filesystem::current_path(currentPath);
+    return result;
+}
+
+std::string StageEditor::GetCurrentStagePath() const {
+    std::string dir = stageDir_;
+    if (!dir.empty() && dir.back() != '/' && dir.back() != '\\') {
+        dir += '/';
+    }
+    std::string filename = stageFileName_;
+    if (filename.length() < 5 || filename.substr(filename.length() - 5) != kJsonExtension) {
+        filename += kJsonExtension;
+    }
+    return dir + filename;
+}
+
+void StageEditor::RefreshStageFileList() {
+    availableStages_.clear();
+    selectedStageFileIndex_ = -1;
+
+    std::filesystem::path dirPath(stageDir_);
+    if (!std::filesystem::exists(dirPath) || !std::filesystem::is_directory(dirPath)) {
+        return;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.is_regular_file() && entry.path().extension() == kJsonExtension) {
+            std::string fname = entry.path().filename().string();
+            availableStages_.push_back(fname);
+            if (fname == stageFileName_) {
+                selectedStageFileIndex_ = static_cast<int>(availableStages_.size()) - 1;
+            }
+        }
+    }
+}
+
+namespace {
+    constexpr float kDefaultSpawnRadius = 5.0f;
+    constexpr float kDefaultHangTime = 3.0f;
+    constexpr int kDefaultSpawnCount = 1;
+
+    const std::string kKeyPos = "\"pos\": [";
+    const std::string kKeyType = "\"type\": ";
+    const std::string kKeyCount = "\"count\": ";
+    const std::string kKeySize = "\"size\": [";
+    const std::string kKeyRadius = "\"radius\": ";
+    const std::string kKeyHangTime = "\"hang_time\": ";
+
+    bool LoadEnemiesFromFile(const std::string& filepath, std::vector<std::unique_ptr<Enemy>>& outEnemies, const Vector3& offset = { 0.0f, 0.0f, 0.0f }) {
+        std::ifstream ifs(filepath);
+        if (!ifs.is_open()) return false;
+
+        std::string line;
+        while (std::getline(ifs, line)) {
+            size_t posIdx = line.find(kKeyPos);
+            if (posIdx == std::string::npos) continue;
+
+            size_t posEnd = line.find("]", posIdx);
+            if (posEnd == std::string::npos) continue;
+
+            size_t posStart = posIdx + kKeyPos.length();
+            if (posStart >= posEnd) continue;
+
+            std::string posStr = line.substr(posStart, posEnd - posStart);
+            float px = 0.0f, py = 0.0f, pz = 0.0f;
+            if (sscanf_s(posStr.c_str(), "%f, %f, %f", &px, &py, &pz) != 3) continue;
+
+            int typeInt = 0;
+            size_t typeIdx = line.find(kKeyType);
+            if (typeIdx != std::string::npos) {
+                size_t valStart = typeIdx + kKeyType.length();
+                if (valStart < line.length()) {
+                    sscanf_s(line.c_str() + valStart, "%d", &typeInt);
+                }
+            }
+
+            int count = kDefaultSpawnCount;
+            size_t countIdx = line.find(kKeyCount);
+            if (countIdx != std::string::npos) {
+                size_t valStart = countIdx + kKeyCount.length();
+                if (valStart < line.length()) {
+                    sscanf_s(line.c_str() + valStart, "%d", &count);
+                }
+            } else {
+                // 旧形式サイズデータからのフォールバック
+                size_t sizeIdx = line.find(kKeySize);
+                if (sizeIdx != std::string::npos) {
+                    size_t valStart = sizeIdx + kKeySize.length();
+                    if (valStart < line.length()) {
+                        float sx = 1.0f;
+                        sscanf_s(line.c_str() + valStart, "%f", &sx);
+                        count = static_cast<int>(sx);
+                    }
+                }
+            }
+
+            float radius = kDefaultSpawnRadius;
+            size_t radiusIdx = line.find(kKeyRadius);
+            if (radiusIdx != std::string::npos) {
+                size_t valStart = radiusIdx + kKeyRadius.length();
+                if (valStart < line.length()) {
+                    sscanf_s(line.c_str() + valStart, "%f", &radius);
+                }
+            }
+
+            float hang = kDefaultHangTime;
+            size_t hangIdx = line.find(kKeyHangTime);
+            if (hangIdx != std::string::npos) {
+                size_t valStart = hangIdx + kKeyHangTime.length();
+                if (valStart < line.length()) {
+                    sscanf_s(line.c_str() + valStart, "%f", &hang);
+                }
+            }
+
+            auto enemy = std::make_unique<Enemy>();
+            enemy->Initialize();
+            enemy->SetPosition({ px + offset.x, py + offset.y, pz + offset.z });
+            enemy->SetSpawnPoint(true);
+            enemy->SetEnemyType(static_cast<Enemy::EnemyType>(typeInt));
+            enemy->SetSpawnCount(count);
+            enemy->SetSpawnRadius(radius);
+            enemy->SetHangTime(hang);
+
+            outEnemies.push_back(std::move(enemy));
+        }
+        return true;
+    }
+}
+
+void StageEditor::LoadStage(const std::string& filepath) {
+    std::vector<std::unique_ptr<Enemy>> loaded;
+    if (!LoadEnemiesFromFile(filepath, loaded)) {
+        lastOperationStatus_ = "読み込み失敗: ファイルが見つかりません (" + filepath + ")";
+        return;
+    }
+
+    editorEnemies_ = std::move(loaded);
+    SetSelectedIndex(-1);
+#ifdef _USEIMGUI
+    SceneHierarchy::GetInstance()->SetSelected(nullptr);
+#endif
+    lastOperationStatus_ = "読込成功: " + filepath + " (" + std::to_string(editorEnemies_.size()) + "箇所の敵)";
+}
+
+void StageEditor::ImportStage(const std::string& filepath, const Vector3& offset) {
+    std::vector<std::unique_ptr<Enemy>> loaded;
+    if (!LoadEnemiesFromFile(filepath, loaded, offset)) {
+        lastOperationStatus_ = "配置失敗: ファイルが見つかりません (" + filepath + ")";
+        return;
+    }
+
+    size_t prevCount = editorEnemies_.size();
+    for (auto& enemy : loaded) {
+        editorEnemies_.push_back(std::move(enemy));
+    }
+
+    if (editorEnemies_.size() > prevCount) {
+        SetSelectedIndex(static_cast<int>(prevCount));
+#ifdef _USEIMGUI
+        if (editorEnemies_[prevCount]) {
+            SceneHierarchy::GetInstance()->SetSelected(editorEnemies_[prevCount]->GetCube());
+        }
+#endif
+    }
+    lastOperationStatus_ = "追加配置成功: " + filepath + " (+" + std::to_string(loaded.size()) + "箇所)";
+}
+
 void StageEditor::SaveStage(const std::string& filepath) {
-    _mkdir("resources");
-    _mkdir("resources/stages");
+    std::filesystem::path p(filepath);
+    if (p.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(p.parent_path(), ec);
+    }
 
     std::ofstream ofs(filepath);
-    if (!ofs.is_open()) return;
+    if (!ofs.is_open()) {
+        lastOperationStatus_ = "保存失敗: 書き込みエラー (" + filepath + ")";
+        return;
+    }
 
     ofs << "[\n";
     for (size_t i = 0; i < editorEnemies_.size(); ++i) {
@@ -649,102 +974,7 @@ void StageEditor::SaveStage(const std::string& filepath) {
         ofs << "\n";
     }
     ofs << "]\n";
-}
 
-namespace {
-    constexpr float kDefaultSpawnRadius = 5.0f;
-    constexpr float kDefaultHangTime = 3.0f;
-    constexpr int kDefaultSpawnCount = 1;
-
-    const std::string kKeyPos = "\"pos\": [";
-    const std::string kKeyType = "\"type\": ";
-    const std::string kKeyCount = "\"count\": ";
-    const std::string kKeySize = "\"size\": [";
-    const std::string kKeyRadius = "\"radius\": ";
-    const std::string kKeyHangTime = "\"hang_time\": ";
-}
-
-void StageEditor::LoadStage(const std::string& filepath) {
-    std::ifstream ifs(filepath);
-    if (!ifs.is_open()) return;
-
-    editorEnemies_.clear();
-    SetSelectedIndex(-1);
-#ifdef _USEIMGUI
-    SceneHierarchy::GetInstance()->SetSelected(nullptr);
-#endif
-
-    std::string line;
-    while (std::getline(ifs, line)) {
-        size_t posIdx = line.find(kKeyPos);
-        if (posIdx == std::string::npos) continue;
-
-        size_t posEnd = line.find("]", posIdx);
-        if (posEnd == std::string::npos) continue;
-
-        size_t posStart = posIdx + kKeyPos.length();
-        if (posStart >= posEnd) continue;
-
-        std::string posStr = line.substr(posStart, posEnd - posStart);
-        float px = 0.0f, py = 0.0f, pz = 0.0f;
-        if (sscanf_s(posStr.c_str(), "%f, %f, %f", &px, &py, &pz) != 3) continue;
-
-        int typeInt = 0;
-        size_t typeIdx = line.find(kKeyType);
-        if (typeIdx != std::string::npos) {
-            size_t valStart = typeIdx + kKeyType.length();
-            if (valStart < line.length()) {
-                sscanf_s(line.c_str() + valStart, "%d", &typeInt);
-            }
-        }
-
-        int count = kDefaultSpawnCount;
-        size_t countIdx = line.find(kKeyCount);
-        if (countIdx != std::string::npos) {
-            size_t valStart = countIdx + kKeyCount.length();
-            if (valStart < line.length()) {
-                sscanf_s(line.c_str() + valStart, "%d", &count);
-            }
-        } else {
-            // 旧形式サイズデータからのフォールバック
-            size_t sizeIdx = line.find(kKeySize);
-            if (sizeIdx != std::string::npos) {
-                size_t valStart = sizeIdx + kKeySize.length();
-                if (valStart < line.length()) {
-                    float sx = 1.0f;
-                    sscanf_s(line.c_str() + valStart, "%f", &sx);
-                    count = static_cast<int>(sx);
-                }
-            }
-        }
-
-        float radius = kDefaultSpawnRadius;
-        size_t radiusIdx = line.find(kKeyRadius);
-        if (radiusIdx != std::string::npos) {
-            size_t valStart = radiusIdx + kKeyRadius.length();
-            if (valStart < line.length()) {
-                sscanf_s(line.c_str() + valStart, "%f", &radius);
-            }
-        }
-
-        float hang = kDefaultHangTime;
-        size_t hangIdx = line.find(kKeyHangTime);
-        if (hangIdx != std::string::npos) {
-            size_t valStart = hangIdx + kKeyHangTime.length();
-            if (valStart < line.length()) {
-                sscanf_s(line.c_str() + valStart, "%f", &hang);
-            }
-        }
-
-        auto enemy = std::make_unique<Enemy>();
-        enemy->Initialize();
-        enemy->SetPosition({ px, py, pz });
-        enemy->SetSpawnPoint(true);
-        enemy->SetEnemyType(static_cast<Enemy::EnemyType>(typeInt));
-        enemy->SetSpawnCount(count);
-        enemy->SetSpawnRadius(radius);
-        enemy->SetHangTime(hang);
-
-        editorEnemies_.push_back(std::move(enemy));
-    }
+    lastOperationStatus_ = "保存成功: " + filepath + " (" + std::to_string(editorEnemies_.size()) + "箇所の敵)";
+    RefreshStageFileList();
 }

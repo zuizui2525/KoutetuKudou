@@ -23,6 +23,18 @@ public:
     // ステージ保存・読み込み
     void SaveStage(const std::string& filepath);
     void LoadStage(const std::string& filepath);
+    // ファイル指定での追加配置（マージ配置。オフセット加算可能）
+    void ImportStage(const std::string& filepath, const Vector3& offset = { 0.0f, 0.0f, 0.0f });
+
+    // ステージディレクトリ内のファイル一覧更新
+    void RefreshStageFileList();
+
+    // 現在のディレクトリとファイル名から完全パスを生成
+    std::string GetCurrentStagePath() const;
+
+    // Windows標準ファイルダイアログ (ファイル指定用)
+    static bool OpenFileDialog(std::string& outPath, const char* filter, const char* initialDir = nullptr);
+    static bool SaveFileDialog(std::string& outPath, const char* filter, const char* initialDir = nullptr);
 
     // ゲッター/セッター
     bool IsShowEditor() const { return showStageEditor_; }
@@ -127,7 +139,21 @@ private:
     static inline const float kMaxSpawnRadius = 20.0f;           // 最大湧き半径
     static inline const float kRadiusWheelStep = 0.5f;           // ホイール1目盛りの増減量
 #endif
+    // マジックナンバー排除のためのファイルパス定数
+    static inline const size_t kMaxPathLength = 260;
+    static inline const char* kDefaultStageDir = "resources/stages/";
+    static inline const char* kDefaultStageFileName = "stage1.json";
+    static inline const char* kJsonFileFilter = "JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+    static inline const char* kJsonExtension = ".json";
 
-    static inline const std::string kStageFilePath = "resources/stages/stage1.json"; // ステージ保存先パス
+    // 保存先・読み込み用パス情報
+    char stageDir_[kMaxPathLength] = "resources/stages/";
+    char stageFileName_[kMaxPathLength] = "stage1.json";
+    char directFilePath_[kMaxPathLength] = "";
+    std::vector<std::string> availableStages_;
+    int selectedStageFileIndex_ = -1;
+    std::string lastOperationStatus_;
+    bool useCameraTargetOffset_ = false;
+
     static inline const std::string kTextureKey = "white"; // 敵テクスチャ
 };
