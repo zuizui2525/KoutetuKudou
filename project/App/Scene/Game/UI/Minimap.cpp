@@ -228,9 +228,11 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
 #endif
 
     bool isGamePaused = false;
+#ifdef _USEIMGUI
     if (auto debugEditor = Zuizui::GetInstance()->GetDebugEditor()) {
         isGamePaused = debugEditor->IsPaused();
     }
+#endif
 
     // 1. ドラッグによるルート描画入力 (エディタ配置中またはポーズ中はルート描画を完全に無効化)
     bool isClickStarted = input->MouseTrigger(0);

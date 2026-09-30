@@ -57,6 +57,10 @@ public:
         vpWidthRatio_ = widthRatio;
     }
 
+    // 選択インデックスの取得・設定
+    int GetSelectedIndex() const { return selectedEnemyIndex_; }
+    void SetSelectedIndex(int index);
+
 public:
 #ifdef _USEIMGUI
     enum class EditMode {
@@ -74,9 +78,6 @@ public:
     float GetPendingRadius() const { return pendingRadius_; }
     void SetPendingRadius(float radius) { pendingRadius_ = radius; }
     float GetPendingHangTime() const { return pendingHangTime_; }
-
-    int GetSelectedIndex() const { return selectedEnemyIndex_; }
-    void SetSelectedIndex(int index);
 
     // 2Dマップおよび3Dマップからの配置用ヘルパー
     void AddEnemyFrom2D(const Vector3& pos, Enemy::EnemyType type, int count, float radius, float hangTime);

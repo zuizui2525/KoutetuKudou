@@ -1,6 +1,8 @@
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
+#include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
+#include "Engine/Math/Matrix/Matrix.h"
 #include <windows.h>
 
 #ifdef _USEIMGUI
@@ -17,7 +19,6 @@
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Input/Input.h"
-#include "Engine/Math/Matrix/Matrix.h"
 #include "Engine/Debug/DebugEditor.h"
 #include "App/Scene/Game/Stage/StageEditor.h"
 #include <algorithm>

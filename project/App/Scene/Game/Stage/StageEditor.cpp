@@ -62,6 +62,7 @@ void StageEditor::Initialize() {
 
 void StageEditor::SetSelectedIndex(int index) {
     selectedEnemyIndex_ = index;
+#ifdef _USEIMGUI
     for (int i = 0; i < static_cast<int>(editorEnemies_.size()); ++i) {
         if (editorEnemies_[i]) {
             editorEnemies_[i]->SetSelectedInEditor(i == selectedEnemyIndex_);
@@ -84,6 +85,7 @@ void StageEditor::SetSelectedIndex(int index) {
             }
         }
     }
+#endif
 }
 
 void StageEditor::Update() {
