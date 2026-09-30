@@ -271,6 +271,64 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::EndMenu();
         }
 
+        if (ImGui::BeginMenu("設定###Settings")) {
+            if (gameViewWindow_) {
+                // 1. クリック一時停止チェックボックス & 説明
+                bool enable = gameViewWindow_->IsClickPauseEnabled();
+                if (ImGui::Checkbox("クリック一時停止", &enable)) {
+                    gameViewWindow_->SetClickPauseEnabled(enable);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("ゲーム画面内を左クリックした際に、ゲームの一時停止／再開を切り替えます");
+                }
+                ImGui::TextDisabled("  画面クリックで一時停止/再開");
+
+                ImGui::Separator();
+
+                // 2. ギズモ表示チェックボックス & 説明
+                bool showGizmo = gameViewWindow_->IsShowGizmo();
+                if (ImGui::Checkbox("ギズモ表示", &showGizmo)) {
+                    gameViewWindow_->SetShowGizmo(showGizmo);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("3Dオブジェクト操作用のギズモ軸、および画面内の操作バッジを表示します");
+                }
+                ImGui::TextDisabled("  3D操作ギズモの表示/非表示");
+
+                ImGui::Separator();
+
+                // 3. ギズモ操作モード（現在のモードを表示）
+                int currentOp = gameViewWindow_->GetGizmoOperation();
+                const char* currentOpLabel = "移動";
+                if (currentOp == GameViewWindow::kGizmoOpRotate) {
+                    currentOpLabel = "回転";
+                } else if (currentOp == GameViewWindow::kGizmoOpScale) {
+                    currentOpLabel = "拡縮";
+                }
+
+                constexpr int kMenuTitleBufferSize = 64;
+                char menuTitle[kMenuTitleBufferSize];
+                sprintf_s(menuTitle, "ギズモ操作モード [%s]", currentOpLabel);
+
+                if (ImGui::BeginMenu(menuTitle)) {
+                    if (ImGui::MenuItem("移動 (Translate)", nullptr, currentOp == GameViewWindow::kGizmoOpTranslate)) {
+                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpTranslate);
+                    }
+                    if (ImGui::MenuItem("回転 (Rotate)", nullptr, currentOp == GameViewWindow::kGizmoOpRotate)) {
+                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpRotate);
+                    }
+                    if (ImGui::MenuItem("拡縮 (Scale)", nullptr, currentOp == GameViewWindow::kGizmoOpScale)) {
+                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpScale);
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("3Dギズモの操作種別（平行移動・回転・拡大縮小）を選択します");
+                }
+            }
+            ImGui::EndMenu();
+        }
+
         // 画面中央付近に再生/一時停止ボタンを配置
         float menuBarWidth = ImGui::GetWindowWidth();
         constexpr float kPlayPauseBtnWidth = 70.0f;
@@ -284,20 +342,6 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         } else {
             if (ImGui::Button("一時停止 ||")) {
                 isPaused_ = true;
-            }
-        }
-
-        if (gameViewWindow_) {
-            ImGui::SameLine();
-            bool enable = gameViewWindow_->IsClickPauseEnabled();
-            if (ImGui::Checkbox("クリック一時停止", &enable)) {
-                gameViewWindow_->SetClickPauseEnabled(enable);
-            }
-
-            ImGui::SameLine();
-            bool showGizmo = gameViewWindow_->IsShowGizmo();
-            if (ImGui::Checkbox("ギズモ表示", &showGizmo)) {
-                gameViewWindow_->SetShowGizmo(showGizmo);
             }
         }
 

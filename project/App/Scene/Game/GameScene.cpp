@@ -86,7 +86,8 @@ void GameScene::Initialize() {
     drawRouteCamera_->Initialize(cameraMgr_, startZ);
 
     stageEditor_ = std::make_unique<StageEditor>();
-    stageEditor_->Initialize(&enemyManager_->GetEnemies());
+    stageEditor_->Initialize();
+    stageEditor_->SetDrawRouteCamera(drawRouteCamera_.get());
 
     // 保存されたステージがあればロードする
     stageEditor_->LoadStage("resources/stages/stage1.json");
@@ -190,7 +191,7 @@ void GameScene::StartGame() {
             stageEditor_->SetEditMode(StageEditor::EditMode::None);
         }
 #endif
-        enemyManager_->SetupSpawnTriggers(enemyManager_->GetEnemies(), startPlayerPos.z);
+        enemyManager_->SetupSpawnTriggers(stageEditor_->GetEnemies(), startPlayerPos.z);
     }
 
     // 4. プレイ開始時にカメラ位置と回転をプレイ用の位置にリセット
@@ -226,7 +227,8 @@ void GameScene::TransitionToPlay() {
             enemyManager_->Reset();
 
             TransitionToDraw();
-        }
+        },
+        stageEditor_.get()
     );
     currentPhase_->Initialize();
 }

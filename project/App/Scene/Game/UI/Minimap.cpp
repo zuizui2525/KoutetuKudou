@@ -13,6 +13,7 @@
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "App/Scene/Game/Stage/StageEditor.h"
 #include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Debug/DebugEditor.h"
 #include <cmath>
 #include <algorithm>
 
@@ -132,8 +133,9 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
     }
     if (!input || !cameraMgr_) return;
 
-    float clientW = static_cast<float>(WindowApp::kClientWidth);
-    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    auto dxCommon = EngineResource::GetEngine()->GetDxCommon();
+    float clientW = dxCommon ? dxCommon->GetViewport().Width : static_cast<float>(WindowApp::kClientWidth);
+    float clientH = dxCommon ? dxCommon->GetViewport().Height : static_cast<float>(WindowApp::kClientHeight);
 
     Vector2 mousePos = GameViewWindow::GetMousePosition();
     Vector2 viewSize = GameViewWindow::GetGameViewSize();
@@ -143,48 +145,12 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
         scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
     }
 
-#ifdef _USEIMGUI
-    // --- 2Dマップ上でのエディタマウス操作 ---
-    if (stageEditor && scaledMousePos.x <= clientW * kMinimapWidthRatio) {
-        float normX = scaledMousePos.x / (clientW * kMinimapWidthRatio);
-        float normY = scaledMousePos.y / clientH;
-
-        float startZ = route->GetCurrentAreaStartZ();
-        float goalZ = route->GetCurrentAreaGoalZ();
-        float worldZ = startZ + (goalZ - startZ) * normY;
-        float worldX = (normX - 0.5f) * 40.0f; // 2Dミニマップ横幅マップスケール
-
-        auto editMode = stageEditor->GetEditMode();
-
-        // 1. 配置モード時: マウスホイールで発生範囲（半径）を拡縮
-        if (editMode == StageEditor::EditMode::Placing) {
-            float wheel = input->GetMouseWheel();
-            if (wheel != 0.0f) {
-                float currentR = stageEditor->GetPendingRadius();
-                currentR += (wheel > 0.0f ? 0.5f : -0.5f);
-                if (currentR < 1.0f) currentR = 1.0f;
-                if (currentR > 20.0f) currentR = 20.0f;
-                stageEditor->SetPendingRadius(currentR);
-            }
-        }
-
-        // 2. 左クリック押下時のアクション
-        if (input->MouseTrigger(0)) { // 左クリック
-            if (editMode == StageEditor::EditMode::Placing) {
-                stageEditor->AddEnemyFrom2D(
-                    { worldX, 0.0f, worldZ },
-                    stageEditor->GetPendingType(),
-                    stageEditor->GetPendingCount(),
-                    stageEditor->GetPendingRadius(),
-                    stageEditor->GetPendingHangTime()
-                );
-            }
-        }
-    }
-#endif
-
     float vpWidth = clientW * kMinimapWidthRatio;
     float vpHeight = clientH;
+
+    // ゲーム画面上かつミニマップ領域内にマウスがあるかを判定
+    bool isMouseOnGame = GameViewWindow::IsMouseOnGameView();
+    bool isMouseInMinimap = isMouseOnGame && (scaledMousePos.x <= vpWidth) && (scaledMousePos.y <= vpHeight);
 
     float aspect2D = vpWidth / vpHeight;
 
@@ -204,21 +170,81 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
     float startZ = route->GetCurrentAreaStartZ();
     float goalZ = route->GetCurrentAreaGoalZ();
 
-    // 1. ドラッグによるルート描画入力
+    float marginX = mapW * kMapInnerMarginRatio;
+    float marginY = mapH * kMapInnerMarginRatio;
+    float innerW = mapW - 2.0f * marginX;
+    float innerH = mapH - 2.0f * marginY;
+
+#ifdef _USEIMGUI
+    // --- 2Dマップ上でのエディタマウス操作 ---
+    if (stageEditor && isMouseInMinimap) {
+        float tX = std::clamp((scaledMousePos.x - (offsetX + marginX)) / innerW, 0.0f, 1.0f);
+        float tZ = std::clamp(((offsetY + mapH - marginY) - scaledMousePos.y) / innerH, 0.0f, 1.0f);
+
+        float worldX = kWorldMinX + tX * kWorldWidthX;
+        float worldZ = startZ + tZ * (goalZ - startZ);
+
+        auto editMode = stageEditor->GetEditMode();
+
+        // 1. 配置モード時: マウスホイールで発生範囲（半径）を拡縮
+        if (editMode == StageEditor::EditMode::Placing) {
+            float wheel = input->GetMouseWheel();
+            if (wheel != 0.0f) {
+                static constexpr float kRadiusWheelStep = 0.5f;
+                static constexpr float kMinSpawnRadius = 1.0f;
+                static constexpr float kMaxSpawnRadius = 20.0f;
+                float currentR = stageEditor->GetPendingRadius();
+                currentR += (wheel > 0.0f ? kRadiusWheelStep : -kRadiusWheelStep);
+                currentR = std::clamp(currentR, kMinSpawnRadius, kMaxSpawnRadius);
+                stageEditor->SetPendingRadius(currentR);
+            }
+        }
+
+        // 2. 左クリック押下時のアクション (一時停止中のみ配置を許可)
+        bool isPaused = false;
+        if (auto debugEditor = Zuizui::GetInstance()->GetDebugEditor()) {
+            isPaused = debugEditor->IsPaused();
+        }
+
+        if (input->MouseTrigger(0)) { // 左クリック
+            if (isPaused && editMode == StageEditor::EditMode::Placing) {
+                stageEditor->AddEnemyFrom2D(
+                    { worldX, 0.0f, worldZ },
+                    stageEditor->GetPendingType(),
+                    stageEditor->GetPendingCount(),
+                    stageEditor->GetPendingRadius(),
+                    stageEditor->GetPendingHangTime()
+                );
+            }
+        }
+    }
+#endif
+
+    bool isEditorPlacing = false;
+#ifdef _USEIMGUI
+    if (stageEditor && stageEditor->GetEditMode() == StageEditor::EditMode::Placing) {
+        isEditorPlacing = true;
+    }
+#endif
+
+    bool isGamePaused = false;
+    if (auto debugEditor = Zuizui::GetInstance()->GetDebugEditor()) {
+        isGamePaused = debugEditor->IsPaused();
+    }
+
+    // 1. ドラッグによるルート描画入力 (エディタ配置中またはポーズ中はルート描画を完全に無効化)
     bool isClickStarted = input->MouseTrigger(0);
     bool isPressing = input->MousePress(0);
 
-    if (!route->HasReachedGoal() && isPressing && (route->IsDrawing() || (isClickStarted && scaledMousePos.x <= vpWidth))) {
-        float marginX = mapW * 0.1f;
-        float tX = (scaledMousePos.x - (offsetX + marginX)) / (mapW - 2.0f * marginX);
-        tX = std::clamp(tX, 0.0f, 1.0f);
+    // ドラッグ中であるか、もしくはミニマップ有効領域内でクリックを開始した場合のみルート描画を実行
+    bool canStartDraw = isClickStarted && isMouseInMinimap;
 
-        float marginY = mapH * 0.1f;
-        float tZ = ((offsetY + mapH - marginY) - scaledMousePos.y) / (mapH - 2.0f * marginY);
-        tZ = std::clamp(tZ, 0.0f, 1.0f);
+    if (!isEditorPlacing && !isGamePaused && !route->HasReachedGoal() && isPressing && (route->IsDrawing() || canStartDraw)) {
+        float tX = std::clamp((scaledMousePos.x - (offsetX + marginX)) / innerW, 0.0f, 1.0f);
+        float tZ = std::clamp(((offsetY + mapH - marginY) - scaledMousePos.y) / innerH, 0.0f, 1.0f);
 
         Vector3 dragWorldPos;
-        dragWorldPos.x = -15.0f + tX * 30.0f;
+        dragWorldPos.x = kWorldMinX + tX * kWorldWidthX;
         dragWorldPos.z = startZ + tZ * (goalZ - startZ);
         dragWorldPos.y = 0.0f;
 
@@ -226,36 +252,31 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
         if (isClickStarted) {
             s_smoothedDragPos = dragWorldPos;
         } else {
-            s_smoothedDragPos.x = s_smoothedDragPos.x * 0.6f + dragWorldPos.x * 0.4f;
-            s_smoothedDragPos.y = s_smoothedDragPos.y * 0.6f + dragWorldPos.y * 0.4f;
-            s_smoothedDragPos.z = s_smoothedDragPos.z * 0.6f + dragWorldPos.z * 0.4f;
+            static constexpr float kSmoothOldWeight = 0.6f;
+            static constexpr float kSmoothNewWeight = 0.4f;
+            s_smoothedDragPos.x = s_smoothedDragPos.x * kSmoothOldWeight + dragWorldPos.x * kSmoothNewWeight;
+            s_smoothedDragPos.y = s_smoothedDragPos.y * kSmoothOldWeight + dragWorldPos.y * kSmoothNewWeight;
+            s_smoothedDragPos.z = s_smoothedDragPos.z * kSmoothOldWeight + dragWorldPos.z * kSmoothNewWeight;
         }
 
         route->Update2D(s_smoothedDragPos);
         ioTargetZoom = s_smoothedDragPos;
     } else {
-        route->Update2D({ 9999.0f, 0.0f, 0.0f });
+        static constexpr Vector3 kInvalidCursorPos = { 9999.0f, 0.0f, 0.0f };
+        route->Update2D(kInvalidCursorPos);
     }
 
-    // 2. 右クリックによるLoL風ミニマップ移動
-    if (input->MousePress(1) && scaledMousePos.x <= vpWidth) {
-        float marginX = mapW * 0.1f;
-        float tX = (scaledMousePos.x - (offsetX + marginX)) / (mapW - 2.0f * marginX);
-        tX = std::clamp(tX, 0.0f, 1.0f);
+    // 2. 右クリックによるLoL風ミニマップ移動 (ミニマップ有効領域内でのみ反応)
+    if (input->MousePress(1) && isMouseInMinimap) {
+        float tX = std::clamp((scaledMousePos.x - (offsetX + marginX)) / innerW, 0.0f, 1.0f);
+        float tZ = std::clamp(((offsetY + mapH - marginY) - scaledMousePos.y) / innerH, 0.0f, 1.0f);
 
-        float marginY = mapH * 0.1f;
-        float tZ = ((offsetY + mapH - marginY) - scaledMousePos.y) / (mapH - 2.0f * marginY);
-        tZ = std::clamp(tZ, 0.0f, 1.0f);
-
-        ioTargetZoom.x = -15.0f + tX * 30.0f;
+        ioTargetZoom.x = kWorldMinX + tX * kWorldWidthX;
         ioTargetZoom.z = startZ + tZ * (goalZ - startZ);
     }
 
     // 3. 各2Dスプライトのパラメータ更新
     cameraMgr_->SetProjectionMatrix2D(Math::MakeOrthographicMatrix(0.0f, 0.0f, vpWidth, vpHeight, 0.0f, 100.0f));
-
-    float marginX = mapW * 0.1f;
-    float marginY = mapH * 0.1f;
 
     minimapBg_->SetSize(vpWidth, vpHeight);
     minimapBg_->SetPosition({ 0.0f, 0.0f });
@@ -355,15 +376,15 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
                 Vector3 pt0 = densePoints[i];
                 Vector3 pt1 = densePoints[i + 1];
 
-                float tX0 = (pt0.x - (-15.0f)) / 30.0f;
-                float px0 = offsetX + marginX + tX0 * (mapW - 2.0f * marginX);
+                float tX0 = (pt0.x - kWorldMinX) / kWorldWidthX;
+                float px0 = offsetX + marginX + tX0 * innerW;
                 float tZ0 = (pt0.z - startZ) / (goalZ - startZ);
-                float py0 = (offsetY + mapH - marginY) - tZ0 * (mapH - 2.0f * marginY);
+                float py0 = (offsetY + mapH - marginY) - tZ0 * innerH;
 
-                float tX1 = (pt1.x - (-15.0f)) / 30.0f;
-                float px1 = offsetX + marginX + tX1 * (mapW - 2.0f * marginX);
+                float tX1 = (pt1.x - kWorldMinX) / kWorldWidthX;
+                float px1 = offsetX + marginX + tX1 * innerW;
                 float tZ1 = (pt1.z - startZ) / (goalZ - startZ);
-                float py1 = (offsetY + mapH - marginY) - tZ1 * (mapH - 2.0f * marginY);
+                float py1 = (offsetY + mapH - marginY) - tZ1 * innerH;
 
                 float dx = px1 - px0;
                 float dy = py1 - py0;
@@ -417,11 +438,11 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
     float maxZ3D = ioTargetZoom.z + viewH3D * 0.5f;
 
     auto to2D = [&](float wx, float wz) -> Vector2 {
-        float tX = (wx - (-15.0f)) / 30.0f;
-        float px = offsetX + marginX + tX * (mapW - 2.0f * marginX);
+        float tX = (wx - kWorldMinX) / kWorldWidthX;
+        float px = offsetX + marginX + tX * innerW;
 
         float tZ = (wz - startZ) / (goalZ - startZ);
-        float py = (offsetY + mapH - marginY) - tZ * (mapH - 2.0f * marginY);
+        float py = (offsetY + mapH - marginY) - tZ * innerH;
         return { px, py };
     };
 
@@ -475,6 +496,36 @@ void Minimap::Update(Input* input, Route* route, Stage* stage, Vector3& ioTarget
 }
 
 void Minimap::Draw(int currentAreaIndex) {
+    if (!cameraMgr_) {
+        cameraMgr_ = CameraResource::GetCameraManager();
+    }
+
+    auto dxCommon = EngineResource::GetEngine()->GetDxCommon();
+    float clientW = dxCommon ? dxCommon->GetViewport().Width : static_cast<float>(WindowApp::kClientWidth);
+    float clientH = dxCommon ? dxCommon->GetViewport().Height : static_cast<float>(WindowApp::kClientHeight);
+    float vpWidth = clientW * kMinimapWidthRatio;
+    float vpHeight = clientH;
+
+    // 描画直前に2Dミニマップ領域（幅30%）専用の正射影行列を設定し、全スプライトのWVP行列を確実に更新（ポーズ中の一括更新による上書きを防止）
+    cameraMgr_->SetProjectionMatrix2D(Math::MakeOrthographicMatrix(0.0f, 0.0f, vpWidth, vpHeight, 0.0f, 100.0f));
+
+    minimapBg_->Update();
+    if (currentAreaIndex == 3 && bossArea2D_) {
+        bossArea2D_->Update();
+    }
+    for (auto& icon : pillarIcons_) {
+        icon->Update();
+    }
+    startIcon_->Update();
+    goalIcon_->Update();
+    indicatorIcon_->Update();
+    for (int i = 0; i < 4; ++i) {
+        zoomFrame2D_[i]->Update();
+    }
+    for (int i = 0; i < 4; ++i) {
+        minimapBorderFrame2D_[i]->Update();
+    }
+
     minimapBg_->Draw("white");
 
     // ボスエリアは背景のすぐ上（背後）に描画
@@ -491,11 +542,6 @@ void Minimap::Draw(int currentAreaIndex) {
 
     if (activeMiniMapLineCount_ > 0) {
         auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
-
-        float clientW = static_cast<float>(WindowApp::kClientWidth);
-        float clientH = static_cast<float>(WindowApp::kClientHeight);
-        float vpWidth = clientW * kMinimapWidthRatio;
-        float vpHeight = clientH;
 
         // WVP行列の更新 (単位行列 * View2D * 正しいProj2D)
         Matrix4x4 viewMat = cameraMgr_->GetViewMatrix2D();
@@ -529,4 +575,7 @@ void Minimap::Draw(int currentAreaIndex) {
     for (int i = 0; i < 4; ++i) {
         minimapBorderFrame2D_[i]->Draw("white");
     }
+
+    // ミニマップ描画完了後、全画面用プロジェクション行列を復元（他システムの2D描画への影響を防止）
+    cameraMgr_->SetProjectionMatrix2D(Math::MakeOrthographicMatrix(0.0f, 0.0f, clientW, clientH, 0.0f, 100.0f));
 }

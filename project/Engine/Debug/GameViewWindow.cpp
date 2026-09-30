@@ -18,9 +18,23 @@
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Math/Matrix/Matrix.h"
+#include "Engine/Debug/DebugEditor.h"
+#include "App/Scene/Game/Stage/StageEditor.h"
 #include <algorithm>
 
 namespace {
+    // ゲーム状態に応じたGameView枠線・ステータス表示の定数 (マジックナンバー排除)
+    static constexpr float kGameViewBorderThickness = 4.0f;
+    static constexpr ImU32 kPausedBorderColor = IM_COL32(235, 55, 55, 255);       // 一時停止中: 鮮明な赤
+    static constexpr ImU32 kRunningBorderColor = IM_COL32(45, 140, 245, 255);     // 再生中: 爽やかな青
+    static constexpr ImU32 kPausedBannerBgColor = IM_COL32(200, 40, 40, 230);     // 一時停止中ステータス帯
+    static constexpr ImU32 kRunningBannerBgColor = IM_COL32(30, 95, 190, 230);     // 再生中ステータス帯
+    static constexpr ImU32 kStatusTextColor = IM_COL32(255, 255, 255, 255);       // ステータステキスト色
+    static constexpr float kBadgePaddingX = 8.0f;
+    static constexpr float kBadgePaddingY = 4.0f;
+    static constexpr float kBadgeMargin = 8.0f;
+    static constexpr float kBadgeRounding = 4.0f;
+
     bool RaySphereIntersection(const Vector3& rayOrigin, const Vector3& rayDir, const Vector3& sphereCenter, float sphereRadius, float& outT) {
         Vector3 m = Math::Subtract(rayOrigin, sphereCenter);
         float b = Math::Dot(m, rayDir);
@@ -45,7 +59,7 @@ namespace {
 }
 
 GameViewWindow::GameViewWindow()
-    : wasPaused_(false), showGizmo_(true) {
+    : wasPaused_(false), isClickPauseEnabled_(false), showGizmo_(false) {
 }
 
 void GameViewWindow::Draw(bool* show, bool* isVisible) {
@@ -54,38 +68,7 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
     if (ImGui::Begin("ゲーム画面###Game View", show)) {
         *isVisible = true;
 
-        // 1. ギズモ操作モード切り替えUI（ImGuizmo OPERATION 定数）
-        constexpr int kGizmoOpTranslate = 7;
-        constexpr int kGizmoOpRotate = 120;
-        constexpr int kGizmoOpScale = 896;
-
-        int currentOp = gizmoOperation_;
-        bool opChanged = false;
-
-        ImGui::Text("ギズモ操作:");
-        ImGui::SameLine();
-        if (ImGui::RadioButton("移動", currentOp == kGizmoOpTranslate)) {
-            currentOp = kGizmoOpTranslate;
-            opChanged = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("回転", currentOp == kGizmoOpRotate)) {
-            currentOp = kGizmoOpRotate;
-            opChanged = true;
-        }
-        ImGui::SameLine();
-        if (ImGui::RadioButton("拡縮", currentOp == kGizmoOpScale)) {
-            currentOp = kGizmoOpScale;
-            opChanged = true;
-        }
-
-        if (opChanged) {
-            gizmoOperation_ = currentOp;
-        }
-
-        ImGui::Separator();
-
-        // 2. ゲーム画面描画エリア（内部のみWindowPaddingを0にする）
+        // ゲーム画面描画エリア（内部のみWindowPaddingを0にする）
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::BeginChild("GameRenderArea", ImVec2(0, 0), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
@@ -128,13 +111,93 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             sGameViewSize_ = { width, height };
             sGameViewPosMin_ = { imgPosMin.x, imgPosMin.y };
 
+            // ゲーム停止状態（ポーズ）に応じた枠線（ボーダー）およびステータスバッジの描画
+            bool isPaused = false;
+            if (auto debugEditor = Zuizui::GetInstance()->GetDebugEditor()) {
+                isPaused = debugEditor->IsPaused();
+            }
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            ImU32 borderColor = isPaused ? kPausedBorderColor : kRunningBorderColor;
+            ImVec2 imgPosMax = ImVec2(imgPosMin.x + width, imgPosMin.y + height);
+            drawList->AddRect(imgPosMin, imgPosMax, borderColor, 0.0f, 0, kGameViewBorderThickness);
+
+            // 画面左上に状態ステータスバッジ（赤: 一時停止中 / 青: 進行中）を描画
+            const char* statusText = isPaused ? " [|| 一時停止中 - 敵配置可能] " : " [> 進行中 - ゲーム動作中] ";
+            ImVec2 textSize = ImGui::CalcTextSize(statusText);
+            ImVec2 badgeMin = ImVec2(imgPosMin.x + kBadgeMargin, imgPosMin.y + kBadgeMargin);
+            ImVec2 badgeMax = ImVec2(badgeMin.x + textSize.x + kBadgePaddingX * 2.0f, badgeMin.y + textSize.y + kBadgePaddingY * 2.0f);
+            ImU32 bannerColor = isPaused ? kPausedBannerBgColor : kRunningBannerBgColor;
+            drawList->AddRectFilled(badgeMin, badgeMax, bannerColor, kBadgeRounding);
+            drawList->AddText(ImVec2(badgeMin.x + kBadgePaddingX, badgeMin.y + kBadgePaddingY), kStatusTextColor, statusText);
+
+            // ギズモ表示が有効な場合、ステータスバッジの右隣に画面内オーバーレイとして「ギズモ操作」UIを描画
+            bool isGizmoOverlayHovered = false;
+            if (showGizmo_) {
+                // オーバーレイUIの配置用定数（マジックナンバー排除）
+                constexpr float kGizmoOverlayOffsetX = 8.0f;
+                constexpr float kGizmoOverlayWidth = 230.0f;
+                constexpr float kGizmoOverlayInnerPaddingX = 8.0f;
+                constexpr ImU32 kGizmoOverlayBgColor = IM_COL32(20, 25, 35, 220); // バッジと同調する半透明ダーク背景
+
+                ImVec2 overlayPos = ImVec2(badgeMax.x + kGizmoOverlayOffsetX, badgeMin.y);
+                float overlayHeight = badgeMax.y - badgeMin.y;
+                ImVec2 overlayMax = ImVec2(overlayPos.x + kGizmoOverlayWidth, overlayPos.y + overlayHeight);
+
+                // 背景バッジを描画（ステータスバッジと同調）
+                drawList->AddRectFilled(overlayPos, overlayMax, kGizmoOverlayBgColor, kBadgeRounding);
+
+                // マウスがオーバーレイ上にあるか判定（レイキャスト誤クリック防止用）
+                ImVec2 mousePos = ImGui::GetMousePos();
+                if (mousePos.x >= overlayPos.x && mousePos.x <= overlayMax.x &&
+                    mousePos.y >= overlayPos.y && mousePos.y <= overlayMax.y) {
+                    isGizmoOverlayHovered = true;
+                }
+
+                // カーソルをオーバーレイ内部へ配置（垂直中央揃えで確実に可視化）
+                float itemOffsetY = (overlayHeight - ImGui::GetFrameHeight()) * 0.5f;
+                if (itemOffsetY < 0.0f) {
+                    itemOffsetY = 0.0f;
+                }
+                ImGui::SetCursorScreenPos(ImVec2(overlayPos.x + kGizmoOverlayInnerPaddingX, overlayPos.y + itemOffsetY));
+
+                ImGui::BeginGroup();
+
+                int currentOp = gizmoOperation_;
+                bool opChanged = false;
+
+                ImGui::Text("ギズモ:");
+                ImGui::SameLine();
+                if (ImGui::RadioButton("移動", currentOp == kGizmoOpTranslate)) {
+                    currentOp = kGizmoOpTranslate;
+                    opChanged = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::RadioButton("回転", currentOp == kGizmoOpRotate)) {
+                    currentOp = kGizmoOpRotate;
+                    opChanged = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::RadioButton("拡縮", currentOp == kGizmoOpScale)) {
+                    currentOp = kGizmoOpScale;
+                    opChanged = true;
+                }
+
+                if (opChanged) {
+                    gizmoOperation_ = currentOp;
+                }
+
+                ImGui::EndGroup();
+            }
+
             // 3Dレイキャストによるオブジェクト直接選択処理
             BaseCamera* camera = CameraResource::GetCameraManager()->GetActiveCamera();
-            if (camera && sIsMouseOnGameView_) {
-                // ギズモの操作子をホバー中・操作中、あるいはCtrlキー押下中の場合はレイキャストを一切行わない（誤クリック防止）
+            bool isEditorPlacing = StageEditor::IsPlacingNow();
+            if (camera && sIsMouseOnGameView_ && !isEditorPlacing) {
+                // ギズモの操作子をホバー中・操作中、あるいはCtrlキー押下中、オーバーレイホバー中の場合はレイキャストを一切行わない（誤クリック防止）
                 auto input = InputResource::GetInput();
                 bool isCtrlPressed = input && (input->Press(DIK_LCONTROL) || input->Press(DIK_RCONTROL));
-                bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing() || isCtrlPressed;
+                bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing() || isCtrlPressed || isGizmoOverlayHovered;
 
                 if (!isGizmoActive) {
                     bool isLeftClicked = ImGui::IsMouseClicked(0);
@@ -231,11 +294,11 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                                 // 異なるオブジェクトがクリックされた（または何も選択されていなかった）場合は、そのターゲットを選択してモードを適用
                                 SceneHierarchy::GetInstance()->SetSelected(nearestObj);
                                 if (isLeftClicked) {
-                                    gizmoOperation_ = 7; // TRANSLATE
+                                    gizmoOperation_ = kGizmoOpTranslate;
                                 } else if (isMiddleClicked) {
-                                    gizmoOperation_ = 120; // ROTATE
+                                    gizmoOperation_ = kGizmoOpRotate;
                                 } else if (isRightClicked) {
-                                    gizmoOperation_ = 896; // SCALE
+                                    gizmoOperation_ = kGizmoOpScale;
                                 }
                             }
                         }
@@ -407,7 +470,23 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             popAnim_.Update(ImGui::GetIO().DeltaTime);
             popAnim_.Draw(ImGui::GetWindowDrawList(), center);
 
-            // リプレイシステム削除に伴い、クリックポーズおよびポーズ中オーバーレイ表示は無効化されました
+            // 左クリックによる一時停止・再開トグル処理（クリック一時停止機能）
+            if (isClickPauseEnabled_ && sIsMouseOnGameView_) {
+                auto input = InputResource::GetInput();
+                bool isCtrlPressed = input && (input->Press(DIK_LCONTROL) || input->Press(DIK_RCONTROL));
+                bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing() || isCtrlPressed || isGizmoOverlayHovered;
+                bool isEditorPlacing = StageEditor::IsPlacingNow();
+
+                if (!isGizmoActive && !isEditorPlacing) {
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        if (auto debugEditor = Zuizui::GetInstance()->GetDebugEditor()) {
+                            bool nextPaused = !debugEditor->IsPaused();
+                            debugEditor->SetPause(nextPaused);
+                            popAnim_.Trigger(nextPaused ? PopAnimation::Type::Pause : PopAnimation::Type::Play);
+                        }
+                    }
+                }
+            }
 
         } else {
             ImGui::Text("No Active PostProcess");
@@ -478,4 +557,38 @@ Vector2 GameViewWindow::GetGameViewPosMin() {
 #else
     return Vector2{ 0.0f, 0.0f };
 #endif
+}
+
+bool GameViewWindow::WorldToScreen(const Vector3& worldPos, const BaseCamera* camera, Vector2& outScreenPos, float vpOffsetXRatio, float vpWidthRatio) {
+    if (!camera) return false;
+
+    // View行列およびProjection行列の乗算 (行優先: View * Projection)
+    Matrix4x4 viewMat = camera->GetViewMatrix();
+    Matrix4x4 projMat = camera->GetProjectionMatrix();
+    Matrix4x4 viewProj = Math::Multiply(viewMat, projMat);
+
+    // 行ベクトル * 行列 によるクリップ座標の計算
+    float w = worldPos.x * viewProj.m[0][3] + worldPos.y * viewProj.m[1][3] + worldPos.z * viewProj.m[2][3] + viewProj.m[3][3];
+    static constexpr float kNearClipW = 0.001f;
+    if (w <= kNearClipW) {
+        return false; // カメラの背後またはクリップ面手前の場合は除外
+    }
+
+    float invW = 1.0f / w;
+    float ndcX = (worldPos.x * viewProj.m[0][0] + worldPos.y * viewProj.m[1][0] + worldPos.z * viewProj.m[2][0] + viewProj.m[3][0]) * invW;
+    float ndcY = (worldPos.x * viewProj.m[0][1] + worldPos.y * viewProj.m[1][1] + worldPos.z * viewProj.m[2][1] + viewProj.m[3][1]) * invW;
+
+    static constexpr float kHalfCoord = 0.5f;
+    Vector2 viewPos = GetGameViewPosMin();
+    Vector2 viewSize = GetGameViewSize();
+
+    if (viewSize.x <= 0.0f || viewSize.y <= 0.0f) {
+        return false;
+    }
+
+    // NDC [-1, 1] をスクリーンピクセル座標へ変換 (DirectX系のY軸反転を考慮、ビューポートオフセット・幅比率を適用)
+    float localScreenX = (vpOffsetXRatio + (ndcX * kHalfCoord + kHalfCoord) * vpWidthRatio) * viewSize.x;
+    outScreenPos.x = viewPos.x + localScreenX;
+    outScreenPos.y = viewPos.y + (-ndcY * kHalfCoord + kHalfCoord) * viewSize.y;
+    return true;
 }

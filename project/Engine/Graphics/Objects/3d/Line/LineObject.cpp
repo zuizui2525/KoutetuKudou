@@ -142,8 +142,10 @@ void LineObject::UpdateVertex() {
     };
 
     // 頂点バッファの書き換え
-    VertexData* vtx;
-    vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vtx));
+    if (!vertexResource_) return;
+    VertexData* vtx = nullptr;
+    HRESULT hr = vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vtx));
+    if (FAILED(hr) || !vtx) return;
 
     // 頂点0: 始点 - オフセット
     vtx[0].position = { startPoint_.x - offset.x, startPoint_.y - offset.y, startPoint_.z - offset.z, 1.0f };

@@ -10,6 +10,7 @@
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "App/Scene/Core/SceneManager.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
+#include "App/Scene/Game/Stage/StageEditor.h"
 
 /**
  * @brief コンストラクタ
@@ -23,6 +24,7 @@
  * @param reticle 照準UIクラス
  * @param ioCurrentDistance 走行中距離（GameSceneのメンバ変数の参照）
  * @param onAreaCleared エリアのゴール到達時に呼び出されるコールバック関数
+ * @param stageEditor 敵配置エディタ
  */
 PlayPhase::PlayPhase(
     Input* input,
@@ -34,7 +36,8 @@ PlayPhase::PlayPhase(
     PlayCamera* playCamera,
     Reticle* reticle,
     float& ioCurrentDistance,
-    std::function<void()> onAreaCleared
+    std::function<void()> onAreaCleared,
+    StageEditor* stageEditor
 ) : input_(input),
     cameraMgr_(cameraMgr),
     route_(route),
@@ -44,7 +47,8 @@ PlayPhase::PlayPhase(
     playCamera_(playCamera),
     reticle_(reticle),
     currentDistance_(ioCurrentDistance),
-    onAreaCleared_(onAreaCleared) {}
+    onAreaCleared_(onAreaCleared),
+    stageEditor_(stageEditor) {}
 
 void PlayPhase::Initialize() {
     // プレイモード開始時に自動走行フラグを立てる
@@ -107,6 +111,14 @@ void PlayPhase::Update() {
 
     // 10. エフェクトシステムの更新
     EffectManager::GetInstance()->Update();
+
+#ifdef _USEIMGUI
+    // 11. エディタ湧き範囲サークルの更新（プレイ中ガイド表示がONの場合）
+    if (stageEditor_ && stageEditor_->IsShowDuringPlay()) {
+        stageEditor_->SetViewportRatio(0.0f, 1.0f);
+        stageEditor_->Update();
+    }
+#endif
 }
 
 void PlayPhase::Draw() {
@@ -121,16 +133,28 @@ void PlayPhase::Draw() {
     // 3. エネミーの描画（60.0fカリング付き）
     enemyManager_->Draw(playerPos);
 
-    // 4. エフェクトの描画
+#ifdef _USEIMGUI
+    // 4. エディタ湧き範囲サークルの描画（プレイ中ガイド表示がONの場合）
+    if (stageEditor_ && stageEditor_->IsShowDuringPlay()) {
+        stageEditor_->Draw3D();
+    }
+#endif
+
+    // 5. エフェクトの描画
     EffectManager::GetInstance()->Draw();
 
-    // 5. スタート/ゴール球体の描画
+    // 6. スタート/ゴール球体の描画
     route_->DrawSpheres();
 
-    // 6. 照準（レティクル）の描画
+    // 7. 照準（レティクル）の描画
     reticle_->Draw();
 }
 
 void PlayPhase::ImGuiControl() {
-    // プレイフェーズ中は特有のImGui表示は行いませんが、インターフェースの実装として空定義します
+#ifdef _USEIMGUI
+    // プレイ中ガイド表示がONの場合は敵エディタおよび3Dテキストオーバーレイを描画
+    if (stageEditor_ && stageEditor_->IsShowDuringPlay()) {
+        stageEditor_->ImGuiControl();
+    }
+#endif
 }

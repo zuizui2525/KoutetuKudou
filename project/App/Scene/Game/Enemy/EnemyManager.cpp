@@ -32,6 +32,7 @@ void EnemyManager::Reset() {
     spawnTriggers_.clear();
     lastSpawnZ_ = 0.0f;
     hasBossSpawned_ = false;
+    hasPrevPlayerPos_ = false;
 }
 
 /**
@@ -60,6 +61,7 @@ void EnemyManager::SetupSpawnTriggers(const std::vector<std::unique_ptr<Enemy>>&
     enemies_.clear(); // エディタ用ダミーサークルをクリア
     lastSpawnZ_ = startPlayerZ;
     hasBossSpawned_ = false;
+    hasPrevPlayerPos_ = false;
 }
 
 void EnemyManager::Update(Player* player) {
@@ -69,9 +71,12 @@ void EnemyManager::Update(Player* player) {
     Vector3 tangent = player->GetDirection();
 
     // 1. 動的湧き・ボス戦湧き処理
-    // (A) エディタトリガーによる湧き判定
+    // (A) エディタトリガーによる湧き判定 (XZ平面上の円形通過判定)
+    Vector3 segStart = hasPrevPlayerPos_ ? prevPlayerPos_ : playerPos;
+    Vector3 segEnd = playerPos;
+
     for (auto& trigger : spawnTriggers_) {
-        if (!trigger.triggered && playerPos.z >= trigger.z) {
+        if (!trigger.triggered && IsIntersectingCircleXZ(segStart, segEnd, trigger.pos, trigger.radius)) {
             trigger.triggered = true;
 
             for (int i = 0; i < trigger.count; ++i) {
@@ -248,6 +253,10 @@ void EnemyManager::Update(Player* player) {
             }
         }
     }
+
+    // 次フレームの判定用に入力自機位置を記録
+    prevPlayerPos_ = playerPos;
+    hasPrevPlayerPos_ = true;
 }
 
 void EnemyManager::Draw(const Vector3& playerPos) {
@@ -281,4 +290,39 @@ bool EnemyManager::IsCollidingAABB(const Vector3& pos1, const Vector3& size1, co
     return (minX1 <= maxX2 && maxX1 >= minX2) &&
            (minY1 <= maxY2 && maxY1 >= minY2) &&
            (minZ1 <= maxZ2 && maxZ1 >= minZ2);
+}
+
+/**
+ * @brief 2D平面(XZ)における線分と円の交差判定 (すり抜け防止最近接距離判定)
+ * @param segStart 線分の始点 (前フレーム位置)
+ * @param segEnd 線分の終点 (現フレーム位置)
+ * @param circleCenter 円の中心座標
+ * @param radius 円の半径
+ * @return 線分が円に交差または包含している場合 true
+ */
+bool EnemyManager::IsIntersectingCircleXZ(const Vector3& segStart, const Vector3& segEnd, const Vector3& circleCenter, float radius) {
+    float segX = segEnd.x - segStart.x;
+    float segZ = segEnd.z - segStart.z;
+    float segLenSq = segX * segX + segZ * segZ;
+
+    static constexpr float kEpsilon = 1e-6f;
+    static constexpr float kZero = 0.0f;
+    static constexpr float kOne = 1.0f;
+
+    float t = kZero;
+    if (segLenSq > kEpsilon) {
+        float toCenterX = circleCenter.x - segStart.x;
+        float toCenterZ = circleCenter.z - segStart.z;
+        t = (toCenterX * segX + toCenterZ * segZ) / segLenSq;
+        t = std::clamp(t, kZero, kOne);
+    }
+
+    float closestX = segStart.x + t * segX;
+    float closestZ = segStart.z + t * segZ;
+
+    float dx = closestX - circleCenter.x;
+    float dz = closestZ - circleCenter.z;
+    float distSq = dx * dx + dz * dz;
+
+    return distSq <= (radius * radius);
 }

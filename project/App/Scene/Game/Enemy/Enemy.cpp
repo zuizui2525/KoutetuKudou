@@ -60,10 +60,6 @@ void Enemy::Update() {
 
     if (isSpawnPoint_) {
         cube_->Update();
-        headCube_->Update();
-        bodyCollider_->Update();
-        headCollider_->Update();
-        UpdateBullets();
         return;
     }
 
@@ -351,13 +347,71 @@ void Enemy::UpdateHpBar(const Vector3& charPos) {
     }
 }
 
+void Enemy::SetEnemyType(EnemyType type) {
+    enemyType_ = type;
+    if (isSpawnPoint_) {
+        UpdateSpawnVisual();
+    }
+}
+
+void Enemy::SetSpawnRadius(float radius) {
+    spawnRadius_ = radius;
+    if (isSpawnPoint_) {
+        UpdateSpawnVisual();
+    }
+}
+
+void Enemy::SetSelectedInEditor(bool selected) {
+    isSelectedInEditor_ = selected;
+    if (isSpawnPoint_) {
+        UpdateSpawnVisual();
+    }
+}
+
+void Enemy::UpdateSpawnVisual() {
+    if (!isSpawnPoint_) return;
+
+    Vector4 ringColor = kNormalSpawnColor;
+    Vector3 markerScale = kSpawnCenterMarkerScale;
+
+    switch (enemyType_) {
+    case EnemyType::Normal:
+        ringColor = kNormalSpawnColor;
+        break;
+    case EnemyType::Stationary:
+        ringColor = kStationarySpawnColor;
+        break;
+    case EnemyType::Swarm:
+        ringColor = kSwarmSpawnColor;
+        break;
+    case EnemyType::Boss:
+        ringColor = kBossSpawnColor;
+        break;
+    }
+
+    if (isSelectedInEditor_) {
+        // 選択時はスケールを拡大し、鮮烈な発光ネオンイエローで強調
+        constexpr float kSelectedScaleMultiplier = 1.5f;
+        markerScale = {
+            kSpawnCenterMarkerScale.x * kSelectedScaleMultiplier,
+            kSpawnCenterMarkerScale.y * kSelectedScaleMultiplier,
+            kSpawnCenterMarkerScale.z * kSelectedScaleMultiplier
+        };
+        static constexpr Vector4 kSelectedMarkerColor = { 1.0f, 0.95f, 0.05f, 1.0f }; // 鮮烈な発光ネオンイエロー
+        ringColor = kSelectedMarkerColor;
+    }
+
+    if (cube_) {
+        cube_->SetScale(markerScale);
+        cube_->SetColor(ringColor);
+    }
+}
+
 void Enemy::SetSpawnPoint(bool active) {
     isSpawnPoint_ = active;
     if (isSpawnPoint_) {
-        // 出現サークル用に潰したシアンの円盤を設定
-        cube_->SetScale({ 3.0f, 0.1f, 3.0f });
-        cube_->SetColor({ 0.0f, 1.0f, 0.8f, 0.5f });
-        
+        UpdateSpawnVisual();
+
         // 不要な頭部・コライダーは非アクティブ化(サイズを0にする)
         headCube_->SetScale({ 0.0f, 0.0f, 0.0f });
         bodyCollider_->SetScale({ 0.0f, 0.0f, 0.0f });

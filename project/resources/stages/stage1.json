@@ -1,4 +1,6 @@
 [
-  {"pos": [0, 1, -400], "type": 0, "count": 5, "radius": 5, "hang_time": 3},
-  {"pos": [-20, 0, -120], "type": 0, "count": 5, "radius": 2, "hang_time": 3}
+  {"pos": [0, 0, -220], "type": 0, "count": 3, "radius": 5, "hang_time": 3},
+  {"pos": [-6, 0, -200], "type": 2, "count": 5, "radius": 4, "hang_time": 2.5},
+  {"pos": [6, 0, -180], "type": 1, "count": 2, "radius": 6, "hang_time": 3},
+  {"pos": [1.0445, 0, -230.516], "type": 0, "count": 5, "radius": 5, "hang_time": 3}
 ]

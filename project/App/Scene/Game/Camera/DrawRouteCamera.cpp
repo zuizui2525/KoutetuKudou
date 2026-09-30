@@ -5,6 +5,7 @@
 #include "Engine/Input/Input.h"
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
+#include "Engine/Zuizui.h"
 #include <algorithm>
 
 DrawRouteCamera::DrawRouteCamera() = default;
@@ -46,8 +47,9 @@ void DrawRouteCamera::Update(Input* input, float startZ, float goalZ) {
 
     Vector2 mousePos = GameViewWindow::GetMousePosition();
     Vector2 viewSize = GameViewWindow::GetGameViewSize();
-    float clientW = static_cast<float>(WindowApp::kClientWidth);
-    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    auto dxCommon = Zuizui::GetInstance()->GetDxCommon();
+    float clientW = dxCommon ? dxCommon->GetViewport().Width : static_cast<float>(WindowApp::kClientWidth);
+    float clientH = dxCommon ? dxCommon->GetViewport().Height : static_cast<float>(WindowApp::kClientHeight);
 
     Vector2 scaledMousePos = mousePos;
     if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
@@ -55,10 +57,15 @@ void DrawRouteCamera::Update(Input* input, float startZ, float goalZ) {
         scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
     }
 
-    float vpWidth = clientW * 0.3f;
+    constexpr float kSplitLeftRatio = 0.3f;
+    float vpWidth = clientW * kSplitLeftRatio;
+
+    // ゲーム画面上かつ右側の3Dビューポート領域内にマウスがあるかを判定
+    bool isMouseOnGame = GameViewWindow::IsMouseOnGameView();
+    bool isMouseIn3DView = isMouseOnGame && (scaledMousePos.x > vpWidth) && (scaledMousePos.x <= clientW) && (scaledMousePos.y >= 0.0f) && (scaledMousePos.y <= clientH);
 
     // 1. 右ドラッグによる自由スクロール
-    if (input->MousePress(1) && scaledMousePos.x > vpWidth) {
+    if (input->MousePress(1) && isMouseIn3DView) {
         float dx = input->GetMouseDeltaX();
         float dy = input->GetMouseDeltaY();
 
@@ -71,8 +78,8 @@ void DrawRouteCamera::Update(Input* input, float startZ, float goalZ) {
         isEasing_ = false; // 手動スクロール時はイージングを解除
     }
 
-    // 2. マウスホイールによるズームイン・アウト (右画面にマウスがある場合のみ)
-    if (scaledMousePos.x > vpWidth) {
+    // 2. マウスホイールによるズームイン・アウト (3Dビューポート内にマウスがある場合のみ)
+    if (isMouseIn3DView) {
         float wheel = input->GetMouseWheel();
         if (wheel != 0.0f) {
             targetZoomFactor_ -= wheel * kZoomSensitivity;
@@ -82,7 +89,7 @@ void DrawRouteCamera::Update(Input* input, float startZ, float goalZ) {
     }
 
     // 3. マウスホイールクリック（中央クリック）で中央＆標準ズームにイージングで戻る
-    if (scaledMousePos.x > vpWidth && input->MouseTrigger(2)) {
+    if (isMouseIn3DView && input->MouseTrigger(2)) {
         isEasing_ = true;
         destinationZoom_.x = 0.0f; // X座標を中央に戻す (Z座標は現在のカメラ注視Zを維持)
         targetZoomFactor_ = 1.0f;  // 標準ズーム（1.0f）に戻す

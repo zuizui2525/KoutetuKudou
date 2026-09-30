@@ -17,7 +17,12 @@ public:
     bool IsClickPauseEnabled() const { return isClickPauseEnabled_; }
     void SetClickPauseEnabled(bool enable) { isClickPauseEnabled_ = enable; }
 
-    // ギズモ操作モードの取得・設定 (7: TRANSLATE, 120: ROTATE, 896: SCALE)
+    // ギズモ操作モード定数（マジックナンバー排除）
+    static constexpr int kGizmoOpTranslate = 7;
+    static constexpr int kGizmoOpRotate = 120;
+    static constexpr int kGizmoOpScale = 896;
+
+    // ギズモ操作モードの取得・設定
     int GetGizmoOperation() const { return gizmoOperation_; }
     void SetGizmoOperation(int op) { gizmoOperation_ = op; }
 
@@ -34,14 +39,16 @@ public:
     static Vector2 GetMousePosition();
     // ゲーム画面の左上座標
     static Vector2 GetGameViewPosMin();
+    // 3Dワールド座標からゲーム画面上のスクリーン座標への変換（画面分割対応：左オフセット比率、幅比率）
+    static bool WorldToScreen(const Vector3& worldPos, const class BaseCamera* camera, Vector2& outScreenPos, float vpOffsetXRatio = 0.0f, float vpWidthRatio = 1.0f);
 
 private:
 #ifdef _USEIMGUI
     PopAnimation popAnim_;
     bool wasPaused_ = false;
-    bool isClickPauseEnabled_ = true; // 左クリックによる一時停止を有効にするかどうかのフラグ
-    bool showGizmo_ = true;           // ギズモを描画・利用するかどうかのフラグ
-    int gizmoOperation_ = 7;          // ギズモの操作モード (初期値: TRANSLATE = 7)
+    bool isClickPauseEnabled_ = false; // 左クリックによる一時停止を有効にするかどうかのフラグ（初期値: オフ）
+    bool showGizmo_ = false;           // ギズモを描画・利用するかどうかのフラグ（初期値: オフ）
+    int gizmoOperation_ = kGizmoOpTranslate; // ギズモの操作モード (初期値: TRANSLATE)
     static inline bool sIsMouseOnGameView_ = false;
     static inline Vector2 sGameViewSize_ = { 0.0f, 0.0f };
     static inline Vector2 sGameViewPosMin_ = { 0.0f, 0.0f };
