@@ -28,6 +28,10 @@ public:
     void SetSize(const Vector3& size) { size_ = size; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kVertexCount = 24;
+    static constexpr uint32_t kIndexCount = 36;
+
     void CreateMesh();
 
 private:

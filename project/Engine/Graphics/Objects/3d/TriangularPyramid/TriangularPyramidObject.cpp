@@ -1,4 +1,5 @@
 #include "Engine/Graphics/Objects/3d/TriangularPyramid/TriangularPyramidObject.h"
+#include "Engine/Graphics/Objects/3d/Drawer/Object3DDrawer.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
@@ -38,37 +39,8 @@ void TriangularPyramidObject::Update() {
 }
 
 void TriangularPyramidObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
-    if (!isVisible_) return;
-    auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
-    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object3D"));
-    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object3D"));
-    commandList->IASetVertexBuffers(0, 1, &vbView_);
-    commandList->IASetIndexBuffer(&ibView_);
-    commandList->SetGraphicsRootConstantBufferView(0, wvpResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, materialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(2, CameraResource::GetCameraManager()->GetGPUVirtualAddress());
-    
-    auto lightMgr = LightResource::GetLightManager();
-    if (lightMgr) {
-        commandList->SetGraphicsRootConstantBufferView(3, lightMgr->GetDirectionalLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(4, lightMgr->GetPointLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(5, lightMgr->GetSpotLightGroupAddress());
-    }
-    
-    commandList->SetGraphicsRootDescriptorTable(6, sTexMgr->GetGpuHandle(textureKey));
-    
-    if (!envMapKey.empty()) {
-        if (materialData_->environmentCoefficient == 0.0f) {
-            materialData_->environmentCoefficient = 1.0f;
-        }
-        commandList->SetGraphicsRootDescriptorTable(7, sTexMgr->GetGpuHandle(envMapKey));
-    } else {
-        materialData_->environmentCoefficient = 0.0f;
-        commandList->SetGraphicsRootDescriptorTable(7, sTexMgr->GetGpuHandle("skyboxTex")); 
-    }
-    
-    uint32_t indexCount = 12; // 3 sides * 3 + 1 bottom * 3 = 12
-    commandList->DrawIndexedInstanced(indexCount, 1, 0, 0, 0);
+    // 描画処理は共通描画クラス Object3DDrawer を通して実行
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, kIndexCount, textureKey, envMapKey);
 }
 
 void TriangularPyramidObject::CreateMesh() {

@@ -30,6 +30,9 @@ public:
     void SetHeight(float height) { height_ = height; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kIndexCount = 12;
+
     void CreateMesh();
 
 private:

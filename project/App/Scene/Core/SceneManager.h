@@ -21,6 +21,7 @@ public:
 
     void Update();
     void Draw();
+    void Draw2D();
     void ImGuiControl();
 
     void SetPostProcess(PostProcess* postProcess) { postProcess_ = postProcess; }

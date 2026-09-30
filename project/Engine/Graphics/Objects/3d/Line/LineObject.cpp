@@ -1,4 +1,5 @@
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
+#include "Engine/Graphics/Objects/3d/Drawer/Object3DDrawer.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
@@ -51,24 +52,8 @@ void LineObject::Update() {
 }
 
 void LineObject::Draw(const std::string& textureKey) {
-    if (!isVisible_) return;
-    auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
-    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object3D"));
-    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object3D"));
-    commandList->IASetVertexBuffers(0, 1, &vbView_);
-    commandList->IASetIndexBuffer(&ibView_);
-    commandList->SetGraphicsRootConstantBufferView(0, wvpResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, materialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(2, CameraResource::GetCameraManager()->GetGPUVirtualAddress());
-    auto lightMgr = LightResource::GetLightManager();
-    if (lightMgr) {
-        commandList->SetGraphicsRootConstantBufferView(3, lightMgr->GetDirectionalLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(4, lightMgr->GetPointLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(5, lightMgr->GetSpotLightGroupAddress());
-    }
-    commandList->SetGraphicsRootDescriptorTable(6, sTexMgr->GetGpuHandle(textureKey));
-    
-    commandList->DrawIndexedInstanced(6, 1, 0, 0, 0);
+    // 描画処理は共通描画クラス Object3DDrawer を通して実行
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, kIndexCount, textureKey);
 }
 
 void LineObject::CreateMesh() {

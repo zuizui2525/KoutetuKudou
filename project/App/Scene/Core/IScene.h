@@ -15,6 +15,9 @@ public:
     // 毎フレームの描画処理（描画コマンドの発行）
     virtual void Draw() = 0;
 
+    // 毎フレームの2D/UI描画処理（ポストプロセス適用後の最終テクスチャに対する描画コマンドの発行）
+    virtual void Draw2D() {}
+
     // ImGuiコントロールの処理
     virtual void ImGuiControl() = 0;
 };

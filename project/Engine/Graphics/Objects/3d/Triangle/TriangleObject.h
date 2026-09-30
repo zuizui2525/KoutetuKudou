@@ -20,6 +20,9 @@ public:
     void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "");
   
 private:
+    // 頂点数定数 (マジックナンバー排除)
+    static constexpr uint32_t kVertexCount = 3;
+
     // GPUリソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
 

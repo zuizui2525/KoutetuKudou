@@ -34,6 +34,9 @@ public:
     void SetTubeSubdivision(uint32_t subdiv) { tubeSubdivision_ = subdiv; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kIndicesPerSegment = 6;
+
     void CreateMesh();
 
 private:

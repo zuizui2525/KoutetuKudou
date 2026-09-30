@@ -25,6 +25,9 @@ public:
     // 描画前処理（状態をRENDER_TARGETに遷移し、レンダーターゲットの設定およびクリア）
     void PreDraw(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle, bool clearDepth = true);
 
+    // 描画前処理（クリアを行わずにレンダーターゲットへ遷移・設定し、2Dスプライト等のオーバーレイ描画を可能にする）
+    void PreDrawWithoutClear(ID3D12GraphicsCommandList* commandList);
+
     // 描画後処理（状態をPIXEL_SHADER_RESOURCEに遷移してシェーダ読み込み可能にする）
     void PostDraw(ID3D12GraphicsCommandList* commandList);
 

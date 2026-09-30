@@ -126,3 +126,10 @@ void SceneManager::Draw() {
     }
 #endif
 }
+
+void SceneManager::Draw2D() {
+    // 現在のシーンがあれば2D/UI描画を実行
+    if (currentScene_) {
+        currentScene_->Draw2D();
+    }
+}

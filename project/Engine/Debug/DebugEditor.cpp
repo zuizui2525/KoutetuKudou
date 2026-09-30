@@ -283,21 +283,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 }
                 ImGui::TextDisabled("  画面クリックで一時停止/再開");
 
-                ImGui::Separator();
-
-                // 2. ギズモ表示チェックボックス & 説明
-                bool showGizmo = gameViewWindow_->IsShowGizmo();
-                if (ImGui::Checkbox("ギズモ表示", &showGizmo)) {
-                    gameViewWindow_->SetShowGizmo(showGizmo);
-                }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("3Dオブジェクト操作用のギズモ軸、および画面内の操作バッジを表示します");
-                }
-                ImGui::TextDisabled("  3D操作ギズモの表示/非表示");
-
-                ImGui::Separator();
-
-                // 3. ギズモ操作モード（現在のモードを表示）
+                // 2. ギズモ操作モード（現在のモードを表示）
                 int currentOp = gameViewWindow_->GetGizmoOperation();
                 const char* currentOpLabel = "移動";
                 if (currentOp == GameViewWindow::kGizmoOpRotate) {

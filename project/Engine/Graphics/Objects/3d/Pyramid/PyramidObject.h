@@ -34,6 +34,9 @@ public:
     void SetDepth(float depth) { size_.z = depth; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kIndexCount = 18;
+
     void CreateMesh();
 
 private:

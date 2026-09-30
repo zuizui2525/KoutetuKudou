@@ -3,6 +3,34 @@
 #include "App/Scene/Core/SceneManager.h"
 #include "Engine/Graphics/PostProcess/PostProcess.h"
 
+namespace {
+    // 2Dテスト用オブジェクト定数 (マジックナンバー排除)
+    static inline const Vector3 kTestSpritePosition = { 100.0f, 150.0f, 0.0f };
+    static constexpr float kTestSpriteWidth = 120.0f;
+    static constexpr float kTestSpriteHeight = 120.0f;
+
+    static inline const Vector3 kTestTrianglePosition = { 280.0f, 150.0f, 0.0f };
+    static constexpr float kTestTriangleWidth = 120.0f;
+    static constexpr float kTestTriangleHeight = 120.0f;
+    static inline const Vector4 kTestTriangleColor = { 0.2f, 0.8f, 1.0f, 1.0f }; // シアン
+
+    static inline const Vector3 kTestCirclePosition = { 460.0f, 150.0f, 0.0f };
+    static constexpr float kTestCircleRadius = 60.0f;
+    static inline const Vector4 kTestCircleColor = { 1.0f, 0.85f, 0.2f, 1.0f }; // イエロー
+
+    static inline const Vector3 kTestRingPosition = { 640.0f, 150.0f, 0.0f };
+    static constexpr float kTestRingOuterRadius = 60.0f;
+    static constexpr float kTestRingInnerRadius = 40.0f;
+    static inline const Vector4 kTestRingColor = { 1.0f, 0.3f, 0.6f, 1.0f }; // ピンク
+
+    static inline const Vector2 kTestLineStart = { 100.0f, 320.0f };
+    static inline const Vector2 kTestLineEnd = { 760.0f, 320.0f };
+    static constexpr float kTestLineThickness = 6.0f;
+    static inline const Vector4 kTestLineColor = { 0.4f, 1.0f, 0.4f, 1.0f }; // ライムグリーン
+
+    static inline const std::string kDefaultSpriteTex = "white";
+}
+
 
 void TitleScene::Initialize() {
     // 0. ポストプロセスのポインタを取得してメンバ変数に保持し、初期状態でグレースケールを有効にする
@@ -86,6 +114,36 @@ void TitleScene::Initialize() {
     // 5. Skyboxの生成
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize();
+
+    // 6. 2Dオブジェクトの生成と配置 (2D描画テスト用)
+    testSprite_ = std::make_unique<SpriteObject>();
+    testSprite_->Initialize();
+    testSprite_->SetPosition(kTestSpritePosition);
+    testSprite_->SetSize(kTestSpriteWidth, kTestSpriteHeight);
+
+    testTriangle2D_ = std::make_unique<Triangle2DObject>();
+    testTriangle2D_->Initialize();
+    testTriangle2D_->SetPosition(kTestTrianglePosition);
+    testTriangle2D_->SetSize(kTestTriangleWidth, kTestTriangleHeight);
+    testTriangle2D_->GetMaterialData()->color = kTestTriangleColor;
+
+    testCircle2D_ = std::make_unique<Circle2DObject>();
+    testCircle2D_->Initialize();
+    testCircle2D_->SetPosition(kTestCirclePosition);
+    testCircle2D_->SetRadius(kTestCircleRadius);
+    testCircle2D_->GetMaterialData()->color = kTestCircleColor;
+
+    testRing2D_ = std::make_unique<Ring2DObject>();
+    testRing2D_->Initialize();
+    testRing2D_->SetPosition(kTestRingPosition);
+    testRing2D_->SetRadii(kTestRingOuterRadius, kTestRingInnerRadius);
+    testRing2D_->GetMaterialData()->color = kTestRingColor;
+
+    testLine2D_ = std::make_unique<Line2DObject>();
+    testLine2D_->Initialize();
+    testLine2D_->SetPoints(kTestLineStart, kTestLineEnd);
+    testLine2D_->SetThickness(kTestLineThickness);
+    testLine2D_->GetMaterialData()->color = kTestLineColor;
 }
 
 void TitleScene::ImGuiControl() {
@@ -128,6 +186,22 @@ void TitleScene::Update() {
     ring_->Update();
     bunny_->Update();
     skybox_->Update();
+
+    if (testSprite_) {
+        testSprite_->Update();
+    }
+    if (testTriangle2D_) {
+        testTriangle2D_->Update();
+    }
+    if (testCircle2D_) {
+        testCircle2D_->Update();
+    }
+    if (testRing2D_) {
+        testRing2D_->Update();
+    }
+    if (testLine2D_) {
+        testLine2D_->Update();
+    }
 
     // カメラの更新
     BaseCamera* active = cameraMgr_->GetActiveCamera();
@@ -181,4 +255,23 @@ void TitleScene::Draw() {
 
     // バニーの描画（第3引数に環境マップのキーを指定）
     bunny_->Draw("bunny", "white", "forestTex");
+}
+
+void TitleScene::Draw2D() {
+    // 2Dオブジェクト群の描画 (ポストプロセス完了後の最終テクスチャに対するオーバーレイ描画)
+    if (testSprite_) {
+        testSprite_->Draw(kDefaultSpriteTex);
+    }
+    if (testTriangle2D_) {
+        testTriangle2D_->Draw(kDefaultSpriteTex);
+    }
+    if (testCircle2D_) {
+        testCircle2D_->Draw(kDefaultSpriteTex);
+    }
+    if (testRing2D_) {
+        testRing2D_->Draw(kDefaultSpriteTex);
+    }
+    if (testLine2D_) {
+        testLine2D_->Draw(kDefaultSpriteTex);
+    }
 }

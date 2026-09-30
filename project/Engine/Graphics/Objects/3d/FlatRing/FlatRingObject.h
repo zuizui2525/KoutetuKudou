@@ -18,6 +18,9 @@ public:
     void SetInnerRadius(float radius) { innerRadius_ = radius; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kIndicesPerQuad = 6;
+
     void CreateMesh();
 
     uint32_t divide_;

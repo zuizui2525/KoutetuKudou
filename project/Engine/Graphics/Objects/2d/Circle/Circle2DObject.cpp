@@ -1,4 +1,4 @@
-#include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
+#include "Engine/Graphics/Objects/2d/Circle/Circle2DObject.h"
 #include "Engine/Graphics/Objects/2d/Drawer/Object2DDrawer.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
@@ -6,65 +6,98 @@
 #include "Engine/Base/Utils/DxUtils.h"
 #include <imgui.h>
 
-void SpriteObject::SetSize(float width, float height) {
-    width_ = width;
-    height_ = height;
-    UpdateVertexData(); // サイズが変わったら頂点を再計算
+namespace {
+    constexpr float kHalf = 0.5f;
+    constexpr float kTwoPi = 2.0f * static_cast<float>(M_PI);
+    constexpr float kDefaultShininess = 30.0f;
 }
 
-void SpriteObject::UpdateVertexData() {
+void Circle2DObject::SetRadius(float radius) {
+    radius_ = radius;
+    UpdateVertexData();
+}
+
+void Circle2DObject::UpdateVertexData() {
     if (vertexData_ == nullptr) return;
 
-    // 座標の設定 (左上原点の場合)
-    vertexData_[0] = { {0.0f, height_, 0.0f, 1.0f}, {0,1}, {0,0,-1} }; // 左下
-    vertexData_[1] = { {0.0f, 0.0f, 0.0f, 1.0f}, {0,0}, {0,0,-1} };    // 左上
-    vertexData_[2] = { {width_, height_, 0.0f, 1.0f}, {1,1}, {0,0,-1} }; // 右下
-    vertexData_[3] = { {width_, 0.0f, 0.0f, 1.0f}, {1,0}, {0,0,-1} };    // 右上
+    // 中心頂点 (インデックス 0)
+    vertexData_[0] = {
+        { radius_, radius_, 0.0f, 1.0f },
+        { kHalf, kHalf },
+        { 0.0f, 0.0f, kNormalZ }
+    };
+
+    // 外周頂点 (インデックス 1 ~ kSubdivision)
+    for (uint32_t i = 0; i < kSubdivision; ++i) {
+        float angle = static_cast<float>(i) / static_cast<float>(kSubdivision) * kTwoPi;
+        float cosA = std::cos(angle);
+        float sinA = std::sin(angle);
+
+        float x = radius_ + radius_ * cosA;
+        float y = radius_ + radius_ * sinA;
+        float u = kHalf + kHalf * cosA;
+        float v = kHalf + kHalf * sinA;
+
+        vertexData_[i + 1] = {
+            { x, y, 0.0f, 1.0f },
+            { u, v },
+            { 0.0f, 0.0f, kNormalZ }
+        };
+    }
 }
 
-void SpriteObject::Initialize(int lightingMode) {
+void Circle2DObject::Initialize(int lightingMode) {
+    Zuizui* engine = Zuizui::GetInstance();
+
     // Material
-    materialResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(Material));
+    materialResource_ = DxUtils::CreateBufferResource(engine->GetDevice(), sizeof(Material));
     materialResource_->Map(0, nullptr, reinterpret_cast<void**>(&materialData_));
-    materialData_->color = { 1,1,1,1 };
-    materialData_->enableLighting = 0;
+    materialData_->color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    materialData_->enableLighting = lightingMode;
     materialData_->uvtransform = Math::MakeIdentity();
-    materialData_->shininess = 30.0f;
+    materialData_->shininess = kDefaultShininess;
 
     // WVP
-    wvpResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(TransformationMatrix));
+    wvpResource_ = DxUtils::CreateBufferResource(engine->GetDevice(), sizeof(TransformationMatrix));
     wvpResource_->Map(0, nullptr, reinterpret_cast<void**>(&wvpData_));
     wvpData_->WVP = Math::MakeIdentity();
     wvpData_->world = Math::MakeIdentity();
 
     // Vertex
-    vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * 4);
+    vertexResource_ = DxUtils::CreateBufferResource(engine->GetDevice(), sizeof(VertexData) * kVertexCount);
     vbView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vbView_.SizeInBytes = sizeof(VertexData) * 4;
+    vbView_.SizeInBytes = sizeof(VertexData) * kVertexCount;
     vbView_.StrideInBytes = sizeof(VertexData);
-
-    // Mapしてポインタを保存しておく
     vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vertexData_));
 
-    // 初期サイズで頂点を設定
     UpdateVertexData();
 
     // Index
-    indexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(uint32_t) * 6);
+    indexResource_ = DxUtils::CreateBufferResource(engine->GetDevice(), sizeof(uint32_t) * kIndexCount);
     ibView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
-    ibView_.SizeInBytes = sizeof(uint32_t) * 6;
+    ibView_.SizeInBytes = sizeof(uint32_t) * kIndexCount;
     ibView_.Format = DXGI_FORMAT_R32_UINT;
-    uint32_t* idx;
+    uint32_t* idx = nullptr;
     indexResource_->Map(0, nullptr, reinterpret_cast<void**>(&idx));
-    idx[0] = 0; idx[1] = 1; idx[2] = 2; idx[3] = 1; idx[4] = 3; idx[5] = 2;
+
+    // 扇形三角形のインデックス構築
+    for (uint32_t i = 0; i < kSubdivision; ++i) {
+        uint32_t next = (i + 1) % kSubdivision;
+        idx[i * 3 + 0] = 0;             // 中心
+        idx[i * 3 + 1] = 1 + next;      // 次の外周点
+        idx[i * 3 + 2] = 1 + i;         // 現在の外周点
+    }
 
     // ヒエラルキー自動登録
-    InitializeGameObject("Sprite");
+    InitializeGameObject("Circle2D");
 }
 
-void SpriteObject::Update() {
+void Circle2DObject::Update() {
     Matrix4x4 world = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    Matrix4x4 wvp = Math::Multiply(Math::Multiply(world, CameraResource::GetCameraManager()->GetViewMatrix2D()), CameraResource::GetCameraManager()->GetProjectionMatrix2D());
+    Matrix4x4 wvp = Math::Multiply(
+        Math::Multiply(world, CameraResource::GetCameraManager()->GetViewMatrix2D()),
+        CameraResource::GetCameraManager()->GetProjectionMatrix2D()
+    );
     wvpData_->WVP = wvp;
     wvpData_->world = world;
 
@@ -74,10 +107,9 @@ void SpriteObject::Update() {
     materialData_->uvtransform = uv;
 }
 
-void SpriteObject::Draw(const std::string& textureKey, bool draw) {
+void Circle2DObject::Draw(const std::string& textureKey, bool draw) {
     if (!draw) return;
 
-    // 描画処理は共通描画クラス Object2DDrawer を通して実行
     Object2DDrawer::GetInstance()->DrawIndexed(
         wvpResource_.Get(),
         materialResource_.Get(),
@@ -88,31 +120,28 @@ void SpriteObject::Draw(const std::string& textureKey, bool draw) {
         isVisible_
     );
 }
-void SpriteObject::DrawInspector() {
+
+void Circle2DObject::DrawInspector() {
 #ifdef _USEIMGUI
     std::string label = "##" + name_;
 
-    // --- Sprite特有の設定 (サイズ) ---
-    if (ImGui::CollapsingHeader(("Sprite Settings" + label).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        float size[2] = { width_, height_ };
-        if (ImGui::DragFloat2(("Size" + label).c_str(), size, 1.0f, 0.0f, 0.0f, "%.1f")) {
-            SetSize(size[0], size[1]);
+    if (ImGui::CollapsingHeader(("Circle2D Settings" + label).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        float r = radius_;
+        if (ImGui::DragFloat(("Radius" + label).c_str(), &r, 1.0f, 1.0f, 1000.0f, "%.1f")) {
+            SetRadius(r);
         }
     }
 
-    // --- 共通のSRT設定 ---
     if (ImGui::CollapsingHeader(("Transform" + label).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat3(("Scale" + label).c_str(), &transform_.scale.x, 0.01f, 0.0f, 0.0f, "%.1f");
         ImGui::DragFloat3(("Rotate" + label).c_str(), &transform_.rotate.x, 0.01f, 0.0f, 0.0f, "%.1f");
         ImGui::DragFloat3(("Translate" + label).c_str(), &transform_.translate.x, 1.0f, 0.0f, 0.0f, "%.1f");
     }
 
-    // --- カラー設定 ---
     if (ImGui::CollapsingHeader(("Color" + label).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::ColorEdit4(("Color" + label).c_str(), &materialData_->color.x, ImGuiColorEditFlags_AlphaBar);
     }
 
-    // --- UV設定 (Sprite特有) ---
     if (ImGui::CollapsingHeader(("UV Transform" + label).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat2(("uvScale" + label).c_str(), &uvTransform_.scale.x, 0.01f, 0.0f, 0.0f, "%.1f");
         ImGui::DragFloat(("uvRotate" + label).c_str(), &uvTransform_.rotate.z, 0.01f, 0.0f, 0.0f, "%.1f");

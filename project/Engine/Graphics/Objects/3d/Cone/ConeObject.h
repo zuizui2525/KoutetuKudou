@@ -32,6 +32,9 @@ public:
     void SetSubdivision(uint32_t subdiv) { subdivision_ = subdiv; needsUpdate_ = true; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kIndicesPerSegment = 6;
+
     void CreateMesh();
 
 private:

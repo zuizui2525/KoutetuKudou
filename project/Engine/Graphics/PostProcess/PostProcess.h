@@ -41,6 +41,16 @@ public:
     void ProcessEffects();
 
     /// <summary>
+    /// 2D / UI描画前処理（ポストエフェクト適用後の最終テクスチャをクリアせずにRenderTargetとしてバインド）
+    /// </summary>
+    void PreDraw2D();
+
+    /// <summary>
+    /// 2D / UI描画後処理（最終テクスチャを読み込み用リソース状態へ戻す）
+    /// </summary>
+    void PostDraw2D();
+
+    /// <summary>
     /// 現在保持している最終結果テクスチャのSRVハンドルを返す（軽量ゲッター）
     /// </summary>
     D3D12_GPU_DESCRIPTOR_HANDLE GetFinalSrvGpuHandle() const;
@@ -51,6 +61,11 @@ public:
     ID3D12Resource* GetFinalResource() const;
 
     /// <summary>
+    /// 現在保持している最終結果テクスチャへのポインタを返す
+    /// </summary>
+    RenderTexture* GetFinalRenderTexture() const;
+
+    /// <summary>
     /// 指定されたレンダーターゲットに最終結果を描画コピーする
     /// </summary>
     void Draw(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv);
@@ -59,6 +74,12 @@ public:
     /// スワップチェーン（最終画面）への全画面コピー描画
     /// </summary>
     void Draw();
+
+    /// <summary>
+    /// 最終テクスチャをスワップチェーンへコピー描画する（エフェクト再処理なし）
+    /// </summary>
+    void CopyToSwapChain(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv);
+    void CopyToSwapChain();
 
     /// <summary>
     /// ImGui制御（全パスのImGuiControlを順次呼び出す）

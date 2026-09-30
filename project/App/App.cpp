@@ -240,20 +240,26 @@ void App::Run() {
     bool shouldDraw = !(isPaused && !isGameViewVisible);
 
     if (shouldDraw) {
-        // 1. ポストプロセス（RenderTexture）への描画パス
+        // 1. 3Dシーン描画パス（RenderTextureへの描画）
         postProcess_->PreDraw();
 
         SceneManager::GetInstance()->Draw();
 
         postProcess_->PostDraw();
 
-        // 2. エフェクト適用およびスワップチェーンへのコピー処理
-        if (isGameViewVisible) {
-            // Game Viewが表示されている場合、エフェクト適用のみを行い、スワップチェーンへのコピーは不要
-            postProcess_->ProcessEffects();
-        } else {
-            // Game Viewが表示されていない場合、通常どおりエフェクト適用＆スワップチェーン全体への描画コピーを行う
-            postProcess_->Draw();
+        // 2. ポストエフェクト処理（3D結果に対して深度輪郭線等のエフェクトを適用し、最終テクスチャを確定）
+        postProcess_->ProcessEffects();
+
+        // 3. 2D / UI描画パス（ポストエフェクト適用後の最終テクスチャに対するオーバーレイ描画）
+        postProcess_->PreDraw2D();
+
+        SceneManager::GetInstance()->Draw2D();
+
+        postProcess_->PostDraw2D();
+
+        // 4. Game Viewが表示されていない場合、通常どおりスワップチェーン全体への描画コピーを行う
+        if (!isGameViewVisible) {
+            postProcess_->CopyToSwapChain();
         }
     }
 

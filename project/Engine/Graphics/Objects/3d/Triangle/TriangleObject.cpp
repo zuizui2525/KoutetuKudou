@@ -1,19 +1,17 @@
 #include "Engine/Graphics/Objects/3d/Triangle/TriangleObject.h"
+#include "Engine/Graphics/Objects/3d/Drawer/Object3DDrawer.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
-#include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
-#include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
-#include "Engine/Graphics/Texture/TextureManager.h"
 
 void TriangleObject::Initialize(int lightingMode) {
     // 基底クラスの初期化
     Object3D::Initialize(lightingMode);
     
     // Vertex (三角形3頂点)
-    vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * 3);
+    vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * kVertexCount);
     vbView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vbView_.SizeInBytes = sizeof(VertexData) * 3;
+    vbView_.SizeInBytes = sizeof(VertexData) * kVertexCount;
     vbView_.StrideInBytes = sizeof(VertexData);
 
     VertexData* vtx;
@@ -29,6 +27,8 @@ void TriangleObject::Initialize(int lightingMode) {
     vtx[2].position = { 0.5f, -0.5f, 0.0f, 1.0f }; // 右下
     vtx[2].texcoord = { 1.0f, 1.0f };
     vtx[2].normal = { 0.0f, 0.0f, -1.0f };
+
+    vertexResource_->Unmap(0, nullptr);
 }
 
 void TriangleObject::Update() {
@@ -50,38 +50,7 @@ void TriangleObject::Update() {
 }
 
 void TriangleObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
-    if (!isVisible_) return;
-    // コマンドリスト
-    auto commandList = EngineResource::GetEngine()->GetDxCommon()->GetCommandList();
-    // パイプラインの選択
-    commandList->SetGraphicsRootSignature(EngineResource::GetEngine()->GetPSOManager()->GetRootSignature("Object3D"));
-    commandList->SetPipelineState(EngineResource::GetEngine()->GetPSOManager()->GetPSO("Object3D"));
-    // VBV設定
-    commandList->IASetVertexBuffers(0, 1, &vbView_);
-    // 定数バッファ設定
-    commandList->SetGraphicsRootConstantBufferView(0, wvpResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(1, materialResource_->GetGPUVirtualAddress());
-    commandList->SetGraphicsRootConstantBufferView(2, CameraResource::GetCameraManager()->GetGPUVirtualAddress());
-    auto lightMgr = LightResource::GetLightManager();
-    if (lightMgr) {
-        commandList->SetGraphicsRootConstantBufferView(3, lightMgr->GetDirectionalLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(4, lightMgr->GetPointLightGroupAddress());
-        commandList->SetGraphicsRootConstantBufferView(5, lightMgr->GetSpotLightGroupAddress());
-    }
-    // 指定されたキーでテクスチャ取得
-    commandList->SetGraphicsRootDescriptorTable(6, sTexMgr->GetGpuHandle(textureKey));
-
-    // 環境マップテクスチャ
-    if (!envMapKey.empty()) {
-        if (materialData_->environmentCoefficient == 0.0f) {
-            materialData_->environmentCoefficient = 1.0f;
-        }
-        commandList->SetGraphicsRootDescriptorTable(7, sTexMgr->GetGpuHandle(envMapKey));
-    } else {
-        materialData_->environmentCoefficient = 0.0f;
-        // TextureCube以外のテクスチャを渡すとエラーになるため、空のときはskyboxTexをダミーとして渡す
-        commandList->SetGraphicsRootDescriptorTable(7, sTexMgr->GetGpuHandle("skyboxTex")); 
-    }
-    // DrawInstanced
-    commandList->DrawInstanced(3, 1, 0, 0);
+    // 描画処理は共通描画クラス Object3DDrawer を通して実行
+    Object3DDrawer::GetInstance()->Draw(this, vbView_, kVertexCount, textureKey, envMapKey);
 }
+

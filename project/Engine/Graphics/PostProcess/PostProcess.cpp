@@ -166,6 +166,68 @@ ID3D12Resource* PostProcess::GetFinalResource() const {
     return renderTextureTemp_->GetResource();
 }
 
+RenderTexture* PostProcess::GetFinalRenderTexture() const {
+    std::vector<IPostProcessPass*> activePasses;
+    for (size_t i = 1; i < passes_.size(); ++i) {
+        if (passes_[i]->IsActive()) {
+            activePasses.push_back(passes_[i].get());
+        }
+    }
+    if (activePasses.empty()) {
+        return renderTexture_.get();
+    }
+    return renderTextureTemp_.get();
+}
+
+void PostProcess::PreDraw2D() {
+    Zuizui* engine = EngineResource::GetEngine();
+    assert(engine != nullptr);
+    RenderTexture* finalTarget = GetFinalRenderTexture();
+    assert(finalTarget != nullptr);
+
+    ID3D12GraphicsCommandList* commandList = engine->GetDxCommon()->GetCommandList();
+
+    // 既存のポストエフェクト結果を保持したまま描画ターゲットに設定
+    finalTarget->PreDrawWithoutClear(commandList);
+
+    // 2D描画用ビューポートおよびシザー矩形の設定
+    HWND hwnd = engine->GetWindow()->GetHWND();
+    RECT clientRect{};
+    GetClientRect(hwnd, &clientRect);
+    float width = static_cast<float>(clientRect.right - clientRect.left);
+    float height = static_cast<float>(clientRect.bottom - clientRect.top);
+
+    constexpr float kMinDepth = 0.0f;
+    constexpr float kMaxDepth = 1.0f;
+
+    D3D12_VIEWPORT vp{};
+    vp.Width = width;
+    vp.Height = height;
+    vp.TopLeftX = 0.0f;
+    vp.TopLeftY = 0.0f;
+    vp.MinDepth = kMinDepth;
+    vp.MaxDepth = kMaxDepth;
+
+    D3D12_RECT sr{};
+    sr.left = 0;
+    sr.right = static_cast<LONG>(width);
+    sr.top = 0;
+    sr.bottom = static_cast<LONG>(height);
+
+    commandList->RSSetViewports(1, &vp);
+    commandList->RSSetScissorRects(1, &sr);
+}
+
+void PostProcess::PostDraw2D() {
+    Zuizui* engine = EngineResource::GetEngine();
+    assert(engine != nullptr);
+    RenderTexture* finalTarget = GetFinalRenderTexture();
+    assert(finalTarget != nullptr);
+
+    ID3D12GraphicsCommandList* commandList = engine->GetDxCommon()->GetCommandList();
+    finalTarget->PostDraw(commandList);
+}
+
 void PostProcess::ProcessEffects() {
     Zuizui* engine = EngineResource::GetEngine();
     assert(engine != nullptr);
@@ -214,16 +276,11 @@ void PostProcess::ProcessEffects() {
     }
 }
 
-void PostProcess::Draw(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
+void PostProcess::CopyToSwapChain(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
     Zuizui* engine = EngineResource::GetEngine();
     assert(engine != nullptr);
 
     ID3D12GraphicsCommandList* commandList = engine->GetDxCommon()->GetCommandList();
-
-    // エフェクトをすべて処理し、レンダーテクスチャに確定させる
-    ProcessEffects();
-
-    // 確定したテクスチャのSRVハンドルを取得
     D3D12_GPU_DESCRIPTOR_HANDLE finalSrv = GetFinalSrvGpuHandle();
 
     // 指定されたレンダーターゲット（スワップチェーン等）にコピー描画する
@@ -237,13 +294,16 @@ void PostProcess::Draw(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
     float width = static_cast<float>(clientRect.right - clientRect.left);
     float height = static_cast<float>(clientRect.bottom - clientRect.top);
     
+    constexpr float kMinDepth = 0.0f;
+    constexpr float kMaxDepth = 1.0f;
+
     D3D12_VIEWPORT vp{};
     vp.Width = width;
     vp.Height = height;
-    vp.TopLeftX = 0;
-    vp.TopLeftY = 0;
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
+    vp.TopLeftX = 0.0f;
+    vp.TopLeftY = 0.0f;
+    vp.MinDepth = kMinDepth;
+    vp.MaxDepth = kMaxDepth;
     
     D3D12_RECT sr{};
     sr.left = 0;
@@ -255,6 +315,24 @@ void PostProcess::Draw(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
     commandList->RSSetScissorRects(1, &sr);
 
     passes_[kPassIndexCopy]->Draw(commandList, finalSrv);
+}
+
+void PostProcess::CopyToSwapChain() {
+    Zuizui* engine = EngineResource::GetEngine();
+    assert(engine != nullptr);
+
+    // スワップチェーンの現在のバックバッファRTVを取得して描画
+    UINT backBufferIndex = engine->GetDxCommon()->GetBackBufferIndex();
+    D3D12_CPU_DESCRIPTOR_HANDLE swapchainRtv = engine->GetDxCommon()->GetRtvHandle(backBufferIndex);
+    CopyToSwapChain(swapchainRtv);
+}
+
+void PostProcess::Draw(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
+    // エフェクトをすべて処理し、レンダーテクスチャに確定させる
+    ProcessEffects();
+
+    // 確定したテクスチャを指定レンダーターゲットにコピー描画する
+    CopyToSwapChain(targetRtv);
 }
 
 void PostProcess::Draw() {

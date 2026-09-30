@@ -36,6 +36,10 @@ public:
     void SetUseTransform(bool useTransform) { useTransform_ = useTransform; }
 
 private:
+    // メッシュ定数 (マジックナンバー排除)
+    static constexpr uint32_t kVertexCount = 4;
+    static constexpr uint32_t kIndexCount = 6;
+
     void CreateMesh();
     void UpdateVertex(); // カメラ位置に合わせてビルボード四角形を計算する
 

@@ -22,6 +22,11 @@ class PostProcess;
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Camera/Debug/DebugCamera.h"
+#include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
+#include "Engine/Graphics/Objects/2d/Triangle/Triangle2DObject.h"
+#include "Engine/Graphics/Objects/2d/Circle/Circle2DObject.h"
+#include "Engine/Graphics/Objects/2d/Ring/Ring2DObject.h"
+#include "Engine/Graphics/Objects/2d/Line/Line2DObject.h"
 
 class TitleScene : public IScene {
 public:
@@ -29,6 +34,7 @@ public:
     void ImGuiControl() override;
     void Update() override;
     void Draw() override;
+    void Draw2D() override;
 
 private:
     // マネージャへのポインタ
@@ -57,4 +63,9 @@ private:
     std::unique_ptr<RingObject> ring_;
     std::unique_ptr<ModelObject> bunny_;
     std::unique_ptr<Skybox> skybox_;
+    std::unique_ptr<SpriteObject> testSprite_; // 2D矩形スプライト
+    std::unique_ptr<Triangle2DObject> testTriangle2D_; // 2D三角形
+    std::unique_ptr<Circle2DObject> testCircle2D_;     // 2D円
+    std::unique_ptr<Ring2DObject> testRing2D_;         // 2Dリング
+    std::unique_ptr<Line2DObject> testLine2D_;         // 2Dライン
 };
