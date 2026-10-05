@@ -14,7 +14,7 @@
 class Line2DObject : Base2D, public IGameObject {
 public:
     Line2DObject() = default;
-    ~Line2DObject() = default;
+    ~Line2DObject();
 
     void Initialize(int lightingMode = 0);
 

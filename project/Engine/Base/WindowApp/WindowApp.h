@@ -1,6 +1,7 @@
 #pragma once
 #include <Windows.h>
 #include <string>
+#include <functional>
 
 class WindowApp {
 public:
@@ -19,6 +20,9 @@ public:
     // メッセージループ
     bool ProcessMessage();
 
+    // 終了ハンドラ設定
+    void SetCloseHandler(std::function<bool()> handler) { closeHandler_ = handler; }
+
     // getter
     HWND GetHWND() const { return hwnd_; }
     HINSTANCE GetInstance() const { return wc_.hInstance; }
@@ -27,6 +31,9 @@ public:
 private:
     // ウィンドウプロシージャ（静的）
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+
+    // 終了前ハンドラ（静的）
+    static inline std::function<bool()> closeHandler_ = nullptr;
 
     // 内部データ
     HWND hwnd_ = nullptr;

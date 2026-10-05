@@ -14,7 +14,7 @@
 class Triangle2DObject : Base2D, public IGameObject {
 public:
     Triangle2DObject() = default;
-    ~Triangle2DObject() = default;
+    ~Triangle2DObject();
 
     void Initialize(int lightingMode = 0);
 

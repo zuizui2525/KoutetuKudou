@@ -9,6 +9,7 @@
 #include "Engine/Graphics/Objects/Camera/Debug/DebugCamera.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Base/Log/Log.h"
+#include "App/Scene/Core/SceneSerializer.h"
 #include <psapi.h> // メモリ取得用（追加）
 
 
@@ -53,7 +54,7 @@ void App::Initialize() {
 
     sceneFactory_ = std::make_unique<SceneFactory>();
     SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
-    SceneManager::GetInstance()->ChangeScene("Title");
+    SceneManager::GetInstance()->ChangeScene("Sample");
 
     // --- PostProcess の初期化 ---
     postProcess_ = std::make_unique<PostProcess>();
@@ -61,6 +62,11 @@ void App::Initialize() {
 
     SceneManager::GetInstance()->SetPostProcess(postProcess_.get());
 
+    // [Task 2-4] シーンシリアライザの動的コンポーネント着脱・保存・復元の単体テスト
+    bool selfTestPassed = SceneSerializer::RunSelfTest();
+    Log::Write(selfTestPassed 
+        ? L" ├─ 【単体テスト成功】 SceneSerializer 動的コンポーネント保存・復元テストに合格しました。"
+        : L" ├─ 【単体テスト失敗】 SceneSerializer のテストに失敗しました。");
 }
 
 void App::Run() {
@@ -174,8 +180,14 @@ void App::Run() {
             sPrevActiveCamera = cameraMgr_->GetActiveCameraName();
             // "Zoom" カメラ（ルート描画・敵配置モード）の場合は、ポーズ中もZoomカメラの視点・画角を維持する
             if (sPrevActiveCamera != kZoomCameraName && cameraMgr_->HasCamera(kEditorCameraName)) {
+                BaseCamera* prevCam = cameraMgr_->GetCamera(sPrevActiveCamera);
                 cameraMgr_->SetActiveCamera(kEditorCameraName);
                 if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetActiveCamera())) {
+                    if (prevCam) {
+                        // 直前まで見ていたカメラの位置・回転を同期して、今見てるところからスタートする
+                        dc->SetPosition(prevCam->GetPosition());
+                        dc->SetRotation(prevCam->GetRotation());
+                    }
                     dc->SetActive(true);
                 }
             }
@@ -196,11 +208,27 @@ void App::Run() {
 
     input_->Update();
     
+    // シーン遷移予約がある場合は、ポーズ中であっても即座にシーン切り替えを実行する
+    bool sceneChanged = SceneManager::GetInstance()->ProcessPendingSceneChange();
+    if (sceneChanged && isPaused) {
+        // ポーズ中にシーンが切り替わった場合、Editorカメラを新シーンのメインカメラ視点に合わせる
+        if (cameraMgr_->HasCamera("Main") && cameraMgr_->HasCamera(kEditorCameraName)) {
+            BaseCamera* mainCam = cameraMgr_->GetCamera("Main");
+            if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetCamera(kEditorCameraName))) {
+                if (mainCam) {
+                    dc->SetPosition(mainCam->GetPosition());
+                    dc->SetRotation(mainCam->GetRotation());
+                }
+            }
+            cameraMgr_->SetActiveCamera(kEditorCameraName);
+        }
+    }
+
     if (!isPaused) {
-        cameraMgr_->Update();
         lightMgr_->Update();
         Log::Update(deltaTime);
         SceneManager::GetInstance()->Update();
+        cameraMgr_->Update();
     } else {
         // ポーズ中の更新処理：
         // Game View が表示されている場合のみ、オブジェクト編集やカメラ見回しを反映させる

@@ -10,15 +10,16 @@
 class SphereObject : public Object3D {
 public:
     SphereObject() = default;
-    ~SphereObject() = default;
+    ~SphereObject() override;
 
     void Initialize(int lightingMode = 2);
 
     // 更新処理
-    void Update();
+    void Update() override;
 
     // 描画処理
     void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "");
+    void DrawWireframe(const std::string& textureKey = "white");
 
     // Getter
     float GetRadius() const { return radius_; }

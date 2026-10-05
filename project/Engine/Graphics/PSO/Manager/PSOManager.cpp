@@ -25,6 +25,16 @@ HRESULT PSOManager::Initialize(
         device_, dxcUtils, dxcCompiler, includeHandler);
     RegisterPreset("Object3D_Alpha", object3DAlphaPreset);
 
+    // Object3D_Wireframe用プリセット作成 (ワイヤーフレーム描画用)
+    PSOPreset object3DWireframePreset = PSOPreset::CreateObject3DWireframePreset(
+        device_, dxcUtils, dxcCompiler, includeHandler);
+    RegisterPreset("Object3D_Wireframe", object3DWireframePreset);
+
+    // Object3D_Line用プリセット作成 (ライン描画用)
+    PSOPreset object3DLinePreset = PSOPreset::CreateObject3DLinePreset(
+        device_, dxcUtils, dxcCompiler, includeHandler);
+    RegisterPreset("Object3D_Line", object3DLinePreset);
+
     // Particle用プリセット作成
     PSOPreset particlePreset = PSOPreset::CreateParticlePreset(
         device_, dxcUtils, dxcCompiler, includeHandler);
@@ -94,7 +104,7 @@ void PSOManager::RegisterPreset(const std::string& name, const PSOPreset& preset
 
     // 固定設定
     desc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-    desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.PrimitiveTopologyType = data.originalPreset.primitiveTopologyType;
     desc.NumRenderTargets = 1;
     desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -136,7 +146,7 @@ HRESULT PSOManager::UpdateBlendMode(const std::string& name, BlendMode mode) {
     desc.RasterizerState = data.originalPreset.rasterizerDesc;
     desc.DepthStencilState = data.originalPreset.depthStencilDesc;
     desc.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
-    desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    desc.PrimitiveTopologyType = data.originalPreset.primitiveTopologyType;
     desc.NumRenderTargets = 1;
     desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;

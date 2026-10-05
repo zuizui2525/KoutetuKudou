@@ -23,4 +23,8 @@ private:
 
     bool isActive_ = false;
     bool isCursorVisible_ = true;
+
+    POINT startCursorPos_{};
+    bool isRightClickOperating_ = false;
+    bool isFirstOperatingFrame_ = false;
 };

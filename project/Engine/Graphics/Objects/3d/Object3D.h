@@ -12,7 +12,7 @@ class Object3D : public Base3D, public IGameObject {
 public:
     virtual ~Object3D();
     virtual void Initialize(int lightingMode = 1);
-    void Update() override {}
+    virtual void Update() override;
 
     /// @brief WVP(World, View, Projection)行列の定数バッファを取得します
     ID3D12Resource* GetWVPResource() const { return wvpResource_.Get(); }
@@ -83,6 +83,10 @@ public:
     const Matrix4x4& GetWorldMatrix() const { return matWorld_; }
     Vector3 GetWorldPosition() const;
 
+    /// @brief ヒエラルキーへの自動登録を制御（コンポーネント内部メッシュの場合はfalseに設定）
+    void SetAutoRegisterHierarchy(bool autoRegister) { autoRegisterHierarchy_ = autoRegister; }
+    bool IsAutoRegisterHierarchy() const { return autoRegisterHierarchy_; }
+
     void DrawInspector() override;
 
 protected:
@@ -108,4 +112,6 @@ protected:
         0.0f, 0.0f, 1.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 1.0f
     };
+
+    bool autoRegisterHierarchy_ = true;
 };

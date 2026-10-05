@@ -1,7 +1,21 @@
 #include "App/Scene/Title/TitleScene.h"
 #include "Engine/Base/BaseResource.h"
 #include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Core/SceneSerializer.h"
 #include "Engine/Graphics/PostProcess/PostProcess.h"
+#include "Engine/Component/GameObject.h"
+#include "Engine/Component/Components/MeshRendererComponent.h"
+#include "Engine/Component/Components/SpriteRendererComponent.h"
+#include "Engine/Component/Components/CameraComponent.h"
+#include "Engine/Component/Components/LightComponent.h"
+#include "Engine/Graphics/Objects/3d/Skybox/Skybox.h"
+#include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
+#include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
+#include "Engine/Input/Input.h"
+#include "Engine/Base/Log/Log.h"
+#include "Engine/Base/Utils/StringUtility.h"
+#include <filesystem>
+#include <format>
 
 namespace {
     // 2Dテスト用オブジェクト定数 (マジックナンバー排除)
@@ -28,17 +42,22 @@ namespace {
     static constexpr float kTestLineThickness = 6.0f;
     static inline const Vector4 kTestLineColor = { 0.4f, 1.0f, 0.4f, 1.0f }; // ライムグリーン
 
-    static inline const std::string kDefaultSpriteTex = "white";
+    static inline const std::string kDefaultTextureKey = "white";
+    static inline const std::string kForestEnvTextureKey = "forestTex";
+    static inline const std::string kBunnyModelKey = "bunny";
+    static inline const std::string kScenesDirectory = "resources/Scenes";
 }
 
+TitleScene::TitleScene() = default;
+TitleScene::~TitleScene() = default;
 
 void TitleScene::Initialize() {
-    // 0. ポストプロセスのポインタを取得してメンバ変数に保持し、初期状態でグレースケールを有効にする
+    // 0. ポストプロセスのポインタを取得してメンバ変数に保持し、初期状態で各エフェクトを有効化
     postProcess_ = SceneManager::GetInstance()->GetPostProcess();
     if (postProcess_) {
-		postProcess_->SetDepthOutlineActive(true);
-		postProcess_->SetGrayscaleActive(true);
-		postProcess_->SetVignetteActive(true);
+        postProcess_->SetDepthOutlineActive(true);
+        postProcess_->SetGrayscaleActive(true);
+        postProcess_->SetVignetteActive(true);
     }
 
     // 1. 各マネージャの取得
@@ -46,111 +65,172 @@ void TitleScene::Initialize() {
     lightMgr_ = LightResource::GetLightManager();
     input_ = InputResource::GetInput();
 
-    // 2. カメラの生成と登録
-    mainCamera_ = std::make_shared<BaseCamera>();
-    mainCamera_->Initialize();
-    cameraMgr_->AddCamera("Main", mainCamera_);
-    cameraMgr_->SetActiveCamera("Main");
+    // 2. シーンJSONファイルの自動読み込みまたは初期生成
+    std::string sceneFilePath = kScenesDirectory + "/Title.json";
+    bool fileExisted = std::filesystem::exists(sceneFilePath);
+    if (fileExisted) {
+        std::string loadedName;
+        bool success = SceneSerializer::LoadScene(sceneFilePath, loadedName, gameObjects_);
+        if (success) {
+            Log::Write(std::format(L"[TitleScene] シーンファイル「{}」から {} 個のオブジェクトを復元しました。",
+                ConvertString(sceneFilePath), gameObjects_.size()));
+        } else {
+            Log::Write(std::format(L"[TitleScene] シーンファイル「{}」の読み込みに失敗しました。",
+                ConvertString(sceneFilePath)));
+        }
+    }
 
-    debugCamera_ = std::make_shared<DebugCamera>();
-    debugCamera_->Initialize();
-    cameraMgr_->AddCamera("Debug", debugCamera_);
-    cameraMgr_->SetActiveCamera("Main");
+    // カメラの存在確認（なければ生成）
+    bool hasCamera = false;
+    for (const auto& obj : gameObjects_) {
+        if (obj && obj->GetComponent<CameraComponent>()) {
+            hasCamera = true;
+            break;
+        }
+    }
+    if (!hasCamera) {
+        auto camObj = std::make_unique<GameObject>("Camera");
+        camObj->SetPosition({ 0.0f, 0.0f, -20.0f });
+        camObj->AddComponent<CameraComponent>();
+        gameObjects_.insert(gameObjects_.begin(), std::move(camObj));
+        Log::Write(L"[TitleScene] デフォルトの Camera GameObject を追加しました。");
+    }
 
-    // 3. ライトの生成（ディレクショナルライト）
-    dirLight_ = std::make_unique<DirectionalLightObject>();
-    dirLight_->Initialize();
-    lightMgr_->AddDirectionalLight(dirLight_.get());
+    // ライトの存在確認（なければ生成）
+    bool hasLight = false;
+    for (const auto& obj : gameObjects_) {
+        if (obj && obj->GetComponent<LightComponent>()) {
+            hasLight = true;
+            break;
+        }
+    }
+    if (!hasLight) {
+        auto lightObj = std::make_unique<GameObject>("DirectionalLight");
+        lightObj->SetPosition({ 0.0f, 10.0f, 0.0f });
+        auto* lightComp = lightObj->AddComponent<LightComponent>();
+        lightComp->SetLightType(LightComponent::LightType::Directional);
+        if (gameObjects_.size() > 1) {
+            gameObjects_.insert(gameObjects_.begin() + 1, std::move(lightObj));
+        } else {
+            gameObjects_.push_back(std::move(lightObj));
+        }
+        Log::Write(L"[TitleScene] デフォルトの DirectionalLight GameObject を追加しました。");
+    }
 
-    // 4. モデルの生成（ロード済み）
-    line_ = std::make_unique<LineObject>();
-    line_->Initialize();
-    line_->SetStartPoint({3.0f, 0.0f, 0.0f});
-    line_->SetEndPoint({ -3.0f, 2.0f, 0.0f });
+    // 初回（ファイルが存在しない、またはCamera/Light以外の描画オブジェクトが空の場合）はオブジェクト群を自動生成
+    bool hasVisualObjects = false;
+    for (const auto& obj : gameObjects_) {
+        if (obj && (obj->GetComponent<MeshRendererComponent>() || obj->GetComponent<SpriteRendererComponent>())) {
+            hasVisualObjects = true;
+            break;
+        }
+    }
 
-    triangle_ = std::make_unique<TriangleObject>();
-    triangle_->Initialize();
-    triangle_->SetPosition({ -2.0f, 2.0f, 0.0f });
+    if (!fileExisted || !hasVisualObjects) {
+        auto create3D = [this](const std::string& name, MeshRendererComponent::MeshType type, const Vector3& pos) {
+            auto obj = std::make_unique<GameObject>(name);
+            obj->SetPosition(pos);
+            auto* mr = obj->AddComponent<MeshRendererComponent>();
+            mr->SetMeshType(type);
+            mr->SetEnvMapKey(kForestEnvTextureKey);
+            gameObjects_.push_back(std::move(obj));
+        };
 
-    square_ = std::make_unique<SquareObject>();
-    square_->Initialize();
-    square_->SetPosition({ -2.0f, 0.0f, 0.0f });
+        create3D("Cube", MeshRendererComponent::MeshType::Cube, { 2.0f, 2.0f, 0.0f });
+        create3D("Sphere", MeshRendererComponent::MeshType::Sphere, { 2.0f, 0.0f, 0.0f });
+        create3D("Pyramid", MeshRendererComponent::MeshType::Pyramid, { 4.0f, 2.0f, 0.0f });
+        create3D("TriangularPyramid", MeshRendererComponent::MeshType::TriangularPyramid, { 4.0f, -2.0f, 0.0f });
+        create3D("Triangle", MeshRendererComponent::MeshType::Triangle, { -2.0f, 2.0f, 0.0f });
+        create3D("Square", MeshRendererComponent::MeshType::Square, { -2.0f, 0.0f, 0.0f });
+        create3D("Cylinder", MeshRendererComponent::MeshType::Cylinder, { 2.0f, -2.0f, 0.0f });
+        create3D("Cone", MeshRendererComponent::MeshType::Cone, { 4.0f, 0.0f, 0.0f });
+        create3D("Ring", MeshRendererComponent::MeshType::Ring, { -2.0f, -2.0f, 0.0f });
+        create3D("Hemisphere", MeshRendererComponent::MeshType::Hemisphere, { -4.0f, 0.0f, 0.0f });
 
-    cube_ = std::make_unique<CubeObject>();
-    cube_->Initialize();
-    cube_->SetPosition({ 2.0f, 2.0f, 0.0f });
+        // Line 3D
+        {
+            auto lineObj = std::make_unique<GameObject>("Line");
+            lineObj->SetPosition({ 0.0f, 0.0f, 0.0f });
+            auto* mr = lineObj->AddComponent<MeshRendererComponent>();
+            mr->SetMeshType(MeshRendererComponent::MeshType::Line);
+            gameObjects_.push_back(std::move(lineObj));
+        }
 
-    triangularPyramid_ = std::make_unique<TriangularPyramidObject>();
-    triangularPyramid_->Initialize();
-    triangularPyramid_->SetPosition({ 4.0f, -2.0f, 0.0f });
+        // Model "bunny"
+        {
+            auto bunnyObj = std::make_unique<GameObject>("Bunny");
+            bunnyObj->SetPosition({ 0.0f, 0.0f, 0.0f });
+            auto* mr = bunnyObj->AddComponent<MeshRendererComponent>();
+            mr->SetMeshType(MeshRendererComponent::MeshType::Model);
+            mr->SetModelKey(kBunnyModelKey);
+            mr->SetEnvMapKey(kForestEnvTextureKey);
+            gameObjects_.push_back(std::move(bunnyObj));
+        }
 
-    pyramid_ = std::make_unique<PyramidObject>();
-    pyramid_->Initialize();
-    pyramid_->SetPosition({ 4.0f, 2.0f, 0.0f });
+        // 2Dオブジェクト群
+        {
+            auto spriteObj = std::make_unique<GameObject>("Sprite");
+            spriteObj->SetPosition(kTestSpritePosition);
+            auto* sr = spriteObj->AddComponent<SpriteRendererComponent>();
+            sr->SetShapeType(SpriteRendererComponent::ShapeType::Sprite);
+            sr->SetSize({ kTestSpriteWidth, kTestSpriteHeight });
+            gameObjects_.push_back(std::move(spriteObj));
+        }
+        {
+            auto triObj = std::make_unique<GameObject>("Triangle2D");
+            triObj->SetPosition(kTestTrianglePosition);
+            auto* sr = triObj->AddComponent<SpriteRendererComponent>();
+            sr->SetShapeType(SpriteRendererComponent::ShapeType::Triangle);
+            sr->SetSize({ kTestTriangleWidth, kTestTriangleHeight });
+            sr->SetColor(kTestTriangleColor);
+            gameObjects_.push_back(std::move(triObj));
+        }
+        {
+            auto circleObj = std::make_unique<GameObject>("Circle2D");
+            circleObj->SetPosition(kTestCirclePosition);
+            auto* sr = circleObj->AddComponent<SpriteRendererComponent>();
+            sr->SetShapeType(SpriteRendererComponent::ShapeType::Circle);
+            sr->SetRadius(kTestCircleRadius);
+            sr->SetColor(kTestCircleColor);
+            gameObjects_.push_back(std::move(circleObj));
+        }
+        {
+            auto ringObj = std::make_unique<GameObject>("Ring2D");
+            ringObj->SetPosition(kTestRingPosition);
+            auto* sr = ringObj->AddComponent<SpriteRendererComponent>();
+            sr->SetShapeType(SpriteRendererComponent::ShapeType::Ring);
+            sr->SetRadius(kTestRingOuterRadius);
+            sr->SetInnerRadius(kTestRingInnerRadius);
+            sr->SetColor(kTestRingColor);
+            gameObjects_.push_back(std::move(ringObj));
+        }
+        {
+            auto line2dObj = std::make_unique<GameObject>("Line2D");
+            line2dObj->SetPosition({ 0.0f, 0.0f, 0.0f });
+            auto* sr = line2dObj->AddComponent<SpriteRendererComponent>();
+            sr->SetShapeType(SpriteRendererComponent::ShapeType::Line);
+            sr->SetLineStart(kTestLineStart);
+            sr->SetLineEnd(kTestLineEnd);
+            sr->SetLineThickness(kTestLineThickness);
+            sr->SetColor(kTestLineColor);
+            gameObjects_.push_back(std::move(line2dObj));
+        }
 
-    sphere_ = std::make_unique<SphereObject>();
-    sphere_->Initialize();
-    sphere_->SetPosition({ 2.0f, 0.0f, 0.0f });
+        std::filesystem::create_directories(kScenesDirectory);
+        SceneSerializer::SaveScene(sceneFilePath, "Title", gameObjects_);
+        Log::Write(std::format(L"[TitleScene] 新規シーンファイル「{}」を自動生成しました。", ConvertString(sceneFilePath)));
+    }
 
-    hemisphere_ = std::make_unique<HemisphereObject>();
-    hemisphere_->Initialize();
-    hemisphere_->SetPosition({ -4.0f, 0.0f, 0.0f });
-
-    cone_ = std::make_unique<ConeObject>();
-    cone_->Initialize();
-    cone_->SetPosition({ 4.0f, 0.0f, 0.0f });
-
-    cylinder_ = std::make_unique<CylinderObject>();
-    cylinder_->Initialize();
-    cylinder_->SetPosition({ 2.0f, -2.0f, 0.0f });
-
-    ring_ = std::make_unique<RingObject>();
-    ring_->Initialize();
-    ring_->SetPosition({ -2.0f, -2.0f, 0.0f });
-
-    bunny_ = std::make_unique<ModelObject>();
-    bunny_->Initialize();
-
-    // 5. Skyboxの生成
+    // 3. 背景 Skybox の生成
     skybox_ = std::make_unique<Skybox>();
     skybox_->Initialize();
-
-    // 6. 2Dオブジェクトの生成と配置 (2D描画テスト用)
-    testSprite_ = std::make_unique<SpriteObject>();
-    testSprite_->Initialize();
-    testSprite_->SetPosition(kTestSpritePosition);
-    testSprite_->SetSize(kTestSpriteWidth, kTestSpriteHeight);
-
-    testTriangle2D_ = std::make_unique<Triangle2DObject>();
-    testTriangle2D_->Initialize();
-    testTriangle2D_->SetPosition(kTestTrianglePosition);
-    testTriangle2D_->SetSize(kTestTriangleWidth, kTestTriangleHeight);
-    testTriangle2D_->GetMaterialData()->color = kTestTriangleColor;
-
-    testCircle2D_ = std::make_unique<Circle2DObject>();
-    testCircle2D_->Initialize();
-    testCircle2D_->SetPosition(kTestCirclePosition);
-    testCircle2D_->SetRadius(kTestCircleRadius);
-    testCircle2D_->GetMaterialData()->color = kTestCircleColor;
-
-    testRing2D_ = std::make_unique<Ring2DObject>();
-    testRing2D_->Initialize();
-    testRing2D_->SetPosition(kTestRingPosition);
-    testRing2D_->SetRadii(kTestRingOuterRadius, kTestRingInnerRadius);
-    testRing2D_->GetMaterialData()->color = kTestRingColor;
-
-    testLine2D_ = std::make_unique<Line2DObject>();
-    testLine2D_->Initialize();
-    testLine2D_->SetPoints(kTestLineStart, kTestLineEnd);
-    testLine2D_->SetThickness(kTestLineThickness);
-    testLine2D_->GetMaterialData()->color = kTestLineColor;
 }
 
 void TitleScene::ImGuiControl() {
 #ifdef _USEIMGUI
-    cameraMgr_->ImGuiControl();
-
-    // ポストプロセスのパラメータ調整用ImGuiコントロール
+    if (cameraMgr_) {
+        cameraMgr_->ImGuiControl();
+    }
     if (postProcess_) {
         postProcess_->ImGuiControl();
     }
@@ -158,120 +238,62 @@ void TitleScene::ImGuiControl() {
 }
 
 void TitleScene::Update() {
-    // シーン切り替え
-    if (input_->Trigger(DIK_SPACE)) {
+    // スペースキーで Game シーンへ遷移
+    if (input_ && input_->Trigger(DIK_SPACE)) {
         SceneManager::GetInstance()->ChangeScene("Game");
     }
 
-#ifdef _USEIMGUI
-    // モード切り替え（TABキー）
-    if (input_->Trigger(DIK_TAB)) {
-        bool isCurrentlyDebug = (cameraMgr_->GetActiveCamera() == debugCamera_.get());
-        cameraMgr_->SetActiveCamera(isCurrentlyDebug ? "Main" : "Debug");
-    }
-#endif
-
-    // ライトとオブジェクトの更新
-    dirLight_->Update();
-    line_->Update();
-    triangle_->Update();
-    square_->Update();
-    cube_->Update();
-    triangularPyramid_->Update();
-    pyramid_->Update();
-    sphere_->Update();
-    hemisphere_->Update();
-    cone_->Update();
-    cylinder_->Update();
-    ring_->Update();
-    bunny_->Update();
-    skybox_->Update();
-
-    if (testSprite_) {
-        testSprite_->Update();
-    }
-    if (testTriangle2D_) {
-        testTriangle2D_->Update();
-    }
-    if (testCircle2D_) {
-        testCircle2D_->Update();
-    }
-    if (testRing2D_) {
-        testRing2D_->Update();
-    }
-    if (testLine2D_) {
-        testLine2D_->Update();
+    // 全 GameObject の更新
+    for (auto& obj : gameObjects_) {
+        if (obj) {
+            obj->Update();
+        }
     }
 
-    // カメラの更新
-    BaseCamera* active = cameraMgr_->GetActiveCamera();
-    DebugCamera* dc = dynamic_cast<DebugCamera*>(active);
-
-    if (dc) {
-        dc->SetActive(true);
-        dc->Update(input_);
-    } else {
-        debugCamera_->SetActive(false);
-        active->Update();
+    // Skybox の更新
+    if (skybox_) {
+        skybox_->Update();
     }
 }
 
 void TitleScene::Draw() {
-    // Skyboxの描画（透過を含まない他のモデルより先、または後に描画）
-    skybox_->Draw("forestTex");
+    // Skybox の描画
+    if (skybox_) {
+        skybox_->Draw(kForestEnvTextureKey);
+    }
 
-    // 線の描画
-    line_->Draw();
-
-    // 三角形の描画
-    triangle_->Draw("white", "forestTex");
-
-    // 四角形の描画
-    square_->Draw("white", "forestTex");
-
-    // 立方体の描画
-    cube_->Draw("white", "forestTex");
-
-    // 三角錐の描画
-    triangularPyramid_->Draw("white", "forestTex");
-
-    // 四角錐の描画
-    pyramid_->Draw("white", "forestTex");
-
-    // 球体の描画
-    sphere_->Draw("white", "forestTex");
-
-    // 半球体の描画
-    hemisphere_->Draw("white", "forestTex");
-
-    // 円錐の描画
-    cone_->Draw("white", "forestTex");
-
-    // 円柱の描画
-    cylinder_->Draw("white", "forestTex");
-
-    // リングの描画
-    ring_->Draw("white", "forestTex");
-
-    // バニーの描画（第3引数に環境マップのキーを指定）
-    bunny_->Draw("bunny", "white", "forestTex");
+    // 全 GameObject の 3D 描画
+    for (auto& obj : gameObjects_) {
+        if (obj) {
+            obj->Draw();
+        }
+    }
 }
 
 void TitleScene::Draw2D() {
-    // 2Dオブジェクト群の描画 (ポストプロセス完了後の最終テクスチャに対するオーバーレイ描画)
-    if (testSprite_) {
-        testSprite_->Draw(kDefaultSpriteTex);
+    // 全 GameObject の 2D 描画
+    for (auto& obj : gameObjects_) {
+        if (obj) {
+            obj->Draw2D();
+        }
     }
-    if (testTriangle2D_) {
-        testTriangle2D_->Draw(kDefaultSpriteTex);
+}
+
+GameObject* TitleScene::CreateGameObject(const std::string& name) {
+    auto obj = std::make_unique<GameObject>(name);
+    GameObject* ptr = obj.get();
+    gameObjects_.push_back(std::move(obj));
+    return ptr;
+}
+
+void TitleScene::AddGameObject(std::unique_ptr<GameObject> gameObject) {
+    if (gameObject) {
+        gameObjects_.push_back(std::move(gameObject));
     }
-    if (testCircle2D_) {
-        testCircle2D_->Draw(kDefaultSpriteTex);
-    }
-    if (testRing2D_) {
-        testRing2D_->Draw(kDefaultSpriteTex);
-    }
-    if (testLine2D_) {
-        testLine2D_->Draw(kDefaultSpriteTex);
-    }
+}
+
+void TitleScene::DestroyGameObject(GameObject* gameObject) {
+    std::erase_if(gameObjects_, [gameObject](const std::unique_ptr<GameObject>& obj) {
+        return obj.get() == gameObject;
+    });
 }

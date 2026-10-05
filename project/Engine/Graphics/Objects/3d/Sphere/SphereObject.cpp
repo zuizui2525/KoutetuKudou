@@ -1,12 +1,24 @@
 #include "Engine/Graphics/Objects/3d/Sphere/SphereObject.h"
 #include "Engine/Graphics/Objects/3d/Drawer/Object3DDrawer.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
+
+SphereObject::~SphereObject() {
+    // GPUリソースを遅延解放キューに退避（GPUが使い終わるまで保持される）
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+}
 
 void SphereObject::Initialize(int lightingMode) {
     // 基底クラスの初期化
@@ -23,29 +35,7 @@ void SphereObject::Update() {
         needsUpdate_ = false;
     }
 
-    // 行列更新
-    Matrix4x4 world = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    if (parent_) {
-        world = Math::Multiply(world, parent_->GetWorldMatrix());
-    }
-    matWorld_ = world;
-
-    Matrix4x4 wvp = Math::Multiply(Math::Multiply(world, CameraResource::GetCameraManager()->GetViewMatrix3D()), CameraResource::GetCameraManager()->GetProjectionMatrix3D());
-
-    Matrix4x4 worldForNormal = world;
-    worldForNormal.m[3][0] = 0.0f;
-    worldForNormal.m[3][1] = 0.0f;
-    worldForNormal.m[3][2] = 0.0f;
-    worldForNormal.m[3][3] = 1.0f;
-
-    wvpData_->WVP = wvp;
-    wvpData_->world = world;
-    wvpData_->WorldInverseTranspose = Math::Transpose(Math::Inverse(worldForNormal));
-
-    Matrix4x4 uv = Math::MakeScaleMatrix(uvTransform_.scale);
-    uv = Math::Multiply(uv, Math::MakeRotateZMatrix(uvTransform_.rotate.z));
-    uv = Math::Multiply(uv, Math::MakeTranslateMatrix(uvTransform_.translate));
-    materialData_->uvtransform = uv;
+    Object3D::Update();
 }
 
 void SphereObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
@@ -53,6 +43,12 @@ void SphereObject::Draw(const std::string& textureKey, const std::string& envMap
     constexpr uint32_t kIndicesPerQuad = 6;
     uint32_t indexCount = subdivision_ * subdivision_ * kIndicesPerQuad;
     Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, envMapKey);
+}
+
+void SphereObject::DrawWireframe(const std::string& textureKey) {
+    constexpr uint32_t kIndicesPerQuad = 6;
+    uint32_t indexCount = subdivision_ * subdivision_ * kIndicesPerQuad;
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, "", "Object3D_Wireframe");
 }
 
 void SphereObject::CreateMesh() {

@@ -14,7 +14,7 @@
 class Circle2DObject : Base2D, public IGameObject {
 public:
     Circle2DObject() = default;
-    ~Circle2DObject() = default;
+    ~Circle2DObject();
 
     void Initialize(int lightingMode = 0);
 

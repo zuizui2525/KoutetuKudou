@@ -16,7 +16,7 @@ public:
     void Initialize(int lightingMode = 2);
 
     // 更新処理
-    void Update();
+    void Update() override;
 
     // 描画処理
     void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "");

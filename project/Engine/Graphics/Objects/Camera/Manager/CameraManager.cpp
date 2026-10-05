@@ -9,6 +9,10 @@
 #include "Engine/Base/Utils/StringUtility.h"
 #include <format>
 
+namespace {
+    constexpr const char* kEditorCameraName = "Editor";
+}
+
 void CameraManager::Initialize() {
     // Engine
     auto engine = EngineResource::GetEngine();
@@ -36,7 +40,7 @@ void CameraManager::Initialize() {
     editorCam->Initialize();
     editorCam->SetPosition({ 0.0f, 10.0f, -20.0f });
     editorCam->SetRotation({ 0.4f, 0.0f, 0.0f });
-    AddCamera("Editor", editorCam);
+    AddCamera(kEditorCameraName, editorCam);
 }
 
 void CameraManager::Update() {
@@ -83,7 +87,7 @@ void CameraManager::ImGuiControl() {
 void CameraManager::Clear() {
     // "Editor" カメラを一時的に退避させる
     std::shared_ptr<BaseCamera> editorCam = nullptr;
-    auto it = cameras_.find("Editor");
+    auto it = cameras_.find(kEditorCameraName);
     if (it != cameras_.end()) {
         editorCam = it->second;
     }
@@ -96,7 +100,7 @@ void CameraManager::Clear() {
 
     // 退避させた "Editor" を再格納して温存する
     if (editorCam) {
-        cameras_["Editor"] = editorCam;
+        cameras_[kEditorCameraName] = editorCam;
     }
 }
 
@@ -108,12 +112,40 @@ void CameraManager::AddCamera(const std::string& name, std::shared_ptr<BaseCamer
         ConvertString(name), pos.x, pos.y, pos.z));
  
     // 最初の登録、または仮に "Editor" が設定されている状態から新しいゲームカメラが登録された場合は上書きする
-    bool isEditor = (name == "Editor");
+    bool isEditor = (name == kEditorCameraName);
     std::string currentActiveName = GetActiveCameraName();
 
-    if (!activeCamera_ || (currentActiveName == "Editor" && !isEditor)) {
+    if (!activeCamera_ || (currentActiveName == kEditorCameraName && !isEditor)) {
         activeCamera_ = camera.get();
         Log::Write(std::format(L" ├─ 【アクティブカメラ設定】 「{}」カメラを起動用カメラに設定しました。", ConvertString(name)));
+    }
+}
+
+void CameraManager::RemoveCamera(const std::string& name) {
+    auto it = cameras_.find(name);
+    if (it != cameras_.end()) {
+        bool wasActive = (activeCamera_ == it->second.get());
+        cameras_.erase(it);
+
+        if (wasActive) {
+            // 他に有効なゲームカメラ（Editor以外）があれば最優先で切り替える
+            BaseCamera* nextGameCam = nullptr;
+            for (const auto& [camName, camPtr] : cameras_) {
+                if (camName != kEditorCameraName && camPtr) {
+                    nextGameCam = camPtr.get();
+                    break;
+                }
+            }
+
+            if (nextGameCam) {
+                activeCamera_ = nextGameCam;
+            } else if (cameras_.find(kEditorCameraName) != cameras_.end()) {
+                activeCamera_ = cameras_[kEditorCameraName].get();
+            } else {
+                activeCamera_ = nullptr;
+            }
+        }
+        Log::Write(std::format(L" ├─ 【カメラ登録解除】 名前:「{}」を破棄しました。", ConvertString(name)));
     }
 }
  

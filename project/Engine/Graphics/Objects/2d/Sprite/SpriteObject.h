@@ -14,7 +14,7 @@ class SpriteObject : Base2D, public IGameObject {
 public:
     // コンストラクタから引数を削除
     SpriteObject() = default;
-    ~SpriteObject() = default;
+    ~SpriteObject();
 
     void Initialize(int lightingMode = 0);
 

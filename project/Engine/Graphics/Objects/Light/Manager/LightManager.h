@@ -8,13 +8,19 @@
 #include "Engine/Base/Log/Log.h"
 #include <format>
 
+class LightComponent;
+
 class LightManager {
 public:
     void Initialize();
     void Update();
     void Clear();
 
-    // ライトの追加窓口
+    // LightComponent の追加・解除窓口
+    void RegisterLightComponent(LightComponent* comp);
+    void UnregisterLightComponent(LightComponent* comp);
+
+    // 従来のライトの追加窓口 (後方互換用)
     void AddDirectionalLight(DirectionalLightObject* light) { 
         directionalLights_.push_back(light); 
         auto& d = light->GetLightData();
@@ -60,4 +66,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> spotLightResource_;
     SpotLightGroup* spotLightData_ = nullptr;
     std::vector<SpotLightObject*> spotLights_;
+
+    // 新コンポーネントシステム用
+    std::vector<LightComponent*> lightComponents_;
 };

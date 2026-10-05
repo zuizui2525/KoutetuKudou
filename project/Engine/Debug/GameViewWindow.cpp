@@ -22,6 +22,7 @@
 #include "Engine/Graphics/Objects/2d/Line/Line2DObject.h"
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
+#include "Engine/Component/GameObject.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Debug/DebugEditor.h"
 #include "App/Scene/Game/Stage/StageEditor.h"
@@ -39,6 +40,16 @@ namespace {
     static constexpr float kBadgePaddingY = 4.0f;
     static constexpr float kBadgeMargin = 8.0f;
     static constexpr float kBadgeRounding = 4.0f;
+
+    // カメラ情報バッジ用の定数 (マジックナンバー排除)
+    static constexpr float kCamBadgeMargin = 8.0f;
+    static constexpr float kCamBadgePaddingX = 10.0f;
+    static constexpr float kCamBadgePaddingY = 4.0f;
+    static constexpr float kCamBadgeRounding = 4.0f;
+    static constexpr float kCamBadgeBorderThickness = 1.0f;
+    static constexpr ImU32 kCamBadgeBgColor = IM_COL32(18, 26, 38, 220);         // 上品な半透明ダークネイビー
+    static constexpr ImU32 kCamBadgeBorderColor = IM_COL32(60, 160, 220, 200);   // 控えめなシアン枠線
+    static constexpr ImU32 kCamBadgeTextColor = IM_COL32(100, 220, 255, 255);    // 視認性の高いシアン文字
 
     // ImGuizmoのハッチング線厚さ定数（0.0fで矢印上の変な破線を完全無効化）
     static constexpr float kDisabledHatchedAxisThickness = 0.0f;
@@ -142,6 +153,24 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             drawList->AddRectFilled(badgeMin, badgeMax, bannerColor, kBadgeRounding);
             drawList->AddText(ImVec2(badgeMin.x + kBadgePaddingX, badgeMin.y + kBadgePaddingY), kStatusTextColor, statusText);
 
+            // 画面右上に現在レンダリングに使用しているアクティブカメラ名バッジを描画
+            if (auto cameraMgr = CameraResource::GetCameraManager()) {
+                std::string activeCamName = cameraMgr->GetActiveCameraName();
+                if (activeCamName.empty()) {
+                    activeCamName = "None";
+                }
+                std::string camBadgeText = " [Camera: " + activeCamName + "] ";
+                ImVec2 camTextSize = ImGui::CalcTextSize(camBadgeText.c_str());
+                float camBadgeWidth = camTextSize.x + kCamBadgePaddingX * 2.0f;
+                float camBadgeHeight = camTextSize.y + kCamBadgePaddingY * 2.0f;
+                ImVec2 camBadgeMin = ImVec2(imgPosMax.x - kCamBadgeMargin - camBadgeWidth, imgPosMin.y + kCamBadgeMargin);
+                ImVec2 camBadgeMax = ImVec2(camBadgeMin.x + camBadgeWidth, camBadgeMin.y + camBadgeHeight);
+
+                drawList->AddRectFilled(camBadgeMin, camBadgeMax, kCamBadgeBgColor, kCamBadgeRounding);
+                drawList->AddRect(camBadgeMin, camBadgeMax, kCamBadgeBorderColor, kCamBadgeRounding, 0, kCamBadgeBorderThickness);
+                drawList->AddText(ImVec2(camBadgeMin.x + kCamBadgePaddingX, camBadgeMin.y + kCamBadgePaddingY), kCamBadgeTextColor, camBadgeText.c_str());
+            }
+
             // ゲーム停止中は常にギズモ操作を有効化（実行中はピッキング・ギズモ共に無効）
             bool isGizmoEffective = isPaused;
             bool isGizmoOverlayHovered = false;
@@ -206,17 +235,16 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             BaseCamera* camera = CameraResource::GetCameraManager()->GetActiveCamera();
             bool isEditorPlacing = StageEditor::IsPlacingNow();
             if (isPaused && camera && sIsMouseOnGameView_ && !isEditorPlacing) {
-                // ギズモの操作子をホバー中・操作中、あるいはCtrlキー押下中、オーバーレイホバー中の場合はレイキャストを一切行わない（誤クリック防止）
+                // ギズモの操作子をホバー中・操作中、あるいはCtrlキー押下中、右クリック中、オーバーレイホバー中の場合はレイキャストを一切行わない（誤クリック防止）
                 auto input = InputResource::GetInput();
                 bool isCtrlPressed = input && (input->Press(DIK_LCONTROL) || input->Press(DIK_RCONTROL));
-                bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing() || isCtrlPressed || isGizmoOverlayHovered;
+                bool isRightPressed = input && input->MousePress(1);
+                bool isGizmoActive = ImGuizmo::IsOver() || ImGuizmo::IsUsing() || isCtrlPressed || isRightPressed || isGizmoOverlayHovered;
 
                 if (!isGizmoActive) {
                     bool isLeftClicked = ImGui::IsMouseClicked(0);
-                    bool isRightClicked = ImGui::IsMouseClicked(1);
-                    bool isMiddleClicked = ImGui::IsMouseClicked(2);
 
-                    if (isLeftClicked || isRightClicked || isMiddleClicked) {
+                    if (isLeftClicked) {
                         Vector2 relativeMousePos = GetMousePosition();
                         const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
 
@@ -304,13 +332,6 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                             // 2Dオブジェクトがクリックされた場合
                             if (selected != nearest2DObj) {
                                 SceneHierarchy::GetInstance()->SetSelected(nearest2DObj);
-                                if (isLeftClicked) {
-                                    gizmoOperation_ = kGizmoOpTranslate;
-                                } else if (isMiddleClicked) {
-                                    gizmoOperation_ = kGizmoOpRotate;
-                                } else if (isRightClicked) {
-                                    gizmoOperation_ = kGizmoOpScale;
-                                }
                             }
                         } else {
                             // ----------------------------------------------------
@@ -385,6 +406,26 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                                             }
                                         }
                                     }
+                                } else if (auto* targetGo = dynamic_cast<GameObject*>(obj)) {
+                                    Vector3 pos = targetGo->GetPosition();
+                                    Vector3 scale = targetGo->GetScale();
+
+                                    constexpr float kMinHitRadius = 0.4f;
+                                    float radius = (scale.x + scale.y + scale.z) / 3.0f;
+                                    if (radius < kMinHitRadius) radius = kMinHitRadius;
+
+                                    Vector3 v = Math::Subtract(pos, rayOrigin);
+                                    float tProj = Math::Dot(v, rayDir);
+                                    if (tProj >= 0.0f) {
+                                        Vector3 projPt = { rayOrigin.x + rayDir.x * tProj, rayOrigin.y + rayDir.y * tProj, rayOrigin.z + rayDir.z * tProj };
+                                        float d = Math::Length(Math::Subtract(projPt, pos));
+                                        if (d <= radius) {
+                                            if (d < minDistance) {
+                                                minDistance = d;
+                                                nearestObj = obj;
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -394,13 +435,6 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                             } else {
                                 if (selected != nearestObj) {
                                     SceneHierarchy::GetInstance()->SetSelected(nearestObj);
-                                    if (isLeftClicked) {
-                                        gizmoOperation_ = kGizmoOpTranslate;
-                                    } else if (isMiddleClicked) {
-                                        gizmoOperation_ = kGizmoOpRotate;
-                                    } else if (isRightClicked) {
-                                        gizmoOperation_ = kGizmoOpScale;
-                                    }
                                 }
                             }
                         }
@@ -422,6 +456,7 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                 Object3D* target3D = dynamic_cast<Object3D*>(selected);
                 BaseCamera* targetCam = dynamic_cast<BaseCamera*>(selected);
                 DirectionalLightObject* targetLight = dynamic_cast<DirectionalLightObject*>(selected);
+                GameObject* targetGo = dynamic_cast<GameObject*>(selected);
 
                 if (targetLine2D) {
                     // 2Dラインギズモ（正射影）
@@ -673,6 +708,46 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
                         target3D->SetPosition(newPos);
                         target3D->SetRotate(newRot);
                         target3D->SetScale(newScale);
+                    }
+                } else if (targetGo) {
+                    ImGuizmo::BeginFrame();
+                    ImGuizmo::SetOrthographic(false);
+                    ImGuizmo::SetDrawlist();
+                    ImGuizmo::SetRect(imgPosMin.x, imgPosMin.y, width, height);
+
+                    Matrix4x4 viewMat = CameraResource::GetCameraManager()->GetViewMatrix3D();
+                    Matrix4x4 projMat = CameraResource::GetCameraManager()->GetProjectionMatrix3D();
+
+                    Vector3 scale = targetGo->GetScale();
+                    Vector3 rotate = targetGo->GetRotate();
+                    Vector3 position = targetGo->GetPosition();
+
+                    Matrix4x4 worldMat = Math::MakeAffineMatrix(scale, rotate, position);
+
+                    ImGuizmo::Manipulate(
+                        &viewMat.m[0][0],
+                        &projMat.m[0][0],
+                        static_cast<ImGuizmo::OPERATION>(gizmoOperation_),
+                        ImGuizmo::LOCAL,
+                        &worldMat.m[0][0]
+                    );
+
+                    if (ImGuizmo::IsUsing()) {
+                        float translation[3], rotationComponents[3], scaleComponents[3];
+                        ImGuizmo::DecomposeMatrixToComponents(&worldMat.m[0][0], translation, rotationComponents, scaleComponents);
+
+                        Vector3 newPos = { translation[0], translation[1], translation[2] };
+                        constexpr float kDegToRad = 3.1415926535f / 180.0f;
+                        Vector3 newRot = {
+                            rotationComponents[0] * kDegToRad,
+                            rotationComponents[1] * kDegToRad,
+                            rotationComponents[2] * kDegToRad
+                        };
+                        Vector3 newScale = { scaleComponents[0], scaleComponents[1], scaleComponents[2] };
+
+                        targetGo->SetPosition(newPos);
+                        targetGo->SetRotate(newRot);
+                        targetGo->SetScale(newScale);
                     }
                 }
             }

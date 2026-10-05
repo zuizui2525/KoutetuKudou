@@ -1,0 +1,47 @@
+{
+  "scene_name": "TestScene",
+  "game_objects": [
+    {
+      "name": "TestEntity",
+      "visible": true,
+      "transform": {
+        "position": [1, 2, 3],
+        "rotation": [0.1, 0.2, 0.3],
+        "scale": [2, 2, 2]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [1, 0.5, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30
+        },
+        {
+          "type": "BoxCollider",
+          "center": [0, 0, 0],
+          "size": [2, 2, 2],
+          "is_trigger": false,
+          "show_gizmo": true
+        },
+        {
+          "type": "AudioSource",
+          "file_path": "resources/sounds/test.wav",
+          "volume": 0.75,
+          "loop": false,
+          "auto_play": false
+        },
+        {
+          "type": "ParticleEffect",
+          "effect_name": "Hit",
+          "offset": [0, 0, 0],
+          "loop": false,
+          "auto_play": false
+        }
+      ]
+    }
+  ]
+}

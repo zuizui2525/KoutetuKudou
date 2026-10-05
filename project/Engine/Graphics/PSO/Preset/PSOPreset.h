@@ -26,6 +26,18 @@ public:
         IDxcCompiler3* dxcCompiler,
         IDxcIncludeHandler* includeHandler);
 
+    static PSOPreset CreateObject3DWireframePreset(
+        ID3D12Device* device,
+        IDxcUtils* dxcUtils,
+        IDxcCompiler3* dxcCompiler,
+        IDxcIncludeHandler* includeHandler);
+
+    static PSOPreset CreateObject3DLinePreset(
+        ID3D12Device* device,
+        IDxcUtils* dxcUtils,
+        IDxcCompiler3* dxcCompiler,
+        IDxcIncludeHandler* includeHandler);
+
     // Particle用のプリセット作成関数
     static PSOPreset CreateParticlePreset(
         ID3D12Device* device,
@@ -47,8 +59,6 @@ public:
         IDxcCompiler3* dxcCompiler,
         IDxcIncludeHandler* includeHandler);
 
-
-
     // メンバ変数
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature;
 
@@ -57,6 +67,7 @@ public:
     D3D12_BLEND_DESC blendDesc{};
     D3D12_RASTERIZER_DESC rasterizerDesc{};
     D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
     // シェーダークラス
     ShaderProgram shaderProgram;

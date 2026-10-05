@@ -52,9 +52,21 @@ void TextureManager::Update() {
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetGpuHandle(const std::string& name) const {
-    auto it = textures_.find(name);
-    if (it != textures_.end()) {
-        return it->second->GetGpuHandle();
+    constexpr const char* kFallbackWhiteKey = "white";
+
+    if (!name.empty()) {
+        auto it = textures_.find(name);
+        if (it != textures_.end()) {
+            return it->second->GetGpuHandle();
+        }
+    }
+
+    // 指定キーが見つからない、または空の場合は "white" テクスチャに安全フォールバック
+    if (name != kFallbackWhiteKey) {
+        auto whiteIt = textures_.find(kFallbackWhiteKey);
+        if (whiteIt != textures_.end()) {
+            return whiteIt->second->GetGpuHandle();
+        }
     }
 
     // 存在しない場合のフォールバック（nullptr的ハンドル）

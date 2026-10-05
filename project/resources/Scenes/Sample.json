@@ -1,0 +1,88 @@
+{
+  "scene_name": "Sample",
+  "game_objects": [
+    {
+      "name": "モンボ",
+      "visible": true,
+      "transform": {
+        "position": [1.1709, 1.71847, 0],
+        "rotation": [0, -0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 1,
+          "texture_key": "monsterBall",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [1, 1, 1, 1],
+          "lighting_mode": 1,
+          "shininess": 30
+        }
+      ]
+    },
+    {
+      "name": "Camera",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, -20],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Camera",
+          "fov": 0.45,
+          "near_z": 0.1,
+          "far_z": 1000,
+          "is_main_camera": true,
+          "use_target": false,
+          "target": [0, 0, 0]
+        }
+      ]
+    },
+    {
+      "name": "DirectionalLight",
+      "visible": true,
+      "transform": {
+        "position": [0, 10, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Light",
+          "light_type": "Directional",
+          "color": [1, 1, 1, 1],
+          "intensity": 1,
+          "range": 10,
+          "decay": 1,
+          "spot_angle": 45,
+          "spot_falloff_start": 30
+        }
+      ]
+    },
+    {
+      "name": "Cube",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [1, 1, 1, 1],
+          "lighting_mode": 2,
+          "shininess": 30
+        }
+      ]
+    }
+  ]
+}

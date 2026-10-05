@@ -2,6 +2,7 @@
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
+#include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Zuizui.h"
 #include <stdexcept>
 #include <typeinfo>
@@ -67,8 +68,10 @@ void Object3D::Initialize(int lightingMode) {
     transform_.rotate = { 0,0,0 };
     uvTransform_ = { {1,1,1}, {0,0,0}, {0,0,0} };
 
-    // ヒエラルキー自動登録
-    InitializeGameObject(GetDefaultNameFromType(typeid(*this)));
+    // ヒエラルキー自動登録（コンポーネント内部メッシュ等で抑止されている場合はスキップ）
+    if (autoRegisterHierarchy_) {
+        InitializeGameObject(GetDefaultNameFromType(typeid(*this)));
+    }
 }
 void Object3D::ImGuiSRTControl(const std::string& name) {
 #ifdef _USEIMGUI
@@ -107,4 +110,37 @@ void Object3D::DrawInspector() {
 
 Vector3 Object3D::GetWorldPosition() const {
     return { matWorld_.m[3][0], matWorld_.m[3][1], matWorld_.m[3][2] };
+}
+
+void Object3D::Update() {
+    // ワールド行列の計算
+    Matrix4x4 world = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    if (parent_) {
+        world = Math::Multiply(world, parent_->GetWorldMatrix());
+    }
+    matWorld_ = world;
+
+    // WVP行列の計算
+    auto cameraMgr = CameraResource::GetCameraManager();
+    if (cameraMgr && wvpData_) {
+        Matrix4x4 wvp = Math::Multiply(Math::Multiply(world, cameraMgr->GetViewMatrix3D()), cameraMgr->GetProjectionMatrix3D());
+
+        Matrix4x4 worldForNormal = world;
+        worldForNormal.m[3][0] = 0.0f;
+        worldForNormal.m[3][1] = 0.0f;
+        worldForNormal.m[3][2] = 0.0f;
+        worldForNormal.m[3][3] = 1.0f;
+
+        wvpData_->WVP = wvp;
+        wvpData_->world = world;
+        wvpData_->WorldInverseTranspose = Math::Transpose(Math::Inverse(worldForNormal));
+    }
+
+    // UV変換行列の計算
+    if (materialData_) {
+        Matrix4x4 uv = Math::MakeScaleMatrix(uvTransform_.scale);
+        uv = Math::Multiply(uv, Math::MakeRotateZMatrix(uvTransform_.rotate.z));
+        uv = Math::Multiply(uv, Math::MakeTranslateMatrix(uvTransform_.translate));
+        materialData_->uvtransform = uv;
+    }
 }

@@ -13,6 +13,12 @@ SceneHierarchy* SceneHierarchy::GetInstance() {
 }
 
 std::string SceneHierarchy::Register(IGameObject* object, const std::string& suggestedName) {
+    // 既に登録済みのオブジェクトインスタンスである場合は二重登録せずリネームのみ行う
+    auto it = std::find(objects_.begin(), objects_.end(), object);
+    if (it != objects_.end()) {
+        return Rename(object, suggestedName);
+    }
+
     std::string uniqueName = ResolveUniqueName(object, suggestedName);
     objects_.push_back(object);
     return uniqueName;

@@ -63,7 +63,16 @@ void Object2DDrawer::DrawIndexed(
     commandList->SetGraphicsRootConstantBufferView(kRootParamIndexMaterial, materialResource->GetGPUVirtualAddress());
 
     // テクスチャ設定
-    commandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, texMgr->GetGpuHandle(textureKey));
+    constexpr const char* kFallbackWhiteKey = "white";
+    std::string validTextureKey = textureKey.empty() ? kFallbackWhiteKey : textureKey;
+    auto texHandle = texMgr->GetGpuHandle(validTextureKey);
+    if (texHandle.ptr == 0) {
+        texHandle = texMgr->GetGpuHandle(kFallbackWhiteKey);
+        if (texHandle.ptr == 0) {
+            return; // クラッシュ防止
+        }
+    }
+    commandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, texHandle);
 
     // 描画コール
     commandList->DrawIndexedInstanced(indexCount, kDefaultInstanceCount, kStartIndexLocation, kBaseVertexLocation, kStartInstanceLocation);

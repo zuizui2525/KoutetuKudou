@@ -35,29 +35,7 @@ void CubeObject::Update() {
         needsUpdate_ = false;
     }
 
-    // 行列更新
-    Matrix4x4 world = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    if (parent_) {
-        world = Math::Multiply(world, parent_->GetWorldMatrix());
-    }
-    matWorld_ = world;
-
-    Matrix4x4 wvp = Math::Multiply(Math::Multiply(world, CameraResource::GetCameraManager()->GetViewMatrix3D()), CameraResource::GetCameraManager()->GetProjectionMatrix3D());
-
-    Matrix4x4 worldForNormal = world;
-    worldForNormal.m[3][0] = 0.0f;
-    worldForNormal.m[3][1] = 0.0f;
-    worldForNormal.m[3][2] = 0.0f;
-    worldForNormal.m[3][3] = 1.0f;
-
-    wvpData_->WVP = wvp;
-    wvpData_->world = world;
-    wvpData_->WorldInverseTranspose = Math::Transpose(Math::Inverse(worldForNormal));
-
-    Matrix4x4 uv = Math::MakeScaleMatrix(uvTransform_.scale);
-    uv = Math::Multiply(uv, Math::MakeRotateZMatrix(uvTransform_.rotate.z));
-    uv = Math::Multiply(uv, Math::MakeTranslateMatrix(uvTransform_.translate));
-    materialData_->uvtransform = uv;
+    Object3D::Update();
 }
 
 void CubeObject::Draw(const std::string& textureKey, const std::string& envMapKey) {

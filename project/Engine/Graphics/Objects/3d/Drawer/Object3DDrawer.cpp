@@ -30,6 +30,9 @@ namespace {
     const std::string kDefaultSkyboxTexKey = "skyboxTex";
     constexpr float kDefaultEnvCoefficient = 1.0f;
     constexpr float kZeroEnvCoefficient = 0.0f;
+
+    // PSOキー関連の定数
+    const std::string kPsoKeyLine = "Object3D_Line";
 }
 
 Object3DDrawer* Object3DDrawer::GetInstance() {
@@ -65,6 +68,13 @@ bool Object3DDrawer::PrepareDraw(
     outCommandList->SetGraphicsRootSignature(psoMgr->GetRootSignature(psoKey));
     outCommandList->SetPipelineState(psoMgr->GetPSO(psoKey));
 
+    // トポロジー設定 (Object3D_Line の場合は LINELIST、それ以外は TRIANGLELIST)
+    if (psoKey == kPsoKeyLine) {
+        outCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+    } else {
+        outCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
     // 頂点バッファ設定
     outCommandList->IASetVertexBuffers(kVertexBufferSlot, kNumViews, &vbView);
 
@@ -88,21 +98,43 @@ bool Object3DDrawer::PrepareDraw(
     // テクスチャ設定
     auto texMgr = TextureResource::GetTextureManager();
     if (texMgr) {
-        outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, texMgr->GetGpuHandle(textureKey));
+        constexpr const char* kFallbackWhiteKey = "white";
+        std::string validTextureKey = textureKey.empty() ? kFallbackWhiteKey : textureKey;
+        auto texHandle = texMgr->GetGpuHandle(validTextureKey);
+
+        // 万一ハンドルが無効な場合はクラッシュ防止のため描画を安全に中断
+        if (texHandle.ptr == 0) {
+            texHandle = texMgr->GetGpuHandle(kFallbackWhiteKey);
+            if (texHandle.ptr == 0) {
+                return false;
+            }
+        }
+        outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, texHandle);
 
         // 環境マップテクスチャ設定
         auto materialData = object->GetMaterialData();
+        auto defaultEnvHandle = texMgr->GetGpuHandle(kDefaultSkyboxTexKey);
+
         if (!envMapKey.empty()) {
-            if (materialData && materialData->environmentCoefficient == kZeroEnvCoefficient) {
-                materialData->environmentCoefficient = kDefaultEnvCoefficient;
+            auto envHandle = texMgr->GetGpuHandle(envMapKey);
+            // 存在しないキーの場合は安全にskyboxTexにフォールバック
+            if (envHandle.ptr == 0) {
+                envHandle = defaultEnvHandle;
             }
-            outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, texMgr->GetGpuHandle(envMapKey));
+
+            if (envHandle.ptr != 0) {
+                if (materialData && materialData->environmentCoefficient == kZeroEnvCoefficient) {
+                    materialData->environmentCoefficient = kDefaultEnvCoefficient;
+                }
+                outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, envHandle);
+            }
         } else {
             if (materialData) {
                 materialData->environmentCoefficient = kZeroEnvCoefficient;
             }
-            // TextureCube以外のテクスチャを渡すとエラーになるため、空のときはskyboxTexをダミーとして渡す
-            outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, texMgr->GetGpuHandle(kDefaultSkyboxTexKey));
+            if (defaultEnvHandle.ptr != 0) {
+                outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, defaultEnvHandle);
+            }
         }
     }
 
@@ -123,6 +155,11 @@ void Object3DDrawer::Draw(
     }
 
     commandList->DrawInstanced(vertexCount, kDefaultInstanceCount, kStartVertexLocation, kStartInstanceLocation);
+
+    // ライン描画を行った場合は、後続の描画（ポストプロセス等）への影響を防ぐため標準の TRIANGLELIST に復元
+    if (psoKey == kPsoKeyLine) {
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
 }
 
 void Object3DDrawer::DrawIndexed(
@@ -141,4 +178,9 @@ void Object3DDrawer::DrawIndexed(
 
     commandList->IASetIndexBuffer(&ibView);
     commandList->DrawIndexedInstanced(indexCount, kDefaultInstanceCount, kStartIndexLocation, kBaseVertexLocation, kStartInstanceLocation);
+
+    // ライン描画を行った場合は、後続の描画（ポストプロセス等）への影響を防ぐため標準の TRIANGLELIST に復元
+    if (psoKey == kPsoKeyLine) {
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
 }

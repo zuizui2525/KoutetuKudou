@@ -31,14 +31,12 @@ private:
     // 各ウィンドウクラスのインスタンス
     std::unique_ptr<class GameViewWindow> gameViewWindow_;
     std::unique_ptr<class PerformanceMonitorWindow> perfMonitorWindow_;
-    std::unique_ptr<class SceneManagerWindow> sceneManagerWindow_;
 
     // 各ウィンドウの表示・非表示フラグ
     bool showGameView_ = true;
     bool showPerfMonitor_ = true;
     bool showHierarchy_ = true;
     bool showInspector_ = true;
-    bool showSceneManager_ = true;
     bool isGameViewVisible_ = false;
 
     // ウィンドウ状態管理のメンバ変数

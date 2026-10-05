@@ -4,7 +4,24 @@
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include <imgui.h>
+
+Triangle2DObject::~Triangle2DObject() {
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (materialResource_) {
+        deferredMgr->Enqueue(std::move(materialResource_));
+    }
+    if (wvpResource_) {
+        deferredMgr->Enqueue(std::move(wvpResource_));
+    }
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+}
 
 namespace {
     constexpr float kHalfScale = 0.5f;

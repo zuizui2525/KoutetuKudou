@@ -93,6 +93,7 @@ void VignettePass::Initialize(ID3D12Device* device) {
 void VignettePass::Draw(ID3D12GraphicsCommandList* commandList, D3D12_GPU_DESCRIPTOR_HANDLE inputSRV) {
     commandList->SetPipelineState(pipelineState_.Get());
     commandList->SetGraphicsRootSignature(rootSignature_.Get());
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList->SetGraphicsRootDescriptorTable(kRootParamIndexSRV, inputSRV);
     commandList->SetGraphicsRootConstantBufferView(kRootParamIndexCBV, vignetteResource_->GetGPUVirtualAddress());
 

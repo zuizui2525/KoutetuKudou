@@ -40,9 +40,24 @@ void Zuizui::Initialize(const wchar_t* title, const int32_t width, const int32_t
 
 void Zuizui::Finalize() {
     Log::Write(L"========================================= [エンジン終了処理開始] =========================================");
+    // 終了前にGPU描画処理の完了を待機（ImGui等のリソース安全破棄のため）
+    if (dxCommon) {
+        dxCommon->FlushGPU();
+    }
+
 #ifdef _USEIMGUI
-    imGui->Shutdown();
+    if (debugEditor) {
+        debugEditor.reset();
+    }
+    if (imGui) {
+        imGui->Shutdown();
+    }
 #endif
+
+    if (dxCommon) {
+        dxCommon->FlushGPU();
+    }
+
     // 明示的に開放 (COM オブジェクトをすべて先に破棄する)
     delete instance;
     instance = nullptr;

@@ -12,8 +12,7 @@ void BaseCamera::Initialize() {
         0.1f, 1000.0f
     );
 
-    // ヒエラルキー自動登録
-    InitializeGameObject("Camera");
+    // 内部カメラはSceneHierarchyに登録しない（GameObject側で管理）
 }
 
 BaseCamera::~BaseCamera() = default;

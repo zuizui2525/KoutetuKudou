@@ -3,8 +3,8 @@
 #include <string>
 #include "App/Scene/Core/IScene.h"
 #include "App/Scene/Core/AbstractSceneFactory.h"
-#include "Engine/Graphics/Objects/3d/Pyramid/PyramidObject.h"
-#include "Engine/Graphics/Objects/3d/Sphere/SphereObject.h"
+#include "Engine/Graphics/Objects/3d/Frustum/CameraFrustumObject.h"
+#include "Engine/Graphics/Objects/3d/LightGizmo/LightGizmoObject.h"
 
 class PostProcess;
 
@@ -23,6 +23,10 @@ public:
     void Draw();
     void Draw2D();
     void ImGuiControl();
+
+    /// @brief 予約されたシーン遷移（nextSceneName_）が存在する場合に即座に実行する（ポーズ中でも実行可能）
+    /// @return シーン遷移が実行された場合は true
+    bool ProcessPendingSceneChange();
 
     void SetPostProcess(PostProcess* postProcess) { postProcess_ = postProcess; }
     PostProcess* GetPostProcess() const { return postProcess_; }
@@ -70,6 +74,6 @@ private:
     PostProcess* postProcess_ = nullptr;
 
     // デバッグ用表示モデル（リーク対策としてメンバ変数で管理）
-    std::unique_ptr<PyramidObject> dbgCameraModel_ = nullptr;
-    std::unique_ptr<SphereObject> dbgLightModel_ = nullptr;
+    std::unique_ptr<CameraFrustumObject> dbgCameraModel_ = nullptr;
+    std::unique_ptr<LightGizmoObject> dbgLightModel_ = nullptr;
 };

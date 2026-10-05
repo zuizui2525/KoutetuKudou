@@ -236,6 +236,9 @@ void PostProcess::ProcessEffects() {
 
     ID3D12GraphicsCommandList* commandList = engine->GetDxCommon()->GetCommandList();
 
+    // ポストプロセスのフルスクリーンパス描画用にプリミティブトポロジーを確実にTRIANGLELISTに設定
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
     // アクティブなパスを収集（CopyImagePassは除く）
     std::vector<IPostProcessPass*> activePasses;
     for (size_t i = 1; i < passes_.size(); ++i) {
@@ -281,6 +284,7 @@ void PostProcess::CopyToSwapChain(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
     assert(engine != nullptr);
 
     ID3D12GraphicsCommandList* commandList = engine->GetDxCommon()->GetCommandList();
+    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     D3D12_GPU_DESCRIPTOR_HANDLE finalSrv = GetFinalSrvGpuHandle();
 
     // 指定されたレンダーターゲット（スワップチェーン等）にコピー描画する

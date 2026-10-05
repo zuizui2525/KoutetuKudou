@@ -28,17 +28,15 @@ void ModelObject::Update() {
 }
 
 void ModelObject::Draw(const std::string& modelKey, const std::string& textureKey, const std::string& envMapKey) {
-    if (!isVisible_) return;
+    if (!isVisible_ || modelKey.empty()) return;
 
-    assert(!modelKey.empty());
-    
+    auto modelData = sModelMgr->GetModelData(modelKey);
+    if (!modelData) return;
+
     std::string finalTextureKey = textureKey;
     if (finalTextureKey.empty()) {
         finalTextureKey = modelKey;
     }
-   
-    auto modelData = sModelMgr->GetModelData(modelKey);
-    assert(modelData);
 
     // 描画処理は共通描画クラス Object3DDrawer を通して実行
     uint32_t vertexCount = static_cast<uint32_t>(modelData->vertices.size());

@@ -14,7 +14,7 @@
 class Ring2DObject : Base2D, public IGameObject {
 public:
     Ring2DObject() = default;
-    ~Ring2DObject() = default;
+    ~Ring2DObject();
 
     void Initialize(int lightingMode = 0);
 

@@ -27,6 +27,7 @@ public:
 
     // --- カメラ管理 ---
     void AddCamera(const std::string& name, std::shared_ptr<BaseCamera> camera);
+    void RemoveCamera(const std::string& name);
     void SetActiveCamera(const std::string& name, bool log = true);
     BaseCamera* GetActiveCamera() { return activeCamera_; }
     std::string GetActiveCameraName() const {

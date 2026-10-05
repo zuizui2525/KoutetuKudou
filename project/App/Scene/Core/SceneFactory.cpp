@@ -4,6 +4,7 @@
 #include "App/Scene/Game/GameScene.h"
 #include "App/Scene/Clear/ClearScene.h"
 #include "App/Scene/GameOver/GameOverScene.h"
+#include "App/Scene/Generic/GenericScene.h"
 
 std::unique_ptr<IScene> SceneFactory::CreateScene(const std::string& sceneName) {
     std::unique_ptr<IScene> newScene = nullptr;
@@ -25,6 +26,9 @@ std::unique_ptr<IScene> SceneFactory::CreateScene(const std::string& sceneName) 
         newScene = std::make_unique<ClearScene>();
     } else if (sceneName == kGameOverSceneName) {
         newScene = std::make_unique<GameOverScene>();
+    } else {
+        // 固定C++クラスのないシーン（Sample, NewScene等）は汎用コンポーネントシーンとして生成
+        newScene = std::make_unique<GenericScene>(sceneName);
     }
 
     return newScene;

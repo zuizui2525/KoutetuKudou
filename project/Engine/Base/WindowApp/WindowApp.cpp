@@ -74,6 +74,12 @@ LRESULT CALLBACK WindowApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARA
 #endif
 
     switch (msg) {
+    case WM_CLOSE:
+        if (closeHandler_ && !closeHandler_()) {
+            return 0;
+        }
+        DestroyWindow(hwnd);
+        return 0;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
