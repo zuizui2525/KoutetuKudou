@@ -5,8 +5,8 @@
       "name": "TitleCamera",
       "visible": true,
       "transform": {
-        "position": [0, 4, -25],
-        "rotation": [0, 0, 0],
+        "position": [0.052, 6, -25.9999],
+        "rotation": [0.152649, -0.002, 0],
         "scale": [1, 1, 1]
       },
       "components": [
@@ -75,7 +75,7 @@
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0, 0, 0],
+        "rotation": [0.00333333, 0.00833333, 0.0025],
         "scale": [3.5, 3.5, 3.5]
       },
       "components": [
@@ -104,7 +104,7 @@
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0, 0, 0],
+        "rotation": [0, -0.0116667, 0],
         "scale": [5.5, 0.6, 5.5]
       },
       "components": [
@@ -133,7 +133,7 @@
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0, 0, 0],
+        "rotation": [0.00583333, 0, 0.00466667],
         "scale": [6, 6, 0.5]
       },
       "components": [
@@ -186,7 +186,7 @@
       "name": "SteelDriveLogo",
       "visible": true,
       "transform": {
-        "position": [640, 160, 0],
+        "position": [640, 160.18, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]
       },
@@ -202,7 +202,7 @@
           "is_italic": false,
           "enable_outline": true,
           "outline_color": [0, 0, 0, 1],
-          "outline_width": 3.0,
+          "outline_width": 3,
           "offset_position": [0, 0, 0],
           "offset_rotation": [0, 0, 0],
           "offset_scale": [1, 1, 1]
@@ -220,7 +220,7 @@
       "name": "Subtitle",
       "visible": true,
       "transform": {
-        "position": [640, 270, 0],
+        "position": [640, 271.658, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]
       },
@@ -236,7 +236,7 @@
           "is_italic": false,
           "enable_outline": true,
           "outline_color": [0.05, 0.02, 0, 1],
-          "outline_width": 2.0,
+          "outline_width": 2,
           "offset_position": [0, 0, 0],
           "offset_rotation": [0, 0, 0],
           "offset_scale": [1, 1, 1]
@@ -264,13 +264,13 @@
           "text": "[ PRESS SPACE TO START ]",
           "font_name": "Consolas",
           "font_size": 26,
-          "color": [0.2, 0.85, 1, 1],
+          "color": [0.2, 0.85, 1, 0.597656],
           "alignment": 1,
           "is_bold": true,
           "is_italic": false,
           "enable_outline": true,
           "outline_color": [0, 0, 0, 1],
-          "outline_width": 2.0,
+          "outline_width": 2,
           "offset_position": [0, 0, 0],
           "offset_rotation": [0, 0, 0],
           "offset_scale": [1, 1, 1]
@@ -280,30 +280,6 @@
           "blink_speed": 3.2,
           "min_alpha": 0.15,
           "max_alpha": 1
-        }
-      ]
-    },
-    {
-      "name": "VersionText",
-      "visible": true,
-      "transform": {
-        "position": [1260, 690, 0],
-        "rotation": [0, 0, 0],
-        "scale": [1, 1, 1]
-      },
-      "components": [
-        {
-          "type": "TextRenderer2D",
-          "text": "VER 1.0.0",
-          "font_name": "Segoe UI",
-          "font_size": 14,
-          "color": [0.55, 0.55, 0.6, 0.7],
-          "alignment": 2,
-          "is_bold": false,
-          "is_italic": false,
-          "offset_position": [0, 0, 0],
-          "offset_rotation": [0, 0, 0],
-          "offset_scale": [1, 1, 1]
         }
       ]
     },
