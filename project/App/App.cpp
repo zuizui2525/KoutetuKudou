@@ -27,7 +27,7 @@ void App::Initialize() {
 #ifdef _USEIMGUI
     engine_->Initialize(L"ZuizuiEngine");
 #else
-    engine_->Initialize(L"LE3B_02_イトウカズイ");
+    engine_->Initialize(L"LE3C_06_イトウ_カズイ_鋼鉄駆動");
 #endif
 
     input_ = std::make_unique<Input>();
