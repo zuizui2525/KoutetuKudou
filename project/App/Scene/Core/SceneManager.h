@@ -49,11 +49,7 @@ public:
         sceneFactory_ = factory;
     }
 
-    void ClearCurrentScene() { 
-        currentScene_.reset(); 
-        dbgCameraModel_.reset();
-        dbgLightModel_.reset();
-    }
+    void ClearCurrentScene();
     const std::string& GetCurrentSceneName() const { return currentSceneName_; }
     IScene* GetCurrentScene() const { return currentScene_.get(); }
 

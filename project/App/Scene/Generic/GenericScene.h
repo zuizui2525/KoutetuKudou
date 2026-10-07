@@ -9,6 +9,7 @@ class BaseCamera;
 class CameraManager;
 class DirectionalLightObject;
 class GameObject;
+class Skybox;
 
 /// <summary>
 /// Unity/Unreal Engine スタイルの汎用コンポーネント指向シーン
@@ -27,8 +28,9 @@ public:
 
     // GameObject 管理
     GameObject* CreateGameObject(const std::string& name = "GameObject");
-    void AddGameObject(std::unique_ptr<GameObject> gameObject);
+    void AddGameObject(std::unique_ptr<GameObject> gameObject) override;
     void DestroyGameObject(GameObject* gameObject);
+    std::unique_ptr<GameObject> DetachGameObject(GameObject* gameObject) override;
     const std::vector<std::unique_ptr<GameObject>>& GetGameObjects() const { return gameObjects_; }
 
     const std::string& GetSceneName() const { return sceneName_; }
@@ -44,4 +46,10 @@ private:
 
     // シーン所属の GameObject 配列
     std::vector<std::unique_ptr<GameObject>> gameObjects_;
+
+    // 背景 Skybox（Titleシーン等で使用）
+    std::unique_ptr<Skybox> skybox_;
+
+    // 花火演出タイマー（Clearシーン等で使用）
+    int fireworkTimer_ = 0;
 };

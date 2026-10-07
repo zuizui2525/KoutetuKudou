@@ -29,6 +29,9 @@ namespace {
     constexpr float kShininessSpeed = 1.0f;
     constexpr float kMinShininess = 1.0f;
     constexpr float kMaxShininess = 200.0f;
+    constexpr float kDragSpeed = 0.05f;
+    constexpr float kMinScale = 0.001f;
+    constexpr float kMaxScale = 1000.0f;
     constexpr const char* kMeshTypeNames[] = {
         "Cube",
         "Sphere",
@@ -68,6 +71,7 @@ void MeshRendererComponent::Initialize() {
         meshObject_->SetColor(color_);
         meshObject_->SetShininess(shininess_);
         meshObject_->SetLightingMode(lightingMode_);
+        meshObject_->SetEnvironmentCoefficient(environmentCoefficient_);
     }
 }
 
@@ -125,6 +129,7 @@ void MeshRendererComponent::RecreateMeshObject() {
         meshObject_->Initialize(lightingMode_);
         meshObject_->SetColor(color_);
         meshObject_->SetShininess(shininess_);
+        meshObject_->SetEnvironmentCoefficient(environmentCoefficient_);
 
         // コンポーネント内部の描画メッシュなのでヒエラルキーからは即座に登録解除（余計なCubeが階層に出るのを防止）
         SceneHierarchy::GetInstance()->Unregister(meshObject_.get());
@@ -165,11 +170,19 @@ void MeshRendererComponent::SetShininess(float shininess) {
     }
 }
 
+void MeshRendererComponent::SetEnvironmentCoefficient(float coef) {
+    environmentCoefficient_ = coef;
+    if (meshObject_) {
+        meshObject_->SetEnvironmentCoefficient(environmentCoefficient_);
+    }
+}
+
 void MeshRendererComponent::Update() {
     if (!meshObject_ || !owner_) return;
 
-    // オーナーのTransformと表示状態をメッシュオブジェクトに同期
-    meshObject_->SetTransform(owner_->GetTransform());
+    // ローカルオフセットと親のワールド行列をメッシュに反映
+    meshObject_->SetTransform(offset_);
+    meshObject_->SetParentMatrix(&owner_->GetWorldMatrix());
     meshObject_->SetVisible(owner_->IsVisible() && isActive_);
 
     // メッシュ側の行列（WVP）を確実に計算・更新
@@ -179,8 +192,10 @@ void MeshRendererComponent::Update() {
 void MeshRendererComponent::Draw() {
     if (!meshObject_ || !isActive_ || !owner_ || !owner_->IsVisible()) return;
 
-    // 描画直前にTransformと行列を最新化して確実に描画
-    meshObject_->SetTransform(owner_->GetTransform());
+    // 描画直前にTransformと行列、環境反射係数を最新化して確実に描画
+    meshObject_->SetTransform(offset_);
+    meshObject_->SetParentMatrix(&owner_->GetWorldMatrix());
+    meshObject_->SetEnvironmentCoefficient(environmentCoefficient_);
     meshObject_->SetVisible(true);
     meshObject_->Update();
 
@@ -223,9 +238,23 @@ void MeshRendererComponent::Draw() {
 
 void MeshRendererComponent::DrawInspector() {
 #ifdef _USEIMGUI
+    std::string idPrefix = "##MeshRenderer_" + std::to_string(reinterpret_cast<uintptr_t>(this));
+
+    // 0. ローカルオフセット (個別Transform)
+    if (ImGui::TreeNodeEx(("Offset Transform (個別の配置)" + idPrefix).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3(("Position" + idPrefix + "_Pos").c_str(), &offset_.translate.x, kDragSpeed, 0.0f, 0.0f, "%.2f");
+        ImGui::DragFloat3(("Rotation" + idPrefix + "_Rot").c_str(), &offset_.rotate.x, kDragSpeed, 0.0f, 0.0f, "%.2f");
+        ImGui::DragFloat3(("Scale" + idPrefix + "_Scl").c_str(), &offset_.scale.x, kDragSpeed, kMinScale, kMaxScale, "%.2f");
+        if (ImGui::Button(("Reset Offset" + idPrefix).c_str())) {
+            offset_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+        }
+        ImGui::TreePop();
+    }
+    ImGui::Separator();
+
     // 1. メッシュタイプ選択コンボ
     int currentType = static_cast<int>(meshType_);
-    if (ImGui::Combo("Mesh Type##MeshRenderer", &currentType, kMeshTypeNames, kMeshTypeCount)) {
+    if (ImGui::Combo(("Mesh Type" + idPrefix).c_str(), &currentType, kMeshTypeNames, kMeshTypeCount)) {
         SetMeshType(static_cast<MeshType>(currentType));
     }
 
@@ -268,6 +297,12 @@ void MeshRendererComponent::DrawInspector() {
     float shininess = shininess_;
     if (ImGui::DragFloat("Shininess##MeshRenderer", &shininess, kShininessSpeed, kMinShininess, kMaxShininess, "%.1f")) {
         SetShininess(shininess);
+    }
+
+    // 8. 環境マップ反射係数 (Environment Reflection)
+    float envCoef = environmentCoefficient_;
+    if (ImGui::SliderFloat("Env Reflection##MeshRenderer", &envCoef, 0.0f, 2.0f, "%.2f")) {
+        SetEnvironmentCoefficient(envCoef);
     }
 #endif
 }

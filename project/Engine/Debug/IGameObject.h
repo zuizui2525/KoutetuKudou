@@ -19,8 +19,11 @@ public:
     // インスペクター描画用（各派生オブジェクトでデバッグUIコードを呼び出す）
     virtual void DrawInspector() = 0;
 
-    // 更新処理の共通インターフェース（ポーズ中エディットなどでの一括更新用）
+    // 更新処理の共通インターフェース（通常フレーム更新用）
     virtual void Update() {}
+
+    // エディタ／ポーズ中の更新処理（行列再計算や表示同期のみ行い、アニメーションは停止）
+    virtual void UpdateEditor() { Update(); }
 
 protected:
     // 派生クラスの Initialize() で呼び出す初期化ヘルパー

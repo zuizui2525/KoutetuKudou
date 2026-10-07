@@ -3,7 +3,7 @@
 #include "imgui.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Zuizui.h"
-#include "Engine/Debug/GameViewWindow.h"
+#include "Engine/Debug/SceneViewWindow.h"
 
 namespace {
     constexpr float kMaxPitch = 1.57f;
@@ -21,29 +21,27 @@ void DebugCamera::Update(Input* input) {
 #ifdef _USEIMGUI
     if (!hwnd_ || !isActive_) return;
 
-    // Ctrl キー（左または右）が押されているか
-    bool isCtrlOperating = input->Press(DIK_LCONTROL) || input->Press(DIK_RCONTROL);
-    if (input->Trigger(DIK_LCONTROL) || input->Trigger(DIK_RCONTROL)) {
-        isFirstOperatingFrame_ = true;
-    }
+    // マウス右クリックによるカメラ操作（Unity / Blender 準拠）
+    // ※ Ctrl キーでの操作を廃止し、Ctrl+Z や Ctrl+S などのショートカットキー押下時の意図しないカメラ移動を完全防止
+    constexpr int kRightMouseButton = 1;
 
-    // 右クリックによる操作判定（開始時にゲームビュー上である場合のみ有効）
-    if (input->MouseTrigger(1)) {
-        if (GameViewWindow::IsMouseOnGameView()) {
+    // 右クリックによる操作判定（開始時にシーンビュー上である場合のみ有効）
+    if (input->MouseTrigger(kRightMouseButton)) {
+        if (SceneViewWindow::IsMouseOnSceneView()) {
             isRightClickOperating_ = true;
             isFirstOperatingFrame_ = true;
             GetCursorPos(&startCursorPos_);
         }
     }
 
-    if (!input->MousePress(1) && isRightClickOperating_) {
+    if (!input->MousePress(kRightMouseButton) && isRightClickOperating_) {
         // 右クリックを離した瞬間に元のマウス位置へ復元
         SetCursorPos(startCursorPos_.x, startCursorPos_.y);
         isRightClickOperating_ = false;
         SetCursorVisible(true);
     }
 
-    bool isOperating = isCtrlOperating || isRightClickOperating_;
+    bool isOperating = isRightClickOperating_;
 
     if (isOperating) {
         // --- 1. カーソル制御と中央固定 ---
@@ -108,8 +106,8 @@ void DebugCamera::Update(Input* input) {
         // キー・右クリックが離されているときはカーソルを表示する
         SetCursorVisible(true);
 
-        // ゲーム画面上のホイールで前後にズーム
-        if (GameViewWindow::IsMouseOnGameView()) {
+        // シーン画面上のホイールで前後にズーム
+        if (SceneViewWindow::IsMouseOnSceneView()) {
             float wheel = input->GetMouseWheel();
             if (std::abs(wheel) > 0.0f) {
                 Matrix4x4 rotateMatrix = Math::MakeRotateMatrix(transform_.rotate.x, transform_.rotate.y, transform_.rotate.z);

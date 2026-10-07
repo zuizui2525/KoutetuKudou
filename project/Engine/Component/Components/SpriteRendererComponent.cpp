@@ -26,6 +26,9 @@ namespace {
     constexpr float kLineDragSpeed = 1.0f;
     constexpr float kMinThickness = 0.5f;
     constexpr float kMaxThickness = 256.0f;
+    constexpr float kDragSpeed = 0.5f;
+    constexpr float kMinScale = 0.001f;
+    constexpr float kMaxScale = 1000.0f;
 
     constexpr const char* kShapeNames[] = {
         "Sprite",
@@ -183,26 +186,30 @@ void SpriteRendererComponent::SetColor(const Vector4& color) {
 void SpriteRendererComponent::Update() {
     if (!owner_) return;
     const auto& tr = owner_->GetTransform();
+    Transform combinedTr{};
+    combinedTr.translate = { tr.translate.x + offset_.translate.x, tr.translate.y + offset_.translate.y, tr.translate.z + offset_.translate.z };
+    combinedTr.rotate = { tr.rotate.x + offset_.rotate.x, tr.rotate.y + offset_.rotate.y, tr.rotate.z + offset_.rotate.z };
+    combinedTr.scale = { tr.scale.x * offset_.scale.x, tr.scale.y * offset_.scale.y, tr.scale.z * offset_.scale.z };
     bool vis = owner_->IsVisible() && isActive_;
 
     if (spriteObject_) {
-        spriteObject_->SetTransform(tr);
+        spriteObject_->SetTransform(combinedTr);
         spriteObject_->SetVisible(vis);
         spriteObject_->Update();
     } else if (triangleObject_) {
-        triangleObject_->SetTransform(tr);
+        triangleObject_->SetTransform(combinedTr);
         triangleObject_->SetVisible(vis);
         triangleObject_->Update();
     } else if (circleObject_) {
-        circleObject_->SetTransform(tr);
+        circleObject_->SetTransform(combinedTr);
         circleObject_->SetVisible(vis);
         circleObject_->Update();
     } else if (ringObject_) {
-        ringObject_->SetTransform(tr);
+        ringObject_->SetTransform(combinedTr);
         ringObject_->SetVisible(vis);
         ringObject_->Update();
     } else if (lineObject_) {
-        lineObject_->SetTransform(tr);
+        lineObject_->SetTransform(combinedTr);
         lineObject_->SetVisible(vis);
         lineObject_->Update();
     }
@@ -211,29 +218,33 @@ void SpriteRendererComponent::Update() {
 void SpriteRendererComponent::Draw2D() {
     if (!isActive_ || !owner_ || !owner_->IsVisible()) return;
     const auto& tr = owner_->GetTransform();
+    Transform combinedTr{};
+    combinedTr.translate = { tr.translate.x + offset_.translate.x, tr.translate.y + offset_.translate.y, tr.translate.z + offset_.translate.z };
+    combinedTr.rotate = { tr.rotate.x + offset_.rotate.x, tr.rotate.y + offset_.rotate.y, tr.rotate.z + offset_.rotate.z };
+    combinedTr.scale = { tr.scale.x * offset_.scale.x, tr.scale.y * offset_.scale.y, tr.scale.z * offset_.scale.z };
 
     if (spriteObject_) {
-        spriteObject_->SetTransform(tr);
+        spriteObject_->SetTransform(combinedTr);
         spriteObject_->SetVisible(true);
         spriteObject_->Update();
         spriteObject_->Draw(textureKey_, true);
     } else if (triangleObject_) {
-        triangleObject_->SetTransform(tr);
+        triangleObject_->SetTransform(combinedTr);
         triangleObject_->SetVisible(true);
         triangleObject_->Update();
         triangleObject_->Draw(textureKey_, true);
     } else if (circleObject_) {
-        circleObject_->SetTransform(tr);
+        circleObject_->SetTransform(combinedTr);
         circleObject_->SetVisible(true);
         circleObject_->Update();
         circleObject_->Draw(textureKey_, true);
     } else if (ringObject_) {
-        ringObject_->SetTransform(tr);
+        ringObject_->SetTransform(combinedTr);
         ringObject_->SetVisible(true);
         ringObject_->Update();
         ringObject_->Draw(textureKey_, true);
     } else if (lineObject_) {
-        lineObject_->SetTransform(tr);
+        lineObject_->SetTransform(combinedTr);
         lineObject_->SetVisible(true);
         lineObject_->Update();
         lineObject_->Draw(textureKey_, true);
@@ -242,9 +253,23 @@ void SpriteRendererComponent::Draw2D() {
 
 void SpriteRendererComponent::DrawInspector() {
 #ifdef _USEIMGUI
+    std::string idPrefix = "##SpriteRenderer_" + std::to_string(reinterpret_cast<uintptr_t>(this));
+
+    // 0. ローカルオフセット (個別Transform)
+    if (ImGui::TreeNodeEx(("Offset Transform (個別の配置)" + idPrefix).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::DragFloat3(("Position" + idPrefix + "_Pos").c_str(), &offset_.translate.x, kDragSpeed, 0.0f, 0.0f, "%.1f px");
+        ImGui::DragFloat3(("Rotation" + idPrefix + "_Rot").c_str(), &offset_.rotate.x, 0.05f, 0.0f, 0.0f, "%.2f");
+        ImGui::DragFloat3(("Scale" + idPrefix + "_Scl").c_str(), &offset_.scale.x, 0.05f, kMinScale, kMaxScale, "%.2f");
+        if (ImGui::Button(("Reset Offset" + idPrefix).c_str())) {
+            offset_ = { {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+        }
+        ImGui::TreePop();
+    }
+    ImGui::Separator();
+
     // 1. 形状切り替え Combo
     int currentShape = static_cast<int>(shapeType_);
-    if (ImGui::Combo("Shape Type##SpriteRenderer", &currentShape, kShapeNames, IM_ARRAYSIZE(kShapeNames))) {
+    if (ImGui::Combo(("Shape Type" + idPrefix).c_str(), &currentShape, kShapeNames, IM_ARRAYSIZE(kShapeNames))) {
         SetShapeType(static_cast<ShapeType>(currentShape));
     }
 

@@ -54,11 +54,13 @@ void Skybox::Initialize() {
     std::copy(std::begin(indices), std::end(indices), indexData);
     indexResource_->Unmap(0, nullptr);
 
-    // 3. WVP用の定数バッファ作成
-    wvpResource_ = DxUtils::CreateBufferResource(device, sizeof(WVPData));
+    // 3. WVP用の定数バッファ作成 (DirectX12の256バイトアライメントに準拠)
+    constexpr size_t kConstantBufferSize = (sizeof(WVPData) + 0xff) & ~0xff;
+    wvpResource_ = DxUtils::CreateBufferResource(device, kConstantBufferSize);
     wvpResource_->Map(0, nullptr, reinterpret_cast<void**>(&wvpData_));
     wvpData_->WVP = Math::MakeIdentity();
     wvpData_->World = Math::MakeIdentity();
+    wvpData_->color = color_;
 }
 
 void Skybox::Update() {
@@ -86,6 +88,7 @@ void Skybox::Update() {
 
     wvpData_->WVP = wvp;
     wvpData_->World = world;
+    wvpData_->color = color_;
 }
 
 void Skybox::Draw(const std::string& textureKey) {

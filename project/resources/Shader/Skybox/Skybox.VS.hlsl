@@ -4,6 +4,7 @@ struct TransformationMatrix
 {
     float32_t4x4 WVP;
     float32_t4x4 World;
+    float32_t4 color;
 };
 
 ConstantBuffer<TransformationMatrix> gTransformationMatrix : register(b0);
@@ -22,6 +23,7 @@ VertexShaderOutput main(VertexShaderInput input)
     
     // 箱のローカル座標をそのままサンプリング用方向ベクトルにする
     output.texcoord = input.position.xyz;
+    output.color = gTransformationMatrix.color;
     
     return output;
 }

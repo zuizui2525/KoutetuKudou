@@ -12,6 +12,7 @@
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Debug/Command/CommandHistory.h"
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Base/Utils/StringUtility.h"
@@ -20,6 +21,13 @@
 SceneManager* SceneManager::GetInstance() {
     static SceneManager instance;
     return &instance;
+}
+
+void SceneManager::ClearCurrentScene() {
+    currentScene_.reset();
+    dbgCameraModel_.reset();
+    dbgLightModel_.reset();
+    CommandHistory::GetInstance()->Clear();
 }
 
 void SceneManager::ImGuiControl() {
@@ -57,6 +65,7 @@ bool SceneManager::ProcessPendingSceneChange() {
         CameraResource::GetCameraManager()->Clear();
         LightResource::GetLightManager()->Clear();
         SceneHierarchy::GetInstance()->Clear();
+        CommandHistory::GetInstance()->Clear();
 
         // ポストプロセスのエフェクトおよびクリアカラーのリセット（シーン遷移時の自動解除）
         if (postProcess_) {
@@ -104,12 +113,16 @@ void SceneManager::Draw() {
     }
 
 #ifdef _USEIMGUI
-    // ポーズ専用 "Editor" カメラが作動中の場合、他のカメラやライトの位置を 3D 可視化する
+    // カメラやライトの 3D ギズモ・視錐台 (Frustum) の可視化
     auto cameraMgr = CameraResource::GetCameraManager();
-    if (cameraMgr && cameraMgr->GetActiveCameraName() == "Editor") {
+    if (cameraMgr) {
         constexpr int kLightingDisabled = 0;
-        constexpr Vector4 kCameraGizmoColor = { 0.2f, 0.7f, 1.0f, 1.0f };
+        constexpr Vector4 kCameraGizmoColor = { 0.2f, 0.7f, 1.0f, 1.0f };         // 通常カメラ: シアン
+        constexpr Vector4 kSelectedCameraGizmoColor = { 1.0f, 0.9f, 0.2f, 1.0f }; // 選択中カメラ: 鮮やかなイエロー
         constexpr Vector4 kLightGizmoColor = { 1.0f, 0.9f, 0.2f, 1.0f };
+        constexpr float kNearZ = 0.2f;
+        constexpr float kDefaultGizmoFarZ = 3.0f;
+        constexpr float kSelectedGizmoFarZ = 12.0f; // 選択中は視界の奥までフラスタムを延長表示
 
         if (!dbgCameraModel_) {
             dbgCameraModel_ = std::make_unique<CameraFrustumObject>();
@@ -127,14 +140,27 @@ void SceneManager::Draw() {
             SceneHierarchy::GetInstance()->Unregister(dbgLightModel_.get());
         }
 
+        IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
+        std::string activeCamName = cameraMgr->GetActiveCameraName();
+
         const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
         for (auto* obj : objects) {
             // 1. 新コンポーネントシステム (GameObject) のチェック
             if (auto* go = dynamic_cast<GameObject*>(obj)) {
                 if (auto* camComp = go->GetComponent<CameraComponent>()) {
-                    dbgCameraModel_->SetParameters(camComp->GetFov(), camComp->GetAspectRatio(), 0.2f, 3.0f);
+                    // 現在自身をレンダリングしているアクティブカメラは画面を覆ってしまうためスキップ
+                    if (obj->GetName() == activeCamName) {
+                        continue;
+                    }
+
+                    bool isSelected = (obj == selected);
+                    float farZ = isSelected ? kSelectedGizmoFarZ : kDefaultGizmoFarZ;
+                    Vector4 gizmoColor = isSelected ? kSelectedCameraGizmoColor : kCameraGizmoColor;
+                    dbgCameraModel_->GetMaterialData()->color = gizmoColor;
+
+                    dbgCameraModel_->SetParameters(camComp->GetFov(), camComp->GetAspectRatio(), kNearZ, farZ);
                     dbgCameraModel_->SetPosition(go->GetPosition());
-                    dbgCameraModel_->SetRotate(go->GetRotate());
+                    dbgCameraModel_->SetRotate(camComp->GetCalculatedRotation());
                     dbgCameraModel_->SetScale({ 1.0f, 1.0f, 1.0f });
                     dbgCameraModel_->Update();
                     dbgCameraModel_->Draw("white");
@@ -151,9 +177,14 @@ void SceneManager::Draw() {
             // 2. 従来のオブジェクト (BaseCamera, DirectionalLightObject) のチェック (後方互換)
             else if (auto* cam = dynamic_cast<BaseCamera*>(obj)) {
                 if (cam == cameraMgr->GetActiveCamera()) continue;
-                dbgCameraModel_->SetParameters(0.45f, 16.0f / 9.0f, 0.2f, 3.0f);
+                bool isSelected = (obj == selected);
+                float farZ = isSelected ? kSelectedGizmoFarZ : kDefaultGizmoFarZ;
+                Vector4 gizmoColor = isSelected ? kSelectedCameraGizmoColor : kCameraGizmoColor;
+                dbgCameraModel_->GetMaterialData()->color = gizmoColor;
+
+                dbgCameraModel_->SetParameters(0.45f, 16.0f / 9.0f, kNearZ, farZ);
                 dbgCameraModel_->SetPosition(cam->GetPosition());
-                dbgCameraModel_->SetRotate(cam->GetRotation());
+                dbgCameraModel_->SetRotate(cam->GetCalculatedRotation());
                 dbgCameraModel_->SetScale({ 1.0f, 1.0f, 1.0f });
                 dbgCameraModel_->Update();
                 dbgCameraModel_->Draw("white");

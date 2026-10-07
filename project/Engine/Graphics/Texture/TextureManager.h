@@ -21,6 +21,9 @@ public:
     // GPUハンドル取得
     D3D12_GPU_DESCRIPTOR_HANDLE GetGpuHandle(const std::string& name) const;
 
+    // 動的テクスチャ等のために空きディスクリプタインデックスを払い出す
+    uint32_t AllocateDescriptorIndex();
+
 private:
     ID3D12Device* device_ = nullptr;
     ID3D12GraphicsCommandList* commandList_ = nullptr;

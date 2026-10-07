@@ -18,7 +18,10 @@
           "env_map_key": "",
           "color": [1, 1, 1, 1],
           "lighting_mode": 1,
-          "shininess": 30
+          "shininess": 30,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     },
@@ -80,7 +83,36 @@
           "env_map_key": "",
           "color": [1, 1, 1, 1],
           "lighting_mode": 2,
-          "shininess": 30
+          "shininess": 30,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "name": "宮﨑",
+      "visible": true,
+      "transform": {
+        "position": [306.293, 347.14, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "SpriteRenderer",
+          "shape_type": 0,
+          "texture_key": "white",
+          "size": [100, 100],
+          "radius": 50,
+          "inner_radius": 35,
+          "line_start": [0, 0],
+          "line_end": [150, 0],
+          "thickness": 4,
+          "color": [1, 1, 1, 1],
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     }

@@ -26,6 +26,9 @@ public:
     const Vector3& GetTarget() const { return target_; }
     bool IsUseTarget() const { return useTarget_; }  
 
+    // 実効的な回転角（注視点モードの場合は視線方向から計算したオイラー角）を取得
+    Vector3 GetCalculatedRotation() const;  
+
     // 行列取得  
     const Matrix4x4& GetViewMatrix() const { return viewMatrix_; }  
     const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }  

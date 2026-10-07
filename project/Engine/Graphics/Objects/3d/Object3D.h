@@ -80,6 +80,8 @@ public:
 
     void SetParent(Object3D* parent) { parent_ = parent; }
     Object3D* GetParent() const { return parent_; }
+    void SetParentMatrix(const Matrix4x4* parentMatrix) { parentMatrix_ = parentMatrix; }
+    const Matrix4x4* GetParentMatrix() const { return parentMatrix_; }
     const Matrix4x4& GetWorldMatrix() const { return matWorld_; }
     Vector3 GetWorldPosition() const;
 
@@ -106,6 +108,7 @@ protected:
 
     // 親オブジェクトとワールド行列
     Object3D* parent_ = nullptr;
+    const Matrix4x4* parentMatrix_ = nullptr;
     Matrix4x4 matWorld_ = {
         1.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 1.0f, 0.0f, 0.0f,

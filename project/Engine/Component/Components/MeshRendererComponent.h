@@ -62,12 +62,24 @@ public:
     float GetShininess() const { return shininess_; }
     void SetShininess(float shininess);
 
+    float GetEnvironmentCoefficient() const { return environmentCoefficient_; }
+    void SetEnvironmentCoefficient(float coef);
+
+    // ==========================================
+    // ローカルオフセット (個別Transform)
+    // ==========================================
+    Transform& GetOffset() { return offset_; }
+    const Transform& GetOffset() const { return offset_; }
+    void SetOffset(const Transform& offset) { offset_ = offset; }
+
 private:
     void RecreateMeshObject();
 
 private:
     MeshType meshType_ = MeshType::Cube;
     std::unique_ptr<Object3D> meshObject_;
+
+    Transform offset_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
 
     std::string textureKey_ = "white";
     std::string modelKey_ = "cube";
@@ -76,4 +88,5 @@ private:
     Vector4 color_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     int lightingMode_ = 2; // 0:None, 1:Lambert, 2:HalfLambert (デフォルト: HalfLambert)
     float shininess_ = 30.0f;
+    float environmentCoefficient_ = 1.0f; // 環境マップ反射係数 (デフォルト: 1.0f)
 };

@@ -18,6 +18,8 @@ namespace {
 CameraFrustumObject::~CameraFrustumObject() {
     auto deferredMgr = DeferredReleaseManager::GetInstance();
     if (vertexResource_) {
+        vertexResource_->Unmap(0, nullptr);
+        mappedVertices_ = nullptr;
         deferredMgr->Enqueue(std::move(vertexResource_));
     }
     if (indexResource_) {
@@ -32,7 +34,7 @@ void CameraFrustumObject::Initialize(int lightingMode) {
 
 void CameraFrustumObject::Update() {
     if (needsUpdate_) {
-        CreateMesh();
+        UpdateVertices();
         needsUpdate_ = false;
     }
     Object3D::Update();
@@ -57,7 +59,9 @@ void CameraFrustumObject::SetParameters(float fov, float aspectRatio, float near
     }
 }
 
-void CameraFrustumObject::CreateMesh() {
+void CameraFrustumObject::UpdateVertices() {
+    if (!mappedVertices_) return;
+
     float tanHalfFov = std::tan(fov_ * 0.5f);
 
     float nearH = nearZ_ * tanHalfFov;
@@ -81,6 +85,10 @@ void CameraFrustumObject::CreateMesh() {
         { { -farW,  -farH,  farZ_,  1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f,  1.0f } },
     };
 
+    std::copy(std::begin(vertices), std::end(vertices), mappedVertices_);
+}
+
+void CameraFrustumObject::CreateMesh() {
     // 12本のエッジ（枠線）のインデックス（対角線なし）
     uint32_t indices[kIndexCount] = {
         // Near 4辺
@@ -91,16 +99,16 @@ void CameraFrustumObject::CreateMesh() {
         0, 4,  1, 5,  2, 6,  3, 7
     };
 
-    // Vertex Resource 作成
+    // Vertex Resource 作成（常時マップ保持）
     vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * kVertexCount);
     vbView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
     vbView_.SizeInBytes = sizeof(VertexData) * kVertexCount;
     vbView_.StrideInBytes = sizeof(VertexData);
 
-    VertexData* vertData = nullptr;
-    vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&vertData));
-    std::copy(std::begin(vertices), std::end(vertices), vertData);
-    vertexResource_->Unmap(0, nullptr);
+    vertexResource_->Map(0, nullptr, reinterpret_cast<void**>(&mappedVertices_));
+
+    // 初回の頂点データを書き込み
+    UpdateVertices();
 
     // Index Resource 作成
     indexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(uint32_t) * kIndexCount);

@@ -72,7 +72,57 @@ void Object2DDrawer::DrawIndexed(
             return; // クラッシュ防止
         }
     }
-    commandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, texHandle);
+
+    DrawIndexedHandle(
+        wvpResource,
+        materialResource,
+        vbView,
+        ibView,
+        indexCount,
+        texHandle,
+        isVisible,
+        psoKey
+    );
+}
+
+void Object2DDrawer::DrawIndexedHandle(
+    ID3D12Resource* wvpResource,
+    ID3D12Resource* materialResource,
+    const D3D12_VERTEX_BUFFER_VIEW& vbView,
+    const D3D12_INDEX_BUFFER_VIEW& ibView,
+    uint32_t indexCount,
+    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
+    bool isVisible,
+    const std::string& psoKey
+) {
+    if (!isVisible || !wvpResource || !materialResource || textureHandle.ptr == 0) return;
+
+    auto engine = EngineResource::GetEngine();
+    if (!engine) return;
+
+    auto dxCommon = engine->GetDxCommon();
+    if (!dxCommon) return;
+
+    auto psoMgr = engine->GetPSOManager();
+    if (!psoMgr) return;
+
+    auto commandList = dxCommon->GetCommandList();
+    if (!commandList) return;
+
+    // パイプライン・ルートシグネチャ設定
+    commandList->SetGraphicsRootSignature(psoMgr->GetRootSignature(psoKey));
+    commandList->SetPipelineState(psoMgr->GetPSO(psoKey));
+
+    // 頂点・インデックスバッファ設定
+    commandList->IASetVertexBuffers(kVertexBufferSlot, kNumViews, &vbView);
+    commandList->IASetIndexBuffer(&ibView);
+
+    // 定数バッファ設定 (WVP, Material)
+    commandList->SetGraphicsRootConstantBufferView(kRootParamIndexWVP, wvpResource->GetGPUVirtualAddress());
+    commandList->SetGraphicsRootConstantBufferView(kRootParamIndexMaterial, materialResource->GetGPUVirtualAddress());
+
+    // テクスチャ設定
+    commandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, textureHandle);
 
     // 描画コール
     commandList->DrawIndexedInstanced(indexCount, kDefaultInstanceCount, kStartIndexLocation, kBaseVertexLocation, kStartInstanceLocation);

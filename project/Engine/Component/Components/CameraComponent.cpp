@@ -238,3 +238,10 @@ void CameraComponent::UnregisterFromCameraManager() {
     isRegistered_ = false;
     registeredName_ = "";
 }
+
+Vector3 CameraComponent::GetCalculatedRotation() const {
+    if (cameraInstance_) {
+        return cameraInstance_->GetCalculatedRotation();
+    }
+    return owner_ ? owner_->GetRotate() : Vector3{ 0.0f, 0.0f, 0.0f };
+}

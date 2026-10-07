@@ -1,6 +1,7 @@
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
 #include "ImGuiManager.h"
+#include <cmath>
 
 void BaseCamera::Initialize() {
     transform_ = { {1.0f,1.0f,1.0f}, {0.0f,0.0f,0.0f}, {0.0f,0.0f,-20.0f} };
@@ -27,6 +28,23 @@ void BaseCamera::Update() {
         viewMatrix_ = Math::Inverse(cameraMatrix);
     }
 }
+
+Vector3 BaseCamera::GetCalculatedRotation() const {
+    if (useTarget_) {
+        Vector3 dir = Math::Subtract(target_, transform_.translate);
+        const float kEpsilon = 0.0001f;
+        const float kZero = 0.0f;
+        float hDist = std::sqrt(dir.x * dir.x + dir.z * dir.z);
+        if (hDist < kEpsilon && std::abs(dir.y) < kEpsilon) {
+            return transform_.rotate;
+        }
+        float pitch = -std::atan2(dir.y, hDist);
+        float yaw = std::atan2(dir.x, dir.z);
+        return { pitch, yaw, kZero };
+    }
+    return transform_.rotate;
+}
+
 void BaseCamera::UpdateProjection(float aspect) {
     aspectRatio_ = aspect;
     projectionMatrix_ = Math::MakePerspectiveFovMatrix(fov_, aspectRatio_, nearZ_, farZ_);

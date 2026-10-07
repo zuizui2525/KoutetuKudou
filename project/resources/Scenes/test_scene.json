@@ -18,7 +18,11 @@
           "env_map_key": "",
           "color": [1, 0.5, 0.2, 1],
           "lighting_mode": 2,
-          "shininess": 30
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         },
         {
           "type": "BoxCollider",
@@ -40,6 +44,41 @@
           "offset": [0, 0, 0],
           "loop": false,
           "auto_play": false
+        },
+        {
+          "type": "TextRenderer2D",
+          "text": "SelfTest2D",
+          "font_name": "Yu Gothic UI",
+          "font_size": 32,
+          "color": [1, 1, 1, 1],
+          "alignment": 0,
+          "is_bold": false,
+          "is_italic": false,
+          "enable_outline": false,
+          "outline_color": [0, 0, 0, 1],
+          "outline_width": 2,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        },
+        {
+          "type": "TextRenderer3D",
+          "text": "SelfTest3D",
+          "font_name": "Yu Gothic UI",
+          "font_size": 48,
+          "color": [1, 1, 1, 1],
+          "alignment": 1,
+          "billboard_mode": 2,
+          "world_scale": 0.02,
+          "lighting_mode": 0,
+          "is_bold": false,
+          "is_italic": false,
+          "enable_outline": false,
+          "outline_color": [0, 0, 0, 1],
+          "outline_width": 2,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     }

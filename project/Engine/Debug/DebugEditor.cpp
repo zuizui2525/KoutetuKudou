@@ -1,5 +1,6 @@
 #ifdef _USEIMGUI
 #include "Engine/Debug/DebugEditor.h"
+#include "Engine/Debug/SceneViewWindow.h"
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Debug/PerformanceMonitorWindow.h"
 #include "Engine/Debug/SceneHierarchy.h"
@@ -18,9 +19,13 @@
 #include "Engine/Component/Components/SpriteRendererComponent.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
+#include "Engine/Component/Components/TextRenderer2DComponent.h"
+#include "Engine/Component/Components/TextRenderer3DComponent.h"
 #include "App/Scene/Core/SceneSerializer.h"
 #include "App/Scene/Generic/GenericScene.h"
-#include "App/Scene/Title/TitleScene.h"
+#include "Engine/Debug/Command/CommandHistory.h"
+#include "Engine/Debug/Command/CreateGameObjectCommand.h"
+#include "Engine/Debug/Command/DeleteGameObjectCommand.h"
 #include "Engine/Base/Utils/StringUtility.h"
 #include <filesystem>
 #include <format>
@@ -46,11 +51,13 @@ namespace {
         Line3D,
         FlatRing,
         CylinderEffect,
+        Text3D,
         Sprite,
         Triangle2D,
         Circle2D,
         Ring2D,
         Line2D,
+        Text2D,
         Camera,
         DirectionalLight,
         PointLight,
@@ -125,11 +132,13 @@ namespace {
         case CreationType::Line3D: defaultName = "Line3D"; break;
         case CreationType::FlatRing: defaultName = "FlatRing"; break;
         case CreationType::CylinderEffect: defaultName = "CylinderEffect"; break;
+        case CreationType::Text3D: defaultName = "Text3D"; break;
         case CreationType::Sprite: defaultName = "Sprite"; break;
         case CreationType::Triangle2D: defaultName = "Triangle2D"; break;
         case CreationType::Circle2D: defaultName = "Circle2D"; break;
         case CreationType::Ring2D: defaultName = "Ring2D"; break;
         case CreationType::Line2D: defaultName = "Line2D"; break;
+        case CreationType::Text2D: defaultName = "Text2D"; break;
         case CreationType::Camera: defaultName = "Camera"; break;
         case CreationType::DirectionalLight: defaultName = "DirectionalLight"; break;
         case CreationType::PointLight: defaultName = "PointLight"; break;
@@ -141,8 +150,6 @@ namespace {
         GameObject* createdObj = nullptr;
         if (auto genericScene = dynamic_cast<GenericScene*>(currentScene)) {
             createdObj = genericScene->CreateGameObject(defaultName);
-        } else if (auto titleScene = dynamic_cast<TitleScene*>(currentScene)) {
-            createdObj = titleScene->CreateGameObject(defaultName);
         } else {
             auto newObj = std::make_unique<GameObject>(defaultName);
             createdObj = newObj.get();
@@ -159,6 +166,31 @@ namespace {
                 else if (type == CreationType::Circle2D) sr->SetShapeType(SpriteRendererComponent::ShapeType::Circle);
                 else if (type == CreationType::Ring2D) sr->SetShapeType(SpriteRendererComponent::ShapeType::Ring);
                 else if (type == CreationType::Line2D) sr->SetShapeType(SpriteRendererComponent::ShapeType::Line);
+                createdObj->Ensure2DPosition();
+            } else if (type == CreationType::Text2D) {
+                createdObj->AddComponent<TextRenderer2DComponent>();
+                createdObj->Ensure2DPosition();
+            } else if (type == CreationType::Text3D) {
+                createdObj->AddComponent<TextRenderer3DComponent>();
+                if (auto cameraMgr = CameraResource::GetCameraManager()) {
+                    if (auto* activeCam = cameraMgr->GetActiveCamera()) {
+                        Vector3 camPos = activeCam->GetPosition();
+                        Vector3 camRot = activeCam->GetRotation();
+                        Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
+                        Vector3 forward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+                        constexpr float kMinForwardLength = 0.001f;
+                        if (Math::Length(forward) < kMinForwardLength) {
+                            forward = { 0.0f, 0.0f, 1.0f };
+                        }
+                        constexpr float kSpawnDistanceForward = 8.0f;
+                        Vector3 spawnPos = {
+                            camPos.x + forward.x * kSpawnDistanceForward,
+                            camPos.y + forward.y * kSpawnDistanceForward,
+                            camPos.z + forward.z * kSpawnDistanceForward
+                        };
+                        createdObj->SetPosition(spawnPos);
+                    }
+                }
             } else if (type == CreationType::Camera) {
                 createdObj->AddComponent<CameraComponent>();
             } else if (type == CreationType::DirectionalLight) {
@@ -189,12 +221,85 @@ namespace {
                 case CreationType::CylinderEffect: mr->SetMeshType(MeshRendererComponent::MeshType::CylinderEffect); break;
                 default: break;
                 }
+
+                // 3Dオブジェクトをアクティブカメラの正面（マジックナンバー排除: kSpawnDistanceForward）に配置して見失いを防止
+                if (auto cameraMgr = CameraResource::GetCameraManager()) {
+                    if (auto* activeCam = cameraMgr->GetActiveCamera()) {
+                        Vector3 camPos = activeCam->GetPosition();
+                        Vector3 camRot = activeCam->GetRotation();
+                        Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
+                        Vector3 forward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+                        constexpr float kMinForwardLength = 0.001f;
+                        if (Math::Length(forward) < kMinForwardLength) {
+                            forward = { 0.0f, 0.0f, 1.0f };
+                        }
+                        constexpr float kSpawnDistanceForward = 8.0f;
+                        Vector3 spawnPos = {
+                            camPos.x + forward.x * kSpawnDistanceForward,
+                            camPos.y + forward.y * kSpawnDistanceForward,
+                            camPos.z + forward.z * kSpawnDistanceForward
+                        };
+                        createdObj->SetPosition(spawnPos);
+                    }
+                }
             }
 
             SceneHierarchy::GetInstance()->SetSelected(createdObj);
+            CommandHistory::GetInstance()->PushCommand(std::make_unique<CreateGameObjectCommand>(createdObj));
             Log::Write(std::format(L"[Hierarchy] 新規 GameObject「{}」を作成しました。",
                 ConvertString(createdObj->GetName())));
         }
+    }
+
+    void FocusOnSelectedObject() {
+        IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
+        if (!selected) return;
+
+        Vector3 targetPos = { 0.0f, 0.0f, 0.0f };
+        if (auto* go = dynamic_cast<GameObject*>(selected)) {
+            targetPos = go->GetPosition();
+        } else if (auto* baseCam = dynamic_cast<BaseCamera*>(selected)) {
+            targetPos = baseCam->GetPosition();
+        }
+
+        auto cameraMgr = CameraResource::GetCameraManager();
+        if (!cameraMgr) return;
+
+        BaseCamera* activeCam = cameraMgr->GetActiveCamera();
+        if (!activeCam) return;
+
+        // カメラの現在の向きから前方ベクトルを算出
+        Vector3 rot = activeCam->GetRotation();
+        Matrix4x4 rotMat = Math::MakeRotateMatrix(rot.x, rot.y, rot.z);
+        Vector3 forward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+        constexpr float kMinForwardLength = 0.001f;
+        if (Math::Length(forward) < kMinForwardLength) {
+            forward = { 0.0f, 0.0f, 1.0f };
+        }
+
+        constexpr float kFocusDistance = 6.0f;
+        Vector3 newCamPos = {
+            targetPos.x - forward.x * kFocusDistance,
+            targetPos.y - forward.y * kFocusDistance,
+            targetPos.z - forward.z * kFocusDistance
+        };
+
+        activeCam->SetPosition(newCamPos);
+
+        // アクティブカメラが CameraComponent を持つ GameObject の場合はオーナーの位置も同期
+        auto currentScene = SceneManager::GetInstance()->GetCurrentScene();
+        std::string activeName = cameraMgr->GetActiveCameraName();
+        if (auto genericScene = dynamic_cast<GenericScene*>(currentScene)) {
+            for (const auto& obj : genericScene->GetGameObjects()) {
+                if (obj && obj->GetName() == activeName && obj->GetComponent<CameraComponent>()) {
+                    obj->SetPosition(newCamPos);
+                    break;
+                }
+            }
+        }
+
+        Log::Write(std::format(L"[Editor] 選択オブジェクト「{}」にカメラをフォーカスしました (Fキー)。",
+            ConvertString(selected->GetName())));
     }
 
     void DestroyGameObjectInCurrentScene(GameObject* gameObject) {
@@ -209,20 +314,26 @@ namespace {
         }
 
         auto currentScene = SceneManager::GetInstance()->GetCurrentScene();
-        if (auto genericScene = dynamic_cast<GenericScene*>(currentScene)) {
-            genericScene->DestroyGameObject(gameObject);
-        } else if (auto titleScene = dynamic_cast<TitleScene*>(currentScene)) {
-            titleScene->DestroyGameObject(gameObject);
-        } else {
+        std::unique_ptr<GameObject> detached;
+        if (currentScene) {
+            detached = currentScene->DetachGameObject(gameObject);
+        }
+        if (!detached) {
             SceneHierarchy::GetInstance()->Unregister(gameObject);
-            auto it = std::remove_if(sFallbackObjects.begin(), sFallbackObjects.end(),
+            auto it = std::find_if(sFallbackObjects.begin(), sFallbackObjects.end(),
                 [gameObject](const std::unique_ptr<GameObject>& ptr) {
                     return ptr.get() == gameObject;
                 });
             if (it != sFallbackObjects.end()) {
-                sFallbackObjects.erase(it, sFallbackObjects.end());
+                detached = std::move(*it);
+                sFallbackObjects.erase(it);
             }
         }
+
+        if (detached) {
+            CommandHistory::GetInstance()->PushCommand(std::make_unique<DeleteGameObjectCommand>(std::move(detached)));
+        }
+
         Log::Write(std::format(L"[Hierarchy] GameObject「{}」を削除しました。",
             ConvertString(name)));
     }
@@ -275,6 +386,9 @@ namespace {
             if (ImGui::MenuItem("Model")) {
                 CreateNewGameObjectInCurrentScene(CreationType::Model);
             }
+            if (ImGui::MenuItem("Text (3D)")) {
+                CreateNewGameObjectInCurrentScene(CreationType::Text3D);
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("2D Object")) {
@@ -292,6 +406,9 @@ namespace {
             }
             if (ImGui::MenuItem("Line (2D)")) {
                 CreateNewGameObjectInCurrentScene(CreationType::Line2D);
+            }
+            if (ImGui::MenuItem("Text (2D)")) {
+                CreateNewGameObjectInCurrentScene(CreationType::Text2D);
             }
             ImGui::EndMenu();
         }
@@ -314,20 +431,25 @@ namespace {
 }
 
 DebugEditor::DebugEditor()
-    : showGameView_(true),
+    : showSceneView_(true),
+      showGameView_(true),
       showPerfMonitor_(true),
       showHierarchy_(true),
       showInspector_(true),
+      showShortcutsWindow_(false),
       isGameViewVisible_(false),
       isFullscreen_(false),
       currentAspect_(AspectType::Aspect16_9_Low),
-      isPaused_(false) {
+      isPaused_(true) {
     wpPrev_.length = sizeof(wpPrev_);
 }
 
-DebugEditor::~DebugEditor() = default;
+DebugEditor::~DebugEditor() {
+    sFallbackObjects.clear();
+}
 
 void DebugEditor::Initialize() {
+    sceneViewWindow_ = std::make_unique<SceneViewWindow>();
     gameViewWindow_ = std::make_unique<GameViewWindow>();
     perfMonitorWindow_ = std::make_unique<PerformanceMonitorWindow>();
 
@@ -348,13 +470,41 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
         SaveCurrentSceneAction(SceneManager::GetInstance()->GetCurrentSceneName());
     }
 
+    // Ctrl+Z (Undo) / Ctrl+Y or Ctrl+Shift+Z (Redo) ショートカット (Unity / Blender 準拠)
+    if (!io.WantTextInput && io.KeyCtrl) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+            if (io.KeyShift) {
+                CommandHistory::GetInstance()->Redo();
+            } else {
+                CommandHistory::GetInstance()->Undo();
+            }
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+            CommandHistory::GetInstance()->Redo();
+        }
+    }
+
+    // F キーによるオブジェクトフォーカス (Focus on Selection)
+    if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+        FocusOnSelectedObject();
+    }
+
+    // F1 キーによるショートカット一覧の開閉
+    if (!io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F1, false)) {
+        showShortcutsWindow_ = !showShortcutsWindow_;
+    }
+
     // メインメニューバーの描画
     DrawMenuBar(hwnd);
 
     // ドックスペースの設定
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-    // Game View
+    // Scene View (編集画面)
+    if (showSceneView_) {
+        sceneViewWindow_->Draw(&showSceneView_);
+    }
+
+    // Game View (ゲーム画面)
     if (showGameView_) {
         gameViewWindow_->Draw(&showGameView_, &isGameViewVisible_);
     } else {
@@ -435,15 +585,18 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         ImGui::PopStyleColor();
                     }
 
-                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(7); // TRANSLATE
+                        FocusOnSelectedObject();
+                    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                        SceneHierarchy::GetInstance()->SetSelected(obj);
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpTranslate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(120); // ROTATE
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpRotate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(896); // SCALE
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
                     }
 
                     ImGui::SameLine();
@@ -461,13 +614,13 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                     ImGui::Selectable(obj->GetName().c_str(), isSelected);
                     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(7); // TRANSLATE
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpTranslate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(120); // ROTATE
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpRotate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
-                        gameViewWindow_->SetGizmoOperation(896); // SCALE
+                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
                     }
                 }
 
@@ -510,6 +663,11 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
         }
         ImGui::End();
     }
+
+    // ショートカットキー一覧ダイアログ
+    if (showShortcutsWindow_) {
+        DrawShortcutsWindow();
+    }
 }
 
 void DebugEditor::DrawMenuBar(HWND hwnd) {
@@ -525,6 +683,26 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::Separator();
             if (ImGui::MenuItem("終了", "Alt+F4")) {
                 SendMessage(hwnd, WM_CLOSE, 0, 0);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("編集###Edit")) {
+            auto cmdHistory = CommandHistory::GetInstance();
+            std::string undoLabel = "元に戻す (Undo)";
+            if (cmdHistory->CanUndo()) {
+                undoLabel += " - " + cmdHistory->GetUndoName();
+            }
+            if (ImGui::MenuItem(undoLabel.c_str(), "Ctrl+Z", false, cmdHistory->CanUndo())) {
+                cmdHistory->Undo();
+            }
+
+            std::string redoLabel = "やり直す (Redo)";
+            if (cmdHistory->CanRedo()) {
+                redoLabel += " - " + cmdHistory->GetRedoName();
+            }
+            if (ImGui::MenuItem(redoLabel.c_str(), "Ctrl+Y", false, cmdHistory->CanRedo())) {
+                cmdHistory->Redo();
             }
             ImGui::EndMenu();
         }
@@ -547,8 +725,8 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                     sceneNames.push_back(stemName);
                 }
             }
-            // 既存のハードコードシーンも一覧に追加（重複排除）
-            const std::vector<std::string> defaultScenes = { "Sample", "Title", "Game", "Debug" };
+            // 既存の基本シーンも一覧に追加（重複排除）
+            const std::vector<std::string> defaultScenes = { "Sample", "Title", "Game", "Clear", "GameOver", "Debug" };
             for (const auto& ds : defaultScenes) {
                 if (std::find(sceneNames.begin(), sceneNames.end(), ds) == sceneNames.end()) {
                     sceneNames.push_back(ds);
@@ -627,6 +805,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         }
         
         if (ImGui::BeginMenu("表示###View")) {
+            ImGui::MenuItem("シーン (編集)", nullptr, &showSceneView_);
             ImGui::MenuItem("ゲーム画面", nullptr, &showGameView_);
             ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
             ImGui::MenuItem("インスペクター", nullptr, &showInspector_);
@@ -760,67 +939,113 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("設定###Settings")) {
-            if (gameViewWindow_) {
-                // 1. クリック一時停止チェックボックス & 説明
-                bool enable = gameViewWindow_->IsClickPauseEnabled();
-                if (ImGui::Checkbox("クリック一時停止", &enable)) {
-                    gameViewWindow_->SetClickPauseEnabled(enable);
-                }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("ゲーム画面内を左クリックした際に、ゲームの一時停止／再開を切り替えます");
-                }
-                ImGui::TextDisabled("  画面クリックで一時停止/再開");
-
-                // 2. ギズモ操作モード（現在のモードを表示）
-                int currentOp = gameViewWindow_->GetGizmoOperation();
-                const char* currentOpLabel = "移動";
-                if (currentOp == GameViewWindow::kGizmoOpRotate) {
-                    currentOpLabel = "回転";
-                } else if (currentOp == GameViewWindow::kGizmoOpScale) {
-                    currentOpLabel = "拡縮";
-                }
-
-                constexpr int kMenuTitleBufferSize = 64;
-                char menuTitle[kMenuTitleBufferSize];
-                sprintf_s(menuTitle, "ギズモ操作モード [%s]", currentOpLabel);
-
-                if (ImGui::BeginMenu(menuTitle)) {
-                    if (ImGui::MenuItem("移動 (Translate)", nullptr, currentOp == GameViewWindow::kGizmoOpTranslate)) {
-                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpTranslate);
-                    }
-                    if (ImGui::MenuItem("回転 (Rotate)", nullptr, currentOp == GameViewWindow::kGizmoOpRotate)) {
-                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpRotate);
-                    }
-                    if (ImGui::MenuItem("拡縮 (Scale)", nullptr, currentOp == GameViewWindow::kGizmoOpScale)) {
-                        gameViewWindow_->SetGizmoOperation(GameViewWindow::kGizmoOpScale);
-                    }
-                    ImGui::EndMenu();
-                }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("3Dギズモの操作種別（平行移動・回転・拡大縮小）を選択します");
-                }
+        if (ImGui::BeginMenu("ヘルプ###Help")) {
+            if (ImGui::MenuItem("ショートカットキー一覧 (Shortcuts)", "F1", &showShortcutsWindow_)) {
             }
             ImGui::EndMenu();
         }
 
-        // 画面中央付近に再生/一時停止ボタンを配置
+        // 画面中央に再生/一時停止ボタンを配置（固定幅で完全中央揃え）
         float menuBarWidth = ImGui::GetWindowWidth();
-        constexpr float kPlayPauseBtnWidth = 70.0f;
+        constexpr float kPlayPauseBtnWidth = 85.0f;
         float centerPos = (menuBarWidth - kPlayPauseBtnWidth) * 0.5f;
         ImGui::SameLine(centerPos);
 
         if (isPaused_) {
-            if (ImGui::Button("再生 ▶")) {
+            if (ImGui::Button("再生 ▶", ImVec2(kPlayPauseBtnWidth, 0.0f))) {
                 isPaused_ = false;
+                if (gameViewWindow_) {
+                    gameViewWindow_->TriggerPopAnimation(PopAnimation::Type::Play);
+                }
             }
         } else {
-            if (ImGui::Button("一時停止 ||")) {
+            if (ImGui::Button("一時停止 ||", ImVec2(kPlayPauseBtnWidth, 0.0f))) {
                 isPaused_ = true;
+                if (gameViewWindow_) {
+                    gameViewWindow_->TriggerPopAnimation(PopAnimation::Type::Pause);
+                }
             }
         }
 
         ImGui::EndMainMenuBar();
     }
 }
+
+void DebugEditor::DrawShortcutsWindow() {
+    constexpr float kDefaultWindowWidth = 540.0f;
+    constexpr float kDefaultWindowHeight = 520.0f;
+    ImGui::SetNextWindowSize(ImVec2(kDefaultWindowWidth, kDefaultWindowHeight), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin("ショートカットキー一覧###ShortcutsWindow", &showShortcutsWindow_, ImGuiWindowFlags_NoCollapse)) {
+        ImGui::TextDisabled("ZuizuiEngine で使用できるキーボード＆マウスショートカットの一覧です。");
+        ImGui::Separator();
+
+        auto DrawShortcutTable = [](const char* tableId, const std::vector<std::pair<std::string, std::string>>& items) {
+            constexpr ImGuiTableFlags kTableFlags = ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_BordersOuter | 
+                                                    ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+            constexpr float kColWidthKey = 0.38f;
+            constexpr float kColWidthDesc = 0.62f;
+
+            if (ImGui::BeginTable(tableId, 2, kTableFlags)) {
+                ImGui::TableSetupColumn("操作 / キー", ImGuiTableColumnFlags_WidthStretch, kColWidthKey);
+                ImGui::TableSetupColumn("機能・説明", ImGuiTableColumnFlags_WidthStretch, kColWidthDesc);
+                ImGui::TableHeadersRow();
+
+                for (const auto& [key, desc] : items) {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    constexpr ImVec4 kKeyColor = { 0.4f, 0.85f, 1.0f, 1.0f }; // シアン系の強調色
+                    ImGui::TextColored(kKeyColor, "%s", key.c_str());
+
+                    ImGui::TableNextColumn();
+                    ImGui::TextUnformatted(desc.c_str());
+                }
+                ImGui::EndTable();
+            }
+        };
+
+        if (ImGui::CollapsingHeader("一般操作 (General)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const std::vector<std::pair<std::string, std::string>> generalShortcuts = {
+                { "Ctrl + S", "現在のシーンを保存 (Save Current Scene)" },
+                { "Ctrl + Z", "直前の操作を元に戻す (Undo)" },
+                { "Ctrl + Y / Ctrl + Shift + Z", "取り消した操作をやり直す (Redo)" },
+                { "F", "選択中のオブジェクトへカメラをフォーカス" },
+                { "F1", "このショートカットキー一覧ウィンドウの開閉" },
+                { "F11", "フルスクリーン / ウィンドウモードの切り替え" },
+                { "Alt + F4", "アプリケーションの終了（保存確認あり）" }
+            };
+            DrawShortcutTable("GeneralTable", generalShortcuts);
+        }
+
+        ImGui::Spacing();
+
+        if (ImGui::CollapsingHeader("シーン・カメラ操作 (Scene View & Camera)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const std::vector<std::pair<std::string, std::string>> cameraShortcuts = {
+                { "右ドラッグ (Right Drag)", "カメラの視線回転（Look Around / FPS視点）" },
+                { "右ドラッグ + W / S", "カメラの前進 / 後退移動" },
+                { "右ドラッグ + A / D", "カメラの左 / 右平行移動" },
+                { "右ドラッグ + E / Q", "カメラの上昇 / 下降移動" },
+                { "マウスホイール回転", "前後ズーム (Zoom In / Out)" },
+                { "中クリックドラッグ", "カメラの平行移動 (Pan)" }
+            };
+            DrawShortcutTable("CameraTable", cameraShortcuts);
+        }
+
+        ImGui::Spacing();
+
+        if (ImGui::CollapsingHeader("ギズモ・オブジェクト操作 (Gizmo & Manipulation)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const std::vector<std::pair<std::string, std::string>> gizmoShortcuts = {
+                { "ヒエラルキー 左クリック", "平行移動ギズモ (Translate) で選択" },
+                { "ヒエラルキー 中クリック", "回転ギズモ (Rotate) で選択" },
+                { "ヒエラルキー 右クリック", "拡縮ギズモ (Scale) で選択" },
+                { "ヒエラルキー ダブルクリック", "オブジェクトを選択してカメラフォーカス (F)" },
+                { "ギズモ軸ドラッグ", "選択オブジェクトのTransform操作 (Undo/Redo対応)" },
+                { "ヒエラルキー [x] ボタン", "オブジェクトの削除 (Undo/Redo対応)" }
+            };
+            DrawShortcutTable("GizmoTable", gizmoShortcuts);
+        }
+    }
+    ImGui::End();
+}
 #endif
+

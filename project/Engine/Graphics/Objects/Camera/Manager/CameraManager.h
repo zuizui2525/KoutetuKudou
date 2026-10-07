@@ -25,6 +25,12 @@ public:
     static bool IsWindowOpen() { return showWindow_; }
     static void SetWindowOpen(bool open) { showWindow_ = open; }
 
+    // --- カメラ管理定数 (マジックストリング排除) ---
+    static inline const std::string kEditorCameraName = "Editor";
+    static inline const std::string kZoomCameraName = "Zoom";
+    static inline const std::string kDefaultCameraName = "Camera";
+    static inline const std::string kMainCameraName = "Main";
+
     // --- カメラ管理 ---
     void AddCamera(const std::string& name, std::shared_ptr<BaseCamera> camera);
     void RemoveCamera(const std::string& name);
@@ -44,6 +50,20 @@ public:
     BaseCamera* GetCamera(const std::string& name) {
         auto it = cameras_.find(name);
         return (it != cameras_.end()) ? it->second.get() : nullptr;
+    }
+
+    /// <summary>
+    /// シーン内のデフォルトゲームカメラ名を取得（"Camera" -> "Main" -> その他ゲームカメラの優先順）
+    /// </summary>
+    std::string GetDefaultGameCameraName() const {
+        if (HasCamera(kDefaultCameraName)) return kDefaultCameraName;
+        if (HasCamera(kMainCameraName)) return kMainCameraName;
+        for (const auto& [name, camera] : cameras_) {
+            if (name != kEditorCameraName && name != kZoomCameraName && camera) {
+                return name;
+            }
+        }
+        return "";
     }
 
     // --- 3D行列ゲッター (アクティブカメラから取得) ---

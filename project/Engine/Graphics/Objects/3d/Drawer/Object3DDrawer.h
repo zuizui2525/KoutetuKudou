@@ -48,6 +48,17 @@ public:
         const std::string& psoKey = "Object3D"
     );
 
+    /// @brief GPUディスクリプタハンドル直接指定による頂点インデックス描画
+    void DrawIndexedHandle(
+        Object3D* object,
+        const D3D12_VERTEX_BUFFER_VIEW& vbView,
+        const D3D12_INDEX_BUFFER_VIEW& ibView,
+        uint32_t indexCount,
+        D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
+        const std::string& envMapKey = "",
+        const std::string& psoKey = "Object3D"
+    );
+
 private:
     Object3DDrawer() = default;
     ~Object3DDrawer() = default;
@@ -59,6 +70,16 @@ private:
         Object3D* object,
         const D3D12_VERTEX_BUFFER_VIEW& vbView,
         const std::string& textureKey,
+        const std::string& envMapKey,
+        const std::string& psoKey,
+        ID3D12GraphicsCommandList*& outCommandList
+    );
+
+    /// @brief GPUハンドル直接指定による描画共通設定
+    bool PrepareDrawHandle(
+        Object3D* object,
+        const D3D12_VERTEX_BUFFER_VIEW& vbView,
+        D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
         const std::string& envMapKey,
         const std::string& psoKey,
         ID3D12GraphicsCommandList*& outCommandList

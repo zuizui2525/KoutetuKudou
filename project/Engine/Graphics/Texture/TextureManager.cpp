@@ -75,6 +75,12 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetGpuHandle(const std::string& name
     return nullHandle;
 }
 
+uint32_t TextureManager::AllocateDescriptorIndex() {
+    uint32_t allocated = descriptorCount_;
+    descriptorCount_++;
+    return allocated;
+}
+
 TextureManager::~TextureManager() {
     if (!textures_.empty()) {
         Log::Write(L" ├─ 【テクスチャシステム終了処理開始】 登録されているすべてのテクスチャを解放します。");

@@ -62,6 +62,11 @@ public:
     /// </summary>
     std::shared_ptr<BaseCamera> GetCameraInstance() const { return cameraInstance_; }
 
+    /// <summary>
+    /// 実効的な回転角（注視点モードの場合は視線方向から計算したオイラー角）を取得
+    /// </summary>
+    Vector3 GetCalculatedRotation() const;
+
 private:
     void UpdateProjection();
     void RegisterToCameraManager();

@@ -63,11 +63,20 @@ public:
     const Vector4& GetColor() const { return color_; }
     void SetColor(const Vector4& color);
 
+    // ==========================================
+    // ローカルオフセット (個別Transform)
+    // ==========================================
+    Transform& GetOffset() { return offset_; }
+    const Transform& GetOffset() const { return offset_; }
+    void SetOffset(const Transform& offset) { offset_ = offset; }
+
 private:
     void RecreateShapeObject();
 
 private:
     ShapeType shapeType_ = ShapeType::Sprite;
+
+    Transform offset_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
 
     std::unique_ptr<SpriteObject> spriteObject_;
     std::unique_ptr<Triangle2DObject> triangleObject_;

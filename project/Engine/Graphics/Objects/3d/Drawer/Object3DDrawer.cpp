@@ -184,3 +184,111 @@ void Object3DDrawer::DrawIndexed(
         commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     }
 }
+
+void Object3DDrawer::DrawIndexedHandle(
+    Object3D* object,
+    const D3D12_VERTEX_BUFFER_VIEW& vbView,
+    const D3D12_INDEX_BUFFER_VIEW& ibView,
+    uint32_t indexCount,
+    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
+    const std::string& envMapKey,
+    const std::string& psoKey
+) {
+    ID3D12GraphicsCommandList* commandList = nullptr;
+    if (!PrepareDrawHandle(object, vbView, textureHandle, envMapKey, psoKey, commandList)) {
+        return;
+    }
+
+    commandList->IASetIndexBuffer(&ibView);
+    commandList->DrawIndexedInstanced(indexCount, kDefaultInstanceCount, kStartIndexLocation, kBaseVertexLocation, kStartInstanceLocation);
+
+    if (psoKey == kPsoKeyLine) {
+        commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+}
+
+bool Object3DDrawer::PrepareDrawHandle(
+    Object3D* object,
+    const D3D12_VERTEX_BUFFER_VIEW& vbView,
+    D3D12_GPU_DESCRIPTOR_HANDLE textureHandle,
+    const std::string& envMapKey,
+    const std::string& psoKey,
+    ID3D12GraphicsCommandList*& outCommandList
+) {
+    if (!object || !object->GetIsVisible() || textureHandle.ptr == 0) {
+        return false;
+    }
+
+    auto engine = EngineResource::GetEngine();
+    if (!engine) return false;
+
+    auto dxCommon = engine->GetDxCommon();
+    if (!dxCommon) return false;
+
+    auto psoMgr = engine->GetPSOManager();
+    if (!psoMgr) return false;
+
+    outCommandList = dxCommon->GetCommandList();
+    if (!outCommandList) return false;
+
+    // パイプライン・ルートシグネチャの設定
+    outCommandList->SetGraphicsRootSignature(psoMgr->GetRootSignature(psoKey));
+    outCommandList->SetPipelineState(psoMgr->GetPSO(psoKey));
+
+    if (psoKey == kPsoKeyLine) {
+        outCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+    } else {
+        outCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    }
+
+    outCommandList->IASetVertexBuffers(kVertexBufferSlot, kNumViews, &vbView);
+
+    // 定数バッファ設定 (WVP, Material, Camera)
+    outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexWVP, object->GetWVPResource()->GetGPUVirtualAddress());
+    outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexMaterial, object->GetMaterialResource()->GetGPUVirtualAddress());
+
+    auto cameraMgr = CameraResource::GetCameraManager();
+    if (cameraMgr) {
+        outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexCamera, cameraMgr->GetGPUVirtualAddress());
+    }
+
+    // ライティング定数バッファ設定
+    auto lightMgr = LightResource::GetLightManager();
+    if (lightMgr) {
+        outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexDirLight, lightMgr->GetDirectionalLightGroupAddress());
+        outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexPointLight, lightMgr->GetPointLightGroupAddress());
+        outCommandList->SetGraphicsRootConstantBufferView(kRootParamIndexSpotLight, lightMgr->GetSpotLightGroupAddress());
+    }
+
+    // 指定されたテクスチャハンドルを設定
+    outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexTexture, textureHandle);
+
+    // 環境マップテクスチャ設定
+    auto texMgr = TextureResource::GetTextureManager();
+    if (texMgr) {
+        auto materialData = object->GetMaterialData();
+        auto defaultEnvHandle = texMgr->GetGpuHandle(kDefaultSkyboxTexKey);
+
+        if (!envMapKey.empty()) {
+            auto envHandle = texMgr->GetGpuHandle(envMapKey);
+            if (envHandle.ptr == 0) {
+                envHandle = defaultEnvHandle;
+            }
+            if (envHandle.ptr != 0) {
+                if (materialData && materialData->environmentCoefficient == kZeroEnvCoefficient) {
+                    materialData->environmentCoefficient = kDefaultEnvCoefficient;
+                }
+                outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, envHandle);
+            }
+        } else {
+            if (materialData) {
+                materialData->environmentCoefficient = kZeroEnvCoefficient;
+            }
+            if (defaultEnvHandle.ptr != 0) {
+                outCommandList->SetGraphicsRootDescriptorTable(kRootParamIndexEnvMap, defaultEnvHandle);
+            }
+        }
+    }
+
+    return true;
+}

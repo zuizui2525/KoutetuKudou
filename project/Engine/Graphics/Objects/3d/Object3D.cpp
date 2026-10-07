@@ -115,7 +115,9 @@ Vector3 Object3D::GetWorldPosition() const {
 void Object3D::Update() {
     // ワールド行列の計算
     Matrix4x4 world = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    if (parent_) {
+    if (parentMatrix_) {
+        world = Math::Multiply(world, *parentMatrix_);
+    } else if (parent_) {
         world = Math::Multiply(world, parent_->GetWorldMatrix());
     }
     matWorld_ = world;

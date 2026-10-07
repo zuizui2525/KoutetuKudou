@@ -1,4 +1,6 @@
 #pragma once
+#include <memory>
+#include "Engine/Component/GameObject.h"
 
 // すべてのシーンクラスが継承する基底インターフェース
 class IScene {
@@ -20,4 +22,8 @@ public:
 
     // ImGuiコントロールの処理
     virtual void ImGuiControl() = 0;
+
+    // GameObject 管理 (Undo/Redo 等でシーンとオブジェクトの着脱に使用)
+    virtual void AddGameObject(std::unique_ptr<GameObject> gameObject) {}
+    virtual std::unique_ptr<GameObject> DetachGameObject(GameObject* gameObject) { return nullptr; }
 };

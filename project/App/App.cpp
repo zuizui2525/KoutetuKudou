@@ -10,15 +10,16 @@
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Base/Log/Log.h"
 #include "App/Scene/Core/SceneSerializer.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
+#include "Engine/Debug/Command/CommandHistory.h"
+#include "Engine/Debug/SceneViewWindow.h"
+#include "Engine/Debug/GameViewWindow.h"
 #include <psapi.h> // メモリ取得用（追加）
 
 
 #pragma comment(lib, "psapi.lib") // 追加
 
-namespace {
-    const std::string kZoomCameraName = "Zoom";
-    const std::string kEditorCameraName = "Editor";
-}
+
 void App::Initialize() {
     // システム
     engine_ = Zuizui::GetInstance();
@@ -54,7 +55,9 @@ void App::Initialize() {
 
     sceneFactory_ = std::make_unique<SceneFactory>();
     SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
-    SceneManager::GetInstance()->ChangeScene("Sample");
+
+    static const std::string kDefaultInitialSceneName = "Title";
+    SceneManager::GetInstance()->ChangeScene(kDefaultInitialSceneName);
 
     // --- PostProcess の初期化 ---
     postProcess_ = std::make_unique<PostProcess>();
@@ -100,7 +103,7 @@ void App::Run() {
 
         // 4. "Zoom" カメラ（右画面70%表示）が存在する場合、分割比率（0.7）を反映したアスペクト比を再設定
         constexpr float kSplitRightRatio = 0.7f;
-        if (auto* zoomCam = cameraMgr_->GetCamera(kZoomCameraName)) {
+        if (auto* zoomCam = cameraMgr_->GetCamera(CameraManager::kZoomCameraName)) {
             zoomCam->UpdateProjection(kGameAspectRatio * kSplitRightRatio);
         }
 
@@ -170,57 +173,110 @@ void App::Run() {
     }
 #endif
 
-    // ポーズのON/OFFに応じてカメラを自動で切り替える
-    static bool sWasPaused = false;
-    static std::string sPrevActiveCamera = "";
+    // --- カメラ制御（ユーザー設計：ゲーム画面優先 ＆ シーン画面時のみ俯瞰 ＆ 復帰時は直前ゲームカメラ） ---
+    static std::string sCurrentGameCamera = "";
+    enum class EditorTab {
+        GameView,
+        SceneView
+    };
+    static EditorTab sCurrentActiveTab = EditorTab::GameView;
 
-    if (isPaused != sWasPaused) {
-        if (isPaused) {
-            // ポーズになった瞬間に、現在アクティブなカメラの名前を記憶する
-            sPrevActiveCamera = cameraMgr_->GetActiveCameraName();
-            // "Zoom" カメラ（ルート描画・敵配置モード）の場合は、ポーズ中もZoomカメラの視点・画角を維持する
-            if (sPrevActiveCamera != kZoomCameraName && cameraMgr_->HasCamera(kEditorCameraName)) {
-                BaseCamera* prevCam = cameraMgr_->GetCamera(sPrevActiveCamera);
-                cameraMgr_->SetActiveCamera(kEditorCameraName);
-                if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetActiveCamera())) {
-                    if (prevCam) {
-                        // 直前まで見ていたカメラの位置・回転を同期して、今見てるところからスタートする
-                        dc->SetPosition(prevCam->GetPosition());
-                        dc->SetRotation(prevCam->GetRotation());
-                    }
-                    dc->SetActive(true);
+    // 現在アクティブなカメラが Editor 以外なら、常にゲーム側が意図した正規カメラとして追従・記録
+    std::string activeCamName = cameraMgr_->GetActiveCameraName();
+    if (!activeCamName.empty() && activeCamName != CameraManager::kEditorCameraName) {
+        sCurrentGameCamera = activeCamName;
+    }
+    if (sCurrentGameCamera.empty()) {
+        sCurrentGameCamera = cameraMgr_->GetDefaultGameCameraName();
+    }
+
+#ifdef _USEIMGUI
+    // 表示中のタブ判定（重なっているタブは前面のみ Visible が true になる）
+    bool isGameViewVisibleNow = GameViewWindow::IsGameViewVisible();
+    bool isSceneViewVisibleNow = SceneViewWindow::IsSceneViewVisible();
+
+    EditorTab determinedTab = sCurrentActiveTab;
+    if (isGameViewVisibleNow && !isSceneViewVisibleNow) {
+        determinedTab = EditorTab::GameView;
+    } else if (isSceneViewVisibleNow && !isGameViewVisibleNow) {
+        determinedTab = EditorTab::SceneView;
+    } else if (isGameViewVisibleNow && isSceneViewVisibleNow) {
+        if (GameViewWindow::IsGameViewFocused() || GameViewWindow::IsMouseOnGameView()) {
+            determinedTab = EditorTab::GameView;
+        } else if (SceneViewWindow::IsSceneViewFocused() || SceneViewWindow::IsMouseOnSceneView()) {
+            determinedTab = EditorTab::SceneView;
+        }
+    }
+
+    // タブ遷移の処理
+    if (determinedTab == EditorTab::SceneView && sCurrentActiveTab != EditorTab::SceneView) {
+        // 【シーン画面になった時】: 俯瞰にする
+        sCurrentActiveTab = EditorTab::SceneView;
+        if (cameraMgr_->HasCamera(CameraManager::kEditorCameraName)) {
+            BaseCamera* gameCam = cameraMgr_->GetCamera(sCurrentGameCamera);
+            if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetCamera(CameraManager::kEditorCameraName))) {
+                if (gameCam) {
+                    dc->SetPosition(gameCam->GetPosition());
+                    dc->SetRotation(gameCam->GetCalculatedRotation());
                 }
+                dc->SetActive(true);
             }
-        } else {
-            // ポーズが解除された瞬間に、記憶していたカメラに戻す
-            if (sPrevActiveCamera != kZoomCameraName && !sPrevActiveCamera.empty() && cameraMgr_->HasCamera(sPrevActiveCamera)) {
-                if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetActiveCamera())) {
-                    dc->SetActive(false);
-                }
-                cameraMgr_->SetActiveCamera(sPrevActiveCamera);
+            if (SceneViewWindow::GetCameraMode() == SceneViewWindow::CameraMode::DebugCamera) {
+                cameraMgr_->SetActiveCamera(CameraManager::kEditorCameraName);
             }
         }
-        sWasPaused = isPaused;
+    } else if (determinedTab == EditorTab::GameView && sCurrentActiveTab != EditorTab::GameView) {
+        // 【ゲーム画面に戻る時】: もともと使っていたゲームカメラに戻す
+        sCurrentActiveTab = EditorTab::GameView;
+        if (!sCurrentGameCamera.empty() && cameraMgr_->HasCamera(sCurrentGameCamera)) {
+            cameraMgr_->SetActiveCamera(sCurrentGameCamera);
+        }
     }
+
+    // ゲーム画面表示中に Editor（俯瞰）が残っている場合は、もともと使っていたゲームカメラに復帰
+    if (determinedTab == EditorTab::GameView) {
+        if (cameraMgr_->GetActiveCameraName() == CameraManager::kEditorCameraName) {
+            if (!sCurrentGameCamera.empty() && cameraMgr_->HasCamera(sCurrentGameCamera)) {
+                cameraMgr_->SetActiveCamera(sCurrentGameCamera);
+            }
+        }
+    }
+#else
+    EditorTab determinedTab = EditorTab::GameView;
+#endif
 
 
     // --- 更新 ---
 
     input_->Update();
     
-    // シーン遷移予約がある場合は、ポーズ中であっても即座にシーン切り替えを実行する
+    // シーン遷移予約がある場合は、即座にシーン切り替えを実行する
     bool sceneChanged = SceneManager::GetInstance()->ProcessPendingSceneChange();
-    if (sceneChanged && isPaused) {
-        // ポーズ中にシーンが切り替わった場合、Editorカメラを新シーンのメインカメラ視点に合わせる
-        if (cameraMgr_->HasCamera("Main") && cameraMgr_->HasCamera(kEditorCameraName)) {
-            BaseCamera* mainCam = cameraMgr_->GetCamera("Main");
-            if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetCamera(kEditorCameraName))) {
-                if (mainCam) {
-                    dc->SetPosition(mainCam->GetPosition());
-                    dc->SetRotation(mainCam->GetRotation());
+    if (sceneChanged) {
+        // 1. 新シーンが自身で設定したアクティブカメラ（"Zoom" など）があれば最優先で採用
+        std::string currentActive = cameraMgr_->GetActiveCameraName();
+        if (!currentActive.empty() && currentActive != CameraManager::kEditorCameraName) {
+            sCurrentGameCamera = currentActive;
+        } else {
+            sCurrentGameCamera = cameraMgr_->GetDefaultGameCameraName();
+        }
+
+        // 2. デバッグカメラの同期（新シーンのゲームカメラ位置・回転に合わせる）
+        if (!sCurrentGameCamera.empty() && cameraMgr_->HasCamera(sCurrentGameCamera) && cameraMgr_->HasCamera(CameraManager::kEditorCameraName)) {
+            BaseCamera* gameCam = cameraMgr_->GetCamera(sCurrentGameCamera);
+            if (auto* dc = dynamic_cast<DebugCamera*>(cameraMgr_->GetCamera(CameraManager::kEditorCameraName))) {
+                if (gameCam) {
+                    dc->SetPosition(gameCam->GetPosition());
+                    dc->SetRotation(gameCam->GetCalculatedRotation());
                 }
             }
-            cameraMgr_->SetActiveCamera(kEditorCameraName);
+        }
+
+        // 3. 現在開いているタブに応じてアクティブカメラを設定
+        if (determinedTab == EditorTab::SceneView) {
+            cameraMgr_->SetActiveCamera(CameraManager::kEditorCameraName);
+        } else {
+            cameraMgr_->SetActiveCamera(sCurrentGameCamera);
         }
     }
 
@@ -228,13 +284,20 @@ void App::Run() {
         lightMgr_->Update();
         Log::Update(deltaTime);
         SceneManager::GetInstance()->Update();
+
+        // ゲーム実行中であっても、アクティブカメラが DebugCamera であればマウス・キー操作で飛び回れるように更新！
+        BaseCamera* activeCam = cameraMgr_->GetActiveCamera();
+        if (auto* dc = dynamic_cast<DebugCamera*>(activeCam)) {
+            dc->Update(input_.get());
+        }
+
         cameraMgr_->Update();
     } else {
         // ポーズ中の更新処理：
         // Game View が表示されている場合のみ、オブジェクト編集やカメラ見回しを反映させる
         if (isGameViewVisible) {
             // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
-            if (cameraMgr_->GetActiveCameraName() == kZoomCameraName) {
+            if (cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
                 SceneManager::GetInstance()->Update();
             }
 
@@ -247,11 +310,11 @@ void App::Run() {
                 dc->Update(input_.get());
             }
 
-            // シーン内のすべてのオブジェクトを更新して行列再計算（位置・色変更）を即座に反映させる
+            // シーン内のすべてのオブジェクトを更新して行列再計算（位置・色変更）を即座に反映させる（アニメーションは停止）
             const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
             for (auto* obj : objects) {
                 if (obj) {
-                    obj->Update();
+                    obj->UpdateEditor();
                 }
             }
 
@@ -295,9 +358,48 @@ void App::Run() {
 }
 
 void App::Finalize() {
+    Log::Write(L"========================================= [アプリケーション終了処理開始] =========================================");
+
+    // 1. シーンの破棄（シーン内のすべてのGameObject、コンポーネント、リソース参照を破棄）
     SceneManager::GetInstance()->ClearCurrentScene();
+
+    // 2. コマンド履歴（Undo / Redo スタックに退避された GameObject 等）の明示的破棄
+    //    （削除コマンドが GameObject を保持しているため、リソース解放漏れを防ぐためにクリア）
+    CommandHistory::GetInstance()->Clear();
+
+    // 3. シーン階層（ヒエラルキー）の選択・登録情報クリア
+    SceneHierarchy::GetInstance()->Clear();
+
+    // 4. エフェクトシステムの破棄
     EffectManager::GetInstance()->Finalize();
-	engine_->Finalize();
+
+    // 5. GPUパイプラインの完了を同期待機（破棄リソースを参照する描画コマンドの完了を保証）
+    if (engine_ && engine_->GetDxCommon()) {
+        engine_->GetDxCommon()->FlushGPU();
+    }
+
+    // 6. アプリケーションが所有するグラフィックスマネージャ・リソースの明示的破棄
+    //    （DxCommon / Device / CoUninitialize の前にすべて安全に解放する）
+    postProcess_.reset();
+    modelMgr_.reset();
+    ModelResource::SetModelManager(nullptr);
+    texMgr_.reset();
+    TextureResource::SetTextureManager(nullptr);
+    lightMgr_.reset();
+    LightResource::SetLightManager(nullptr);
+    cameraMgr_.reset();
+    CameraResource::SetCameraManager(nullptr);
+    input_.reset();
+    InputResource::SetInput(nullptr);
+    sceneFactory_.reset();
+
+    // 7. 遅延解放キューに残ったリソースを完全解放
+    DeferredReleaseManager::GetInstance()->ReleaseAll();
+
+    // 8. エンジン基盤の終了処理（PSO、ImGui、DxCommon、Device破棄、CoUninitialize）
+    engine_->Finalize();
+
+    Log::Write(L"========================================= [アプリケーション終了処理完了] =========================================");
 }
 
 bool App::IsEnd() const {

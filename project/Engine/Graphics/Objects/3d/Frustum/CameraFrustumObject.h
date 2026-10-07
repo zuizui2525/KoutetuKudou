@@ -40,11 +40,13 @@ public:
 
 private:
     void CreateMesh();
+    void UpdateVertices();
 
 private:
     // GPU リソース
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource_;
     Microsoft::WRL::ComPtr<ID3D12Resource> indexResource_;
+    VertexData* mappedVertices_ = nullptr;
 
     D3D12_VERTEX_BUFFER_VIEW vbView_{};
     D3D12_INDEX_BUFFER_VIEW ibView_{};

@@ -28,6 +28,11 @@ public:
     void Update() override;
 
     /// <summary>
+    /// エディタ／ポーズ中の更新処理（行列再計算と描画系コンポーネントの同期のみ実行し、アニメーションは停止）
+    /// </summary>
+    void UpdateEditor() override;
+
+    /// <summary>
     /// 3D描画処理（描画系コンポーネントを呼び出し）
     /// </summary>
     virtual void Draw();
@@ -132,6 +137,36 @@ public:
     /// インデックス指定でコンポーネントを削除（GPU同期を経て安全に解放）
     /// </summary>
     void RemoveComponentByIndex(size_t index);
+
+    /// <summary>
+    /// 2D描画系コンポーネント（SpriteRenderer, TextRenderer2D等）を保持しているか
+    /// </summary>
+    bool Has2DRenderer() const;
+
+    /// <summary>
+    /// 3D描画系コンポーネント（MeshRenderer, TextRenderer3D等）を保持しているか
+    /// </summary>
+    bool Has3DRenderer() const;
+
+    /// <summary>
+    /// 2D空間のオブジェクトとして扱うか判定（Has2DRenderer と等価）
+    /// </summary>
+    bool Is2D() const { return Has2DRenderer(); }
+
+    /// <summary>
+    /// 2D用：3D原点付近にある場合（またはforce指定時）、画面中央の可視位置へ配置
+    /// </summary>
+    void Ensure2DPosition(bool force = false);
+
+    /// <summary>
+    /// 3D用：2D画面座標（X/Yが極端に大きい値）のまま残っている場合（またはforce指定時）、3D原点 (0, 0, 0) へ配置
+    /// </summary>
+    void Ensure3DPosition(bool force = false);
+
+    /// <summary>
+    /// 現在の座標が2Dスクリーン座標スケール（XまたはYが閾値超え）か判定
+    /// </summary>
+    bool IsPosition2DScale() const;
 
 private:
     Transform transform_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };

@@ -1,6 +1,6 @@
 #include "Skybox.hlsli"
 
-TextureCube<float32_t4> gTexture : register(t0);
+Texture2D<float32_t4> gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
 struct PixelShaderOutput
@@ -12,10 +12,9 @@ PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
     
-    // 方向ベクトルを使ってキューブマップからフェッチ
-    // サンプラーはエンジンの標準のものを使用
-    float32_t4 textureColor = gTexture.Sample(gSampler, input.texcoord);
-    output.color = textureColor;
+    // 2Dテクスチャ（white.pngなど）をサンプリングし、頂点カラー（マテリアルカラー）と乗算
+    float32_t4 textureColor = gTexture.Sample(gSampler, float2(0.5f, 0.5f));
+    output.color = textureColor * input.color;
     
     return output;
 }

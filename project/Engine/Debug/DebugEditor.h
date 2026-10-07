@@ -20,23 +20,27 @@ public:
     void Initialize();
     void Draw(ID3D12GraphicsCommandList* commandList);
 
-    // GameViewWindow が表示されているかどうかを取得（App.cppのバッチング制御用）
-    bool IsGameViewVisible() const { return isGameViewVisible_; }
+    // GameView または SceneView が表示されているかどうかを取得（App.cppのバッチング制御用）
+    bool IsGameViewVisible() const { return isGameViewVisible_ || showSceneView_; }
     bool IsPaused() const { return isPaused_; }
     void SetPause(bool paused) { isPaused_ = paused; }
 
 private:
     void DrawMenuBar(HWND hwnd);
+    void DrawShortcutsWindow();
 
     // 各ウィンドウクラスのインスタンス
+    std::unique_ptr<class SceneViewWindow> sceneViewWindow_;
     std::unique_ptr<class GameViewWindow> gameViewWindow_;
     std::unique_ptr<class PerformanceMonitorWindow> perfMonitorWindow_;
 
     // 各ウィンドウの表示・非表示フラグ
+    bool showSceneView_ = true;
     bool showGameView_ = true;
     bool showPerfMonitor_ = true;
     bool showHierarchy_ = true;
     bool showInspector_ = true;
+    bool showShortcutsWindow_ = false;
     bool isGameViewVisible_ = false;
 
     // ウィンドウ状態管理のメンバ変数
