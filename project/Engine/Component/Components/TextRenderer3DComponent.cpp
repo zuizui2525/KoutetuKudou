@@ -124,9 +124,18 @@ void TextRenderer3DComponent::SetFontSize(float fontSize) {
 }
 
 void TextRenderer3DComponent::SetColor(const Vector4& color) {
+    const bool isRgbChanged = (color_.x != color.x || color_.y != color.y || color_.z != color.z);
+    const bool isAlphaChanged = (color_.w != color.w);
+
     color_ = color;
+
     if (enableOutline_) {
-        isTextureDirty_ = true;
+        if (isRgbChanged) {
+            isTextureDirty_ = true;
+        } else if (isAlphaChanged && textObject_) {
+            constexpr float kFullWhiteChannel = 1.0f;
+            textObject_->SetColor({ kFullWhiteChannel, kFullWhiteChannel, kFullWhiteChannel, color_.w });
+        }
     } else if (textObject_) {
         textObject_->SetColor(color_);
     }
@@ -161,9 +170,11 @@ void TextRenderer3DComponent::SetOutlineEnabled(bool enable) {
 }
 
 void TextRenderer3DComponent::SetOutlineColor(const Vector4& color) {
-    outlineColor_ = color;
-    if (enableOutline_) {
-        isTextureDirty_ = true;
+    if (outlineColor_.x != color.x || outlineColor_.y != color.y || outlineColor_.z != color.z || outlineColor_.w != color.w) {
+        outlineColor_ = color;
+        if (enableOutline_) {
+            isTextureDirty_ = true;
+        }
     }
 }
 

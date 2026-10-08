@@ -55,6 +55,7 @@ bool TextTextureGenerator::Generate(
     const Vector4& textColor
 ) {
     // キャッシュ判定：パラメータが前回と完全に一致していれば再生成をスキップ
+    // ※文字色のAlpha (textColor.w) はマテリアル乗算で制御するため、キャッシュ比較対象から除外
     if (textureResource_ &&
         cachedText_ == text &&
         cachedFontName_ == fontName &&
@@ -71,8 +72,7 @@ bool TextTextureGenerator::Generate(
             cachedOutlineWidth_ == outlineWidth &&
             cachedTextColor_.x == textColor.x &&
             cachedTextColor_.y == textColor.y &&
-            cachedTextColor_.z == textColor.z &&
-            cachedTextColor_.w == textColor.w
+            cachedTextColor_.z == textColor.z
         ))) {
         return false;
     }
@@ -257,7 +257,8 @@ bool TextTextureGenerator::Generate(
                 size_t pixelIdx = static_cast<size_t>(y) * bmpWidth + x;
                 size_t outIdx = pixelIdx * kBytesPerPixel;
 
-                float textA = (static_cast<float>(textAlpha[pixelIdx]) * kByteToFloatScale) * textColor.w;
+                // 文字アルファはマテリアル（定数バッファ）側で乗算制御するため、テクスチャ内では基準不透明度とする
+                float textA = static_cast<float>(textAlpha[pixelIdx]) * kByteToFloatScale;
                 float outA = (static_cast<float>(outlineAlpha[pixelIdx]) * kByteToFloatScale) * outlineColor.w;
 
                 // 本文で覆われていないアウトラインの可視アルファ
