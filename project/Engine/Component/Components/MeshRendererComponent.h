@@ -81,8 +81,11 @@ private:
 
     Transform offset_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
 
-    std::string textureKey_ = "white";
-    std::string modelKey_ = "cube";
+    inline static const std::string kDefaultTexturePath = "resources/Textures/white.png";
+    inline static const std::string kDefaultModelPath = "resources/obj/cube/cube.obj";
+
+    std::string textureKey_ = kDefaultTexturePath;
+    std::string modelKey_ = kDefaultModelPath;
     std::string envMapKey_ = "";
 
     Vector4 color_ = { 1.0f, 1.0f, 1.0f, 1.0f };

@@ -9,6 +9,7 @@
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 
 #ifdef _USEIMGUI
 #include <imgui.h>
@@ -17,6 +18,7 @@
 namespace {
     // インスペクター編集用定数 (マジックナンバー排除)
     constexpr size_t kTextBufferSize = 128;
+    constexpr const char* kPayloadTexture = "CONTENT_BROWSER_ITEM_TEXTURE";
     constexpr float kSizeDragSpeed = 1.0f;
     constexpr float kMinSize = 1.0f;
     constexpr float kMaxSize = 4096.0f;
@@ -276,8 +278,20 @@ void SpriteRendererComponent::DrawInspector() {
     // 2. テクスチャキー
     char texBuf[kTextBufferSize]{};
     strncpy_s(texBuf, textureKey_.c_str(), sizeof(texBuf) - 1);
-    if (ImGui::InputText("Texture Key##SpriteRenderer", texBuf, sizeof(texBuf))) {
+    if (ImGui::InputText("Texture Path / Key##SpriteRenderer", texBuf, sizeof(texBuf))) {
         textureKey_ = texBuf;
+        if (auto texMgr = TextureResource::GetTextureManager()) {
+            texMgr->LoadTextureByPath(textureKey_);
+        }
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadTexture)) {
+            const char* droppedPath = static_cast<const char*>(payload->Data);
+            if (auto texMgr = TextureResource::GetTextureManager()) {
+                textureKey_ = texMgr->LoadTextureByPath(droppedPath);
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
 
     // 3. 形状別パラメータ

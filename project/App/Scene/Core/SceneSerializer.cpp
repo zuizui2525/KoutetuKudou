@@ -803,23 +803,33 @@ bool SceneSerializer::RunSelfTest() {
     }
 
     // 4. アサーション検証
-    if (loadedSceneName != "TestScene") return false;
-    if (loadedObjects.size() != 1) return false;
-    if (loadedObjects[0]->GetName() != "TestEntity") return false;
-    if (std::abs(loadedObjects[0]->GetPosition().x - 1.0f) > 0.001f) return false;
-    if (std::abs(loadedObjects[0]->GetPosition().y - 2.0f) > 0.001f) return false;
-    if (std::abs(loadedObjects[0]->GetPosition().z - 3.0f) > 0.001f) return false;
-    if (loadedObjects[0]->GetComponents().size() != 6) return false;
-    if (!loadedObjects[0]->HasComponent<MeshRendererComponent>()) return false;
-    if (!loadedObjects[0]->HasComponent<BoxColliderComponent>()) return false;
-    if (!loadedObjects[0]->HasComponent<AudioSourceComponent>()) return false;
-    if (!loadedObjects[0]->HasComponent<ParticleEffectComponent>()) return false;
-    if (!loadedObjects[0]->HasComponent<TextRenderer2DComponent>()) return false;
-    if (!loadedObjects[0]->HasComponent<TextRenderer3DComponent>()) return false;
+    constexpr float kEpsilon = 0.001f;
+    bool isPassed = true;
 
-    auto* loadedTr3 = loadedObjects[0]->GetComponent<TextRenderer3DComponent>();
-    if (loadedTr3->GetText() != "SelfTest3D") return false;
-    if (loadedTr3->GetBillboardMode() != TextObject3D::BillboardMode::YAxisOnly) return false;
+    if (loadedSceneName != "TestScene") isPassed = false;
+    if (loadedObjects.size() != 1) isPassed = false;
+    if (isPassed && loadedObjects[0]->GetName() != "TestEntity") isPassed = false;
+    if (isPassed && std::abs(loadedObjects[0]->GetPosition().x - 1.0f) > kEpsilon) isPassed = false;
+    if (isPassed && std::abs(loadedObjects[0]->GetPosition().y - 2.0f) > kEpsilon) isPassed = false;
+    if (isPassed && std::abs(loadedObjects[0]->GetPosition().z - 3.0f) > kEpsilon) isPassed = false;
+    if (isPassed && loadedObjects[0]->GetComponents().size() != 6) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<MeshRendererComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<BoxColliderComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<AudioSourceComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<ParticleEffectComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<TextRenderer2DComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<TextRenderer3DComponent>()) isPassed = false;
 
-    return true;
+    if (isPassed) {
+        auto* loadedTr3 = loadedObjects[0]->GetComponent<TextRenderer3DComponent>();
+        if (!loadedTr3 || loadedTr3->GetText() != "SelfTest3D" || loadedTr3->GetBillboardMode() != TextObject3D::BillboardMode::YAxisOnly) {
+            isPassed = false;
+        }
+    }
+
+    // 5. テスト完了後のクリーンアップ（実リソースフォルダにテスト用ファイルを残さない）
+    std::error_code ec;
+    std::filesystem::remove(testPath, ec);
+
+    return isPassed;
 }

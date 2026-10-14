@@ -102,7 +102,7 @@ public:
     void UpdateAllProjection(float aspect);
 
 private:
-    static inline bool showWindow_ = true;
+    static inline bool showWindow_ = false;
 
     std::map<std::string, std::shared_ptr<BaseCamera>> cameras_;
     BaseCamera* activeCamera_ = nullptr;

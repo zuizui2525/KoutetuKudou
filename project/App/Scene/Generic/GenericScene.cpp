@@ -145,11 +145,9 @@ void GenericScene::Initialize() {
         Log::Write(L"[GenericScene] デフォルトの DirectionalLight GameObject を追加しました。");
     }
 
-    // ファイルが存在しなかった場合はデフォルト構成で自動保存
+    // ファイルが存在しなかった場合はメモリ上のデフォルト構成のまま開始（勝手にディスク保存して復活させない）
     if (!fileExisted) {
-        std::filesystem::create_directories(kScenesDirectory);
-        SceneSerializer::SaveScene(sceneFilePath, sceneName_, gameObjects_);
-        Log::Write(std::format(L"[GenericScene] 新規シーンファイル「{}」を自動生成しました。",
+        Log::Write(std::format(L"[GenericScene] シーンファイル「{}」が存在しないため、デフォルト構成で開始します。",
             ConvertString(sceneFilePath)));
     }
 }

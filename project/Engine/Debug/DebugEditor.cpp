@@ -3,6 +3,7 @@
 #include "Engine/Debug/SceneViewWindow.h"
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Debug/PerformanceMonitorWindow.h"
+#include "Engine/Debug/ContentBrowserWindow.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Debug/IGameObject.h"
 #include "Engine/Zuizui.h"
@@ -34,6 +35,15 @@
 
 namespace {
     const std::string kScenesDirectory = "resources/Scenes";
+
+    // シーン削除モーダルID、フォールバックシーン名、最低シーン保持数 (マジックナンバー・ストリング排除)
+    constexpr const char* kDeleteSceneModalId = "DeleteSceneConfirmModal";
+    const std::string kFallbackPrioritySceneName = "Title";
+    constexpr size_t kMinSceneCount = 1;
+
+    // シーン削除モーダル用ステート変数
+    static std::string sSceneNameToDelete = "";
+    static bool sTriggerOpenDeleteSceneModal = false;
 
     enum class CreationType {
         Empty,
@@ -436,6 +446,7 @@ DebugEditor::DebugEditor()
       showPerfMonitor_(true),
       showHierarchy_(true),
       showInspector_(true),
+      showContentBrowser_(true),
       showShortcutsWindow_(false),
       isGameViewVisible_(false),
       isFullscreen_(false),
@@ -452,6 +463,7 @@ void DebugEditor::Initialize() {
     sceneViewWindow_ = std::make_unique<SceneViewWindow>();
     gameViewWindow_ = std::make_unique<GameViewWindow>();
     perfMonitorWindow_ = std::make_unique<PerformanceMonitorWindow>();
+    contentBrowserWindow_ = std::make_unique<ContentBrowserWindow>();
 
     // ウィンドウ終了時（×ボタン、Alt+F4、終了メニュー）のセーブ確認ハンドラを登録
     HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
@@ -517,6 +529,11 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
     // Performance Monitor
     if (showPerfMonitor_) {
         perfMonitorWindow_->Draw(&showPerfMonitor_);
+    }
+
+    // Content Browser
+    if (showContentBrowser_ && contentBrowserWindow_) {
+        contentBrowserWindow_->Draw(&showContentBrowser_);
     }
 
     // Hierarchy (左側)
@@ -708,41 +725,50 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         }
 
         // ----------------------------------------------------
-        // シーン管理メニュー (Scene) - 友達のエンジン完全準拠
+        // シーン管理メニュー (Scene)
         // ----------------------------------------------------
         if (ImGui::BeginMenu("Scene###SceneMenu")) {
             std::string currentSceneName = SceneManager::GetInstance()->GetCurrentSceneName();
 
-            // 1. シーン一覧（resources/Scenes/ 内の .json ファイルを走査）
+            // 1. JSONシーン一覧（resources/Scenes/ 内の .json ファイルを走査）
             if (!std::filesystem::exists(kScenesDirectory)) {
                 std::filesystem::create_directories(kScenesDirectory);
             }
 
-            std::vector<std::string> sceneNames;
+            std::vector<std::string> jsonScenes;
             for (const auto& entry : std::filesystem::directory_iterator(kScenesDirectory)) {
                 if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                    std::string stemName = entry.path().stem().string();
-                    sceneNames.push_back(stemName);
-                }
-            }
-            // 既存の基本シーンも一覧に追加（重複排除）
-            const std::vector<std::string> defaultScenes = { "Sample", "Title", "Game", "Clear", "GameOver", "Debug" };
-            for (const auto& ds : defaultScenes) {
-                if (std::find(sceneNames.begin(), sceneNames.end(), ds) == sceneNames.end()) {
-                    sceneNames.push_back(ds);
+                    jsonScenes.push_back(entry.path().stem().string());
                 }
             }
 
             // シーン一覧表示
-            for (const auto& sName : sceneNames) {
+            for (const auto& sName : jsonScenes) {
+                ImGui::PushID(sName.c_str());
                 bool isSelected = (sName == currentSceneName);
                 if (ImGui::MenuItem(sName.c_str(), nullptr, isSelected)) {
                     if (!isSelected) {
-                        // 切り替え前に現在のシーンを自動保存！
                         SaveCurrentSceneAction(currentSceneName);
                         SceneManager::GetInstance()->ChangeScene(sName);
                     }
                 }
+                ImGui::PopID();
+            }
+
+            // 専用C++シーン（Game）
+            ImGui::Separator();
+            ImGui::TextDisabled("専用シーン");
+            const std::vector<std::string> cppScenes = { "Game" };
+            for (const auto& cs : cppScenes) {
+                ImGui::PushID(cs.c_str());
+                bool isSelected = (cs == currentSceneName);
+                if (ImGui::MenuItem(cs.c_str(), nullptr, isSelected)) {
+                    if (!isSelected) {
+                        SaveCurrentSceneAction(currentSceneName);
+                        SceneManager::GetInstance()->ChangeScene(cs);
+                    }
+                }
+                ImGui::PopID();
             }
 
             ImGui::Separator();
@@ -756,17 +782,14 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             bool newBtnClicked = ImGui::Button("New Scene");
 
             if ((enterPressed || newBtnClicked) && strlen(newSceneNameBuf) > 0) {
-                // 新規シーンへ切り替える前に現在のシーンを自動保存！
                 SaveCurrentSceneAction(currentSceneName);
 
                 std::string newName = newSceneNameBuf;
                 std::string newPath = kScenesDirectory + "/" + newName + ".json";
 
-                // 空シーンのJSONを作成
                 std::vector<std::unique_ptr<GameObject>> emptyObjects;
                 SceneSerializer::SaveScene(newPath, newName, emptyObjects);
 
-                // 新シーンへ切り替え
                 SceneManager::GetInstance()->ChangeScene(newName);
 
                 newSceneNameBuf[0] = '\0';
@@ -780,23 +803,21 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 SaveCurrentSceneAction(currentSceneName);
             }
 
-            // 4. シーン削除 (Delete Scene)
+            // 4. シーン削除 (Delete Scene) - 最後の1つ以外はどのシーンでも削除可能
             if (ImGui::BeginMenu("Delete Scene")) {
-                bool hasDeletable = false;
-                for (const auto& sName : sceneNames) {
-                    if (sName != currentSceneName) {
-                        std::string pathToCheck = kScenesDirectory + "/" + sName + ".json";
-                        if (std::filesystem::exists(pathToCheck)) {
-                            hasDeletable = true;
-                            if (ImGui::MenuItem(sName.c_str())) {
-                                std::filesystem::remove(pathToCheck);
-                                Log::Write(std::format(L"[Scene] シーンファイル「{}」を削除しました。", ConvertString(pathToCheck)));
-                            }
+                if (jsonScenes.size() <= kMinSceneCount) {
+                    ImGui::TextDisabled("これ以上削除できません（最低1つのシーンが必要です）");
+                } else {
+                    for (const auto& sName : jsonScenes) {
+                        std::string label = sName;
+                        if (sName == currentSceneName) {
+                            label += " (編集中)";
+                        }
+                        if (ImGui::MenuItem(label.c_str())) {
+                            sSceneNameToDelete = sName;
+                            sTriggerOpenDeleteSceneModal = true;
                         }
                     }
-                }
-                if (!hasDeletable) {
-                    ImGui::TextDisabled("削除可能な保存シーンがありません");
                 }
                 ImGui::EndMenu();
             }
@@ -810,10 +831,10 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::MenuItem("ヒエラルキー", nullptr, &showHierarchy_);
             ImGui::MenuItem("インスペクター", nullptr, &showInspector_);
             ImGui::MenuItem("コンソール", nullptr, Log::GetShowConsolePtr());
-            ImGui::MenuItem("カメラ一覧", nullptr, CameraManager::GetShowWindowPtr());
             ImGui::MenuItem("ポストエフェクト", nullptr, PostProcess::GetShowWindowPtr());
             ImGui::MenuItem("エフェクト一覧", nullptr, EffectManager::GetShowListWindowPtr());
             ImGui::MenuItem("パフォーマンス監視", nullptr, &showPerfMonitor_);
+            ImGui::MenuItem("コンテンツブラウザ", nullptr, &showContentBrowser_);
             
             GameScene* gameScene = dynamic_cast<GameScene*>(SceneManager::GetInstance()->GetCurrentScene());
             if (gameScene) {
@@ -968,6 +989,77 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         }
 
         ImGui::EndMainMenuBar();
+    }
+
+    // シーン削除確認モーダルのオープン要求
+    if (sTriggerOpenDeleteSceneModal) {
+        ImGui::OpenPopup(kDeleteSceneModalId);
+        sTriggerOpenDeleteSceneModal = false;
+    }
+
+    // シーン削除確認モーダルダイアログ
+    if (ImGui::BeginPopupModal(kDeleteSceneModalId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("シーン「%s」を削除しますか？", sSceneNameToDelete.c_str());
+        constexpr ImVec4 kWarningTextColor = { 1.0f, 0.4f, 0.4f, 1.0f };
+        ImGui::TextColored(kWarningTextColor, "※シーンファイル (.json) が完全に削除されます。この操作は取り消せません。");
+
+        std::string currentScene = SceneManager::GetInstance()->GetCurrentSceneName();
+        if (sSceneNameToDelete == currentScene) {
+            ImGui::TextDisabled("（編集中シーンのため、削除後は残っているシーンへ自動的に遷移します）");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        constexpr float kConfirmBtnWidth = 100.0f;
+        if (ImGui::Button("削除", ImVec2(kConfirmBtnWidth, 0.0f))) {
+            std::string pathToRemove = kScenesDirectory + "/" + sSceneNameToDelete + ".json";
+            std::error_code ec;
+            bool removed = std::filesystem::remove(pathToRemove, ec);
+
+            if (removed) {
+                Log::Write(std::format(L"[Scene] シーンファイル「{}」を正常に削除しました。", ConvertString(pathToRemove)));
+            } else {
+                Log::Write(std::format(L"[Scene] シーンファイル「{}」の削除に失敗しました（理由: {}）。",
+                    ConvertString(pathToRemove), ConvertString(ec.message())));
+            }
+
+            // 編集中シーンを削除した場合は、自動保存を行わずに安全に残りのシーンへフォールバック遷移
+            if (sSceneNameToDelete == currentScene) {
+                std::string fallbackTarget = "";
+
+                // 残っているシーンの中からTitleがあればTitle優先、なければ先頭シーン
+                for (const auto& entry : std::filesystem::directory_iterator(kScenesDirectory)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".json") {
+                        std::string stem = entry.path().stem().string();
+                        if (stem == kFallbackPrioritySceneName) {
+                            fallbackTarget = kFallbackPrioritySceneName;
+                            break;
+                        } else if (fallbackTarget.empty()) {
+                            fallbackTarget = stem;
+                        }
+                    }
+                }
+
+                if (fallbackTarget.empty()) {
+                    fallbackTarget = "Game";
+                }
+
+                SceneManager::GetInstance()->ChangeScene(fallbackTarget);
+            }
+
+            sSceneNameToDelete.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("キャンセル", ImVec2(kConfirmBtnWidth, 0.0f))) {
+            sSceneNameToDelete.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 }
 

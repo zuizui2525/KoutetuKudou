@@ -84,7 +84,9 @@ private:
     std::unique_ptr<Ring2DObject> ringObject_;
     std::unique_ptr<Line2DObject> lineObject_;
 
-    std::string textureKey_ = "white";
+    inline static const std::string kDefaultTexturePath = "resources/Textures/white.png";
+
+    std::string textureKey_ = kDefaultTexturePath;
     Vector2 size_ = { 100.0f, 100.0f };
     float radius_ = 50.0f;
     float innerRadius_ = 35.0f;

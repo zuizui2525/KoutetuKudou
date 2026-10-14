@@ -2,7 +2,15 @@
 #include "d3dx12.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/Utils/StringUtility.h"
+#include "Engine/Base/Log/Log.h"
 #include <cassert>
+#include <filesystem>
+#include <format>
+
+namespace {
+    // デフォルト白テクスチャパス定数（マジックストリング排除）
+    constexpr const char* kDefaultWhiteTexturePath = "resources/Textures/white.png";
+}
 
 Texture::Texture() {}
 Texture::~Texture() {
@@ -12,11 +20,15 @@ Texture::~Texture() {
 void Texture::Initialize(ID3D12Device* device, ID3D12GraphicsCommandList* commandList,
     ID3D12DescriptorHeap* srvHeap, uint32_t descriptorIndex,
     const std::string& filePath) {
-    // 空パスなら白画像を使用
-    filePath_ = filePath.empty() ? "resources/white.png" : filePath;
+    // 空パスまたはファイルが存在しない場合は安全な白画像にフォールバック
+    if (filePath.empty() || !std::filesystem::exists(filePath)) {
+        filePath_ = kDefaultWhiteTexturePath;
+    } else {
+        filePath_ = filePath;
+    }
 
-    // テクスチャ読み込み
-    DirectX::ScratchImage mipImages = LoadTextureFile(filePath);
+    // テクスチャ読み込み（フォールバック済みのパスを使用）
+    DirectX::ScratchImage mipImages = LoadTextureFile(filePath_);
     metadata_ = mipImages.GetMetadata();
 
     // テクスチャリソース作成
@@ -69,17 +81,37 @@ D3D12_GPU_DESCRIPTOR_HANDLE Texture::GetGpuHandle() const {
 
 DirectX::ScratchImage Texture::LoadTextureFile(const std::string& filePath) {
     DirectX::ScratchImage image{};
-    std::wstring filePathW = ConvertString(filePath);
+    std::string targetPath = filePath;
 
-    HRESULT hr;
-    if (filePath.ends_with(".dds")) {
-        // DDSファイルの場合はLoadFromDDSFileを使用
+    if (targetPath.empty() || !std::filesystem::exists(targetPath)) {
+        targetPath = kDefaultWhiteTexturePath;
+    }
+
+    std::wstring filePathW = ConvertString(targetPath);
+
+    HRESULT hr = E_FAIL;
+    if (targetPath.ends_with(".dds")) {
         hr = DirectX::LoadFromDDSFile(filePathW.c_str(), DirectX::DDS_FLAGS_NONE, nullptr, image);
     } else {
-        // それ以外はWICでロード
         hr = DirectX::LoadFromWICFile(filePathW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
     }
-    assert(SUCCEEDED(hr));
+
+    // 読み込み失敗時は白画像にフォールバック（assertクラッシュ完全防止）
+    if (FAILED(hr) && targetPath != kDefaultWhiteTexturePath) {
+        Log::Write(std::format(L" ├─ [警告] テクスチャ読み込み失敗:「{}」。デフォルト白テクスチャにフォールバックします。", ConvertString(targetPath)));
+        std::wstring fallbackW = ConvertString(kDefaultWhiteTexturePath);
+        hr = DirectX::LoadFromWICFile(fallbackW.c_str(), DirectX::WIC_FLAGS_FORCE_SRGB, nullptr, image);
+    }
+
+    // 万が一白画像すらロードできない場合は1x1の白テクスチャをメモリ上で生成
+    if (FAILED(hr)) {
+        image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, 1, 1, 1, 1);
+        uint32_t* pixel = reinterpret_cast<uint32_t*>(image.GetPixels());
+        if (pixel) {
+            *pixel = 0xFFFFFFFF; // RGBA(255, 255, 255, 255)
+        }
+        return std::move(image);
+    }
 
     DirectX::ScratchImage mipImages{};
     

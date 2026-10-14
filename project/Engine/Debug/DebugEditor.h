@@ -33,6 +33,7 @@ private:
     std::unique_ptr<class SceneViewWindow> sceneViewWindow_;
     std::unique_ptr<class GameViewWindow> gameViewWindow_;
     std::unique_ptr<class PerformanceMonitorWindow> perfMonitorWindow_;
+    std::unique_ptr<class ContentBrowserWindow> contentBrowserWindow_;
 
     // 各ウィンドウの表示・非表示フラグ
     bool showSceneView_ = true;
@@ -40,6 +41,7 @@ private:
     bool showPerfMonitor_ = true;
     bool showHierarchy_ = true;
     bool showInspector_ = true;
+    bool showContentBrowser_ = true;
     bool showShortcutsWindow_ = false;
     bool isGameViewVisible_ = false;
 

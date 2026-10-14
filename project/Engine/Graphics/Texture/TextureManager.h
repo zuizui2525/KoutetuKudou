@@ -15,6 +15,12 @@ public:
     // テクスチャをロードして登録（同じ名前ならスキップ）
     void LoadTexture(const std::string& name, const std::string& filePath);
 
+    // ファイルパスから直接ロードして登録（パスそのものをキーとして利用、既にロード済みならスキップ）
+    std::string LoadTextureByPath(const std::string& filePath);
+
+    // テクスチャが登録済みかどうか
+    bool HasTexture(const std::string& name) const;
+
     // 更新処理
     void Update();
 

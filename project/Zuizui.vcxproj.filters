@@ -164,6 +164,9 @@
     <ClCompile Include="Engine\Debug\Command\DeleteGameObjectCommand.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Debug\ContentBrowserWindow.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
     <ClCompile Include="Engine\Graphics\Objects\3d\Skybox\Skybox.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Square\SquareObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Cube\CubeObject.cpp" />
@@ -376,6 +379,7 @@
     <ClInclude Include="Engine\Debug\Command\LinePointsCommand.h" />
     <ClInclude Include="Engine\Debug\Command\CreateGameObjectCommand.h" />
     <ClInclude Include="Engine\Debug\Command\DeleteGameObjectCommand.h" />
+    <ClInclude Include="Engine\Debug\ContentBrowserWindow.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="resources\Shader\Object3d\Object3d.hlsli" />

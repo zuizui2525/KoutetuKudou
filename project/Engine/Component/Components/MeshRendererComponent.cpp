@@ -16,8 +16,9 @@
 #include "Engine/Graphics/Objects/3d/CylinderEffect/CylinderEffectObject.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Base/BaseResource.h"
-#include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Zuizui.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
+#include "Engine/Graphics/Objects/3d/Model/ModelManager.h"
 
 #ifdef _USEIMGUI
 #include <imgui.h>
@@ -26,6 +27,8 @@
 namespace {
     // インスペクター編集用バッファサイズおよび調整刻み値 (マジックナンバー排除)
     constexpr size_t kTextBufferSize = 128;
+    constexpr const char* kPayloadTexture = "CONTENT_BROWSER_ITEM_TEXTURE";
+    constexpr const char* kPayloadModel   = "CONTENT_BROWSER_ITEM_MODEL";
     constexpr float kShininessSpeed = 1.0f;
     constexpr float kMinShininess = 1.0f;
     constexpr float kMaxShininess = 200.0f;
@@ -199,7 +202,7 @@ void MeshRendererComponent::Draw() {
     meshObject_->SetVisible(true);
     meshObject_->Update();
 
-    std::string drawTexKey = textureKey_.empty() ? "white" : textureKey_;
+    std::string drawTexKey = textureKey_.empty() ? kDefaultTexturePath : textureKey_;
 
     if (meshType_ == MeshType::Model) {
         if (auto* model = dynamic_cast<ModelObject*>(meshObject_.get())) {
@@ -262,23 +265,59 @@ void MeshRendererComponent::DrawInspector() {
     if (meshType_ == MeshType::Model) {
         char modelBuf[kTextBufferSize]{};
         strncpy_s(modelBuf, modelKey_.c_str(), sizeof(modelBuf) - 1);
-        if (ImGui::InputText("Model Key##MeshRenderer", modelBuf, sizeof(modelBuf))) {
+        if (ImGui::InputText("Model Path / Key##MeshRenderer", modelBuf, sizeof(modelBuf))) {
             modelKey_ = modelBuf;
+            if (auto modelMgr = ModelResource::GetModelManager()) {
+                modelMgr->LoadModelByPath(modelKey_);
+            }
+        }
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadModel)) {
+                const char* droppedPath = static_cast<const char*>(payload->Data);
+                if (auto modelMgr = ModelResource::GetModelManager()) {
+                    modelKey_ = modelMgr->LoadModelByPath(droppedPath);
+                }
+            }
+            ImGui::EndDragDropTarget();
         }
     }
 
     // 3. テクスチャキー
     char texBuf[kTextBufferSize]{};
     strncpy_s(texBuf, textureKey_.c_str(), sizeof(texBuf) - 1);
-    if (ImGui::InputText("Texture Key##MeshRenderer", texBuf, sizeof(texBuf))) {
+    if (ImGui::InputText("Texture Path / Key##MeshRenderer", texBuf, sizeof(texBuf))) {
         textureKey_ = texBuf;
+        if (auto texMgr = TextureResource::GetTextureManager()) {
+            texMgr->LoadTextureByPath(textureKey_);
+        }
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadTexture)) {
+            const char* droppedPath = static_cast<const char*>(payload->Data);
+            if (auto texMgr = TextureResource::GetTextureManager()) {
+                textureKey_ = texMgr->LoadTextureByPath(droppedPath);
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
 
     // 4. 環境マップキー
     char envBuf[kTextBufferSize]{};
     strncpy_s(envBuf, envMapKey_.c_str(), sizeof(envBuf) - 1);
-    if (ImGui::InputText("EnvMap Key##MeshRenderer", envBuf, sizeof(envBuf))) {
+    if (ImGui::InputText("EnvMap Path / Key##MeshRenderer", envBuf, sizeof(envBuf))) {
         envMapKey_ = envBuf;
+        if (auto texMgr = TextureResource::GetTextureManager()) {
+            texMgr->LoadTextureByPath(envMapKey_);
+        }
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadTexture)) {
+            const char* droppedPath = static_cast<const char*>(payload->Data);
+            if (auto texMgr = TextureResource::GetTextureManager()) {
+                envMapKey_ = texMgr->LoadTextureByPath(droppedPath);
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
 
     // 5. カラーピッカー

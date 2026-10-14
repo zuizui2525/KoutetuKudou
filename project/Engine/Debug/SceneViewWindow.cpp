@@ -218,44 +218,27 @@ void SceneViewWindow::Draw(bool* show) {
             drawList->AddRectFilled(badgeMin, badgeMax, bannerColor, kBadgeRounding);
             drawList->AddText(ImVec2(badgeMin.x + kBadgePaddingX, badgeMin.y + kBadgePaddingY), kStatusTextColor, statusText);
 
-            // 画面右上に現在レンダリングに使用しているアクティブカメラ名バッジを描画
-            if (auto cameraMgr = CameraResource::GetCameraManager()) {
-                std::string activeCamName = cameraMgr->GetActiveCameraName();
-                if (activeCamName.empty()) {
-                    activeCamName = "None";
-                }
-                std::string camBadgeText = " [Camera: " + activeCamName + "] ";
-                ImVec2 camTextSize = ImGui::CalcTextSize(camBadgeText.c_str());
-                float camBadgeWidth = camTextSize.x + kCamBadgePaddingX * 2.0f;
-                float camBadgeHeight = camTextSize.y + kCamBadgePaddingY * 2.0f;
-                ImVec2 camBadgeMin = ImVec2(imgPosMax.x - kCamBadgeMargin - camBadgeWidth, imgPosMin.y + kCamBadgeMargin);
-                ImVec2 camBadgeMax = ImVec2(camBadgeMin.x + camBadgeWidth, camBadgeMin.y + camBadgeHeight);
-
-                drawList->AddRectFilled(camBadgeMin, camBadgeMax, kCamBadgeBgColor, kCamBadgeRounding);
-                drawList->AddRect(camBadgeMin, camBadgeMax, kCamBadgeBorderColor, kCamBadgeRounding, 0, kCamBadgeBorderThickness);
-                drawList->AddText(ImVec2(camBadgeMin.x + kCamBadgePaddingX, camBadgeMin.y + kCamBadgePaddingY), kCamBadgeTextColor, camBadgeText.c_str());
-            }
-
-            // カメラモード切り替えバー（再生中・ポーズ中問わず常時利用可能）
-            constexpr float kCamOverlayOffsetX = 8.0f;
-            constexpr float kCamOverlayWidth = 230.0f;
-            constexpr float kCamOverlayInnerPaddingX = 8.0f;
-            constexpr ImU32 kCamOverlayBgColor = IM_COL32(20, 25, 35, 220); // バッジと同調する半透明ダーク背景
-
-            ImVec2 camOverlayMin = ImVec2(badgeMax.x + kCamOverlayOffsetX, badgeMin.y);
-            float badgeBarHeight = badgeMax.y - badgeMin.y;
-            ImVec2 camOverlayMax = ImVec2(camOverlayMin.x + kCamOverlayWidth, badgeMin.y + badgeBarHeight);
-
-            drawList->AddRectFilled(camOverlayMin, camOverlayMax, kCamOverlayBgColor, kBadgeRounding);
+            // ----------------------------------------------------
+            // 2段目オーバーレイUI（カメラ切替バー ＆ ギズモ操作バー）
+            // マジックナンバーを排除したUI定数定義
+            // ----------------------------------------------------
+            constexpr float kOverlayRowSpacing = 6.0f;       // 1段目（ステータスバッジ）との上下間隔
+            constexpr float kOverlayPaddingX = 8.0f;         // 各バー内部の左右余白
+            constexpr float kOverlayPaddingY = 4.0f;         // 各バー内部の上下余白
+            constexpr float kOverlayGroupSpacing = 8.0f;     // カメラバーとギズモバーの水平間隔
+            constexpr float kOverlayBorderThickness = 1.0f;  // 背景枠線の太さ
+            constexpr ImU32 kOverlayBgColor = IM_COL32(20, 25, 35, 220);       // 半透明ダーク背景
+            constexpr ImU32 kOverlayBorderColor = IM_COL32(65, 75, 95, 200);   // 上品な枠線カラー
 
             ImVec2 currentMousePos = ImGui::GetMousePos();
-            bool isCamOverlayHovered = (currentMousePos.x >= camOverlayMin.x && currentMousePos.x <= camOverlayMax.x &&
-                                        currentMousePos.y >= camOverlayMin.y && currentMousePos.y <= camOverlayMax.y);
+            float row2Y = badgeMax.y + kOverlayRowSpacing;
+            float row2StartX = imgPosMin.x + kBadgeMargin;
 
-            // カメラ切替コントロール描画
-            float camItemOffsetY = (badgeBarHeight - ImGui::GetFrameHeight()) * 0.5f;
-            if (camItemOffsetY < 0.0f) camItemOffsetY = 0.0f;
-            ImGui::SetCursorScreenPos(ImVec2(camOverlayMin.x + kCamOverlayInnerPaddingX, camOverlayMin.y + camItemOffsetY));
+            // 1. カメラモード切り替えバー（下段・左）
+            ImGui::SetCursorScreenPos(ImVec2(row2StartX + kOverlayPaddingX, row2Y + kOverlayPaddingY));
+
+            drawList->ChannelsSplit(2);
+            drawList->ChannelsSetCurrent(1); // 前景: ウィジェット描画
 
             ImGui::BeginGroup();
             bool isDebugMode = (sCameraMode_ == CameraMode::DebugCamera);
@@ -296,38 +279,34 @@ void SceneViewWindow::Draw(bool* show) {
             }
             ImGui::EndGroup();
 
-            // ゲーム停止中は常にギズモ操作を有効化（実行中はピッキング・ギズモ共に無効）
+            ImVec2 camContentMin = ImGui::GetItemRectMin();
+            ImVec2 camContentMax = ImGui::GetItemRectMax();
+            ImVec2 camBgMin = ImVec2(camContentMin.x - kOverlayPaddingX, camContentMin.y - kOverlayPaddingY);
+            ImVec2 camBgMax = ImVec2(camContentMax.x + kOverlayPaddingX, camContentMax.y + kOverlayPaddingY);
+
+            drawList->ChannelsSetCurrent(0); // 背景: コンテンツ実サイズ＋パディングで描画（文字はみ出しゼロ）
+            drawList->AddRectFilled(camBgMin, camBgMax, kOverlayBgColor, kBadgeRounding);
+            drawList->AddRect(camBgMin, camBgMax, kOverlayBorderColor, kBadgeRounding, 0, kOverlayBorderThickness);
+            drawList->ChannelsMerge();
+
+            bool isCamOverlayHovered = (currentMousePos.x >= camBgMin.x && currentMousePos.x <= camBgMax.x &&
+                                        currentMousePos.y >= camBgMin.y && currentMousePos.y <= camBgMax.y);
+
+            // 2. ギズモ操作バー（画面右上に配置、一時停止中のみ有効）
             bool isGizmoEffective = isPaused;
             bool isGizmoOverlayHovered = false;
             if (isGizmoEffective) {
-                // オーバーレイUIの配置用定数（マジックナンバー排除）
-                constexpr float kGizmoOverlayOffsetX = 8.0f;
-                constexpr float kGizmoOverlayWidth = 230.0f;
-                constexpr float kGizmoOverlayInnerPaddingX = 8.0f;
-                constexpr ImU32 kGizmoOverlayBgColor = IM_COL32(20, 25, 35, 220); // バッジと同調する半透明ダーク背景
+                // 前回フレームの描画幅を記憶して右端マージンに合わせて右寄せ配置
+                static float sGizmoTotalWidth = 205.0f;
+                float gizmoStartX = imgPosMax.x - kBadgeMargin - sGizmoTotalWidth;
+                float gizmoStartY = imgPosMin.y + kBadgeMargin;
 
-                ImVec2 overlayPos = ImVec2(camOverlayMax.x + kGizmoOverlayOffsetX, badgeMin.y);
-                float overlayHeight = badgeMax.y - badgeMin.y;
-                ImVec2 overlayMax = ImVec2(overlayPos.x + kGizmoOverlayWidth, overlayPos.y + overlayHeight);
+                ImGui::SetCursorScreenPos(ImVec2(gizmoStartX + kOverlayPaddingX, gizmoStartY + kOverlayPaddingY));
 
-                // 背景バッジを描画（ステータスバッジと同調）
-                drawList->AddRectFilled(overlayPos, overlayMax, kGizmoOverlayBgColor, kBadgeRounding);
-
-                // マウスがオーバーレイ上にあるか判定（レイキャスト誤クリック防止用）
-                if (currentMousePos.x >= overlayPos.x && currentMousePos.x <= overlayMax.x &&
-                    currentMousePos.y >= overlayPos.y && currentMousePos.y <= overlayMax.y) {
-                    isGizmoOverlayHovered = true;
-                }
-
-                // カーソルをオーバーレイ内部へ配置（垂直中央揃えで確実に可視化）
-                float itemOffsetY = (overlayHeight - ImGui::GetFrameHeight()) * 0.5f;
-                if (itemOffsetY < 0.0f) {
-                    itemOffsetY = 0.0f;
-                }
-                ImGui::SetCursorScreenPos(ImVec2(overlayPos.x + kGizmoOverlayInnerPaddingX, overlayPos.y + itemOffsetY));
+                drawList->ChannelsSplit(2);
+                drawList->ChannelsSetCurrent(1); // 前景: ウィジェット描画
 
                 ImGui::BeginGroup();
-
                 int currentOp = gizmoOperation_;
                 bool opChanged = false;
 
@@ -351,8 +330,25 @@ void SceneViewWindow::Draw(bool* show) {
                 if (opChanged) {
                     gizmoOperation_ = currentOp;
                 }
-
                 ImGui::EndGroup();
+
+                ImVec2 gizmoContentMin = ImGui::GetItemRectMin();
+                ImVec2 gizmoContentMax = ImGui::GetItemRectMax();
+                ImVec2 gizmoBgMin = ImVec2(gizmoContentMin.x - kOverlayPaddingX, gizmoContentMin.y - kOverlayPaddingY);
+                ImVec2 gizmoBgMax = ImVec2(gizmoContentMax.x + kOverlayPaddingX, gizmoContentMax.y + kOverlayPaddingY);
+
+                // 次フレームの右寄せ配置のために実際の全体幅を記憶
+                sGizmoTotalWidth = gizmoBgMax.x - gizmoBgMin.x;
+
+                drawList->ChannelsSetCurrent(0); // 背景: コンテンツ実サイズ＋パディングで描画
+                drawList->AddRectFilled(gizmoBgMin, gizmoBgMax, kOverlayBgColor, kBadgeRounding);
+                drawList->AddRect(gizmoBgMin, gizmoBgMax, kOverlayBorderColor, kBadgeRounding, 0, kOverlayBorderThickness);
+                drawList->ChannelsMerge();
+
+                if (currentMousePos.x >= gizmoBgMin.x && currentMousePos.x <= gizmoBgMax.x &&
+                    currentMousePos.y >= gizmoBgMin.y && currentMousePos.y <= gizmoBgMax.y) {
+                    isGizmoOverlayHovered = true;
+                }
             }
 
             // ゲーム停止中（ポーズ中）のみピッキングを実行（ゲーム中の誤クリックを防止）

@@ -179,7 +179,7 @@ public:
     float GetTVNoiseStrength() const;
 
 private:
-    static inline bool showWindow_ = true;
+    static inline bool showWindow_ = false;
 
     std::unique_ptr<RenderTexture> renderTexture_;
     std::unique_ptr<RenderTexture> renderTextureTemp_; // ピンポン用の中間テクスチャ

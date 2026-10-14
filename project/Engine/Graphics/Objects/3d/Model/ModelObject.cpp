@@ -13,18 +13,8 @@ void ModelObject::Initialize(int lightingMode) {
 }
 
 void ModelObject::Update() {
-    Matrix4x4 worldMatrix = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
-    Matrix4x4 viewMatrix = CameraResource::GetCameraManager()->GetViewMatrix3D();
-    Matrix4x4 projectionMatrix = CameraResource::GetCameraManager()->GetProjectionMatrix3D();
-    Matrix4x4 wvpMatrix = Math::Multiply(worldMatrix, Math::Multiply(viewMatrix, projectionMatrix));
-
-    // 法線用行列（逆転置）
-    Matrix4x4 worldForNormal = worldMatrix;
-    worldForNormal.m[3][0] = 0.0f; worldForNormal.m[3][1] = 0.0f; worldForNormal.m[3][2] = 0.0f;
-
-    wvpData_->WVP = wvpMatrix;
-    wvpData_->world = worldMatrix;
-    wvpData_->WorldInverseTranspose = Math::Transpose(Math::Inverse(worldForNormal));
+    // 基底クラスObject3DのUpdateを実行（親行列parentMatrix_やTransformの乗算を確実に行う）
+    Object3D::Update();
 }
 
 void ModelObject::Draw(const std::string& modelKey, const std::string& textureKey, const std::string& envMapKey) {

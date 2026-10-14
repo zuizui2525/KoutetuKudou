@@ -8,6 +8,7 @@
 #include "Engine/Base/Utils/StringUtility.h"
 #include <chrono>
 #include <format>
+#include <filesystem>
  
 void ModelManager::Initialize() {
     // Engine
@@ -41,7 +42,14 @@ void ModelManager::LoadModel(const std::string& name, const std::string& filenam
     data->vertexResource->Unmap(0, nullptr);
  
     models_[name] = std::move(data);
-    texMgr_->LoadTexture(name, models_[name]->material.textureFilePath);
+
+    // テクスチャ未設定または存在しない場合はデフォルト白テクスチャにフォールバック
+    constexpr const char* kDefaultWhiteTexturePath = "resources/Textures/white.png";
+    std::string texPath = models_[name]->material.textureFilePath;
+    if (texPath.empty() || !std::filesystem::exists(texPath)) {
+        texPath = kDefaultWhiteTexturePath;
+    }
+    texMgr_->LoadTexture(name, texPath);
  
     auto endTime = std::chrono::steady_clock::now();
     float elapsed = std::chrono::duration<float>(endTime - startTime).count();
@@ -57,9 +65,44 @@ void ModelManager::LoadModel(const std::string& name, const std::string& filenam
         slowLoadWarning, ConvertString(name), ConvertString(filename), models_[name]->vertices.size(), elapsed));
 }
 
+std::string ModelManager::LoadModelByPath(const std::string& filename) {
+    if (filename.empty()) return "";
+
+    std::filesystem::path p(filename);
+    std::string key = p.generic_string();
+
+    if (!HasModel(key)) {
+        LoadModel(key, key);
+    }
+    return key;
+}
+
+bool ModelManager::HasModel(const std::string& name) const {
+    return models_.find(name) != models_.end();
+}
+
 std::shared_ptr<ModelData> ModelManager::GetModelData(const std::string& name) const {
+    if (name.empty()) return nullptr;
+
     auto it = models_.find(name);
     if (it != models_.end()) return it->second;
+
+    // パス直接指定の場合の動的オンデマンドロード
+    if (std::filesystem::exists(name)) {
+        const_cast<ModelManager*>(this)->LoadModel(name, name);
+        auto loadedIt = models_.find(name);
+        if (loadedIt != models_.end()) return loadedIt->second;
+    }
+
+    // 短縮名の場合の自動解決 (resources/obj/<name>/<name>.obj)
+    std::string fallbackPathObj = "resources/obj/" + name + "/" + name + ".obj";
+    if (std::filesystem::exists(fallbackPathObj)) {
+        const_cast<ModelManager*>(this)->LoadModel(name, fallbackPathObj);
+        const_cast<ModelManager*>(this)->LoadModel(fallbackPathObj, fallbackPathObj);
+        auto loadedIt = models_.find(name);
+        if (loadedIt != models_.end()) return loadedIt->second;
+    }
+
     return nullptr;
 }
 

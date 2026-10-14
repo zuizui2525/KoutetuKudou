@@ -14,6 +14,8 @@ public:
 
     void Initialize();
     void LoadModel(const std::string& name, const std::string& filename);
+    std::string LoadModelByPath(const std::string& filename);
+    bool HasModel(const std::string& name) const;
     std::shared_ptr<ModelData> GetModelData(const std::string& name) const;
     void Clear();
 
