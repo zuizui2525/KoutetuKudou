@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Engine/Math/MathStructs.h"
 #include "Engine/Math/Collision/CollisionStructs.h"
 
@@ -12,6 +12,8 @@ bool IsCollision(const Segment& segment, const Plane& plane);
 bool IsCollision(const Segment& segment, const Triangle& triangle);
 // AABB同士の当たり判定
 bool IsCollision(const AABB& a, const AABB& b);
+// AABB同士の重なりを解消するための押し出しベクトル（bをaから離すベクトル）を計算
+bool CalculateAABBPushVector(const AABB& a, const AABB& b, Vector3& outPushVector);
 // AABBと点の当たり判定
 bool IsCollision(const AABB& aabb, const Vector3& position);
 // AABBと球の当たり判定

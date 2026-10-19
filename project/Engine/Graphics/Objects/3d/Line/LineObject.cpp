@@ -1,6 +1,7 @@
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/3d/Drawer/Object3DDrawer.h"
 #include "Engine/Base/Utils/DxUtils.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
@@ -8,6 +9,17 @@
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Math/Matrix/Matrix.h"
 #include <cmath>
+
+LineObject::~LineObject() {
+    // GPUリソースを遅延解放キューに退避（GPUが描画コマンド実行完了するまで保持）
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+}
 
 void LineObject::Initialize(int lightingMode) {
     Object3D::Initialize(lightingMode);
@@ -57,14 +69,23 @@ void LineObject::Draw(const std::string& textureKey) {
 }
 
 void LineObject::CreateMesh() {
-    vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * 4);
+    // 既存のGPUリソースがあれば遅延解放キューに退避してから新規作成
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (vertexResource_) {
+        deferredMgr->Enqueue(std::move(vertexResource_));
+    }
+    if (indexResource_) {
+        deferredMgr->Enqueue(std::move(indexResource_));
+    }
+
+    vertexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(VertexData) * kVertexCount);
     vbView_.BufferLocation = vertexResource_->GetGPUVirtualAddress();
-    vbView_.SizeInBytes = sizeof(VertexData) * 4;
+    vbView_.SizeInBytes = sizeof(VertexData) * kVertexCount;
     vbView_.StrideInBytes = sizeof(VertexData);
 
-    indexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(uint32_t) * 6);
+    indexResource_ = DxUtils::CreateBufferResource(sEngine->GetDevice(), sizeof(uint32_t) * kIndexCount);
     ibView_.BufferLocation = indexResource_->GetGPUVirtualAddress();
-    ibView_.SizeInBytes = sizeof(uint32_t) * 6;
+    ibView_.SizeInBytes = sizeof(uint32_t) * kIndexCount;
     ibView_.Format = DXGI_FORMAT_R32_UINT;
 
     uint32_t* idxGPU = nullptr;

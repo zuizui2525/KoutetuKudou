@@ -309,21 +309,26 @@ void App::Run() {
         cameraMgr_->Update();
     } else {
         // ポーズ中の更新処理：
-        // Game View が表示されている場合のみ、オブジェクト編集やカメラ見回しを反映させる
-        if (isGameViewVisible) {
+        // エディタ画面（GameView または SceneView）が表示されている場合、オブジェクト編集やカメラ見回しを反映させる
+#ifdef _USEIMGUI
+        bool isEditorActive = isGameViewVisible || SceneViewWindow::IsSceneViewVisible();
+#else
+        bool isEditorActive = isGameViewVisible;
+#endif
+        if (isEditorActive) {
             // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
             if (cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
                 SceneManager::GetInstance()->Update();
             }
-
-            cameraMgr_->Update();
-            lightMgr_->Update();
 
             // もしアクティブカメラが DebugCamera であれば、ポーズ中も入力操作で飛び回れるように更新する
             BaseCamera* activeCam = cameraMgr_->GetActiveCamera();
             if (auto* dc = dynamic_cast<DebugCamera*>(activeCam)) {
                 dc->Update(input_.get());
             }
+
+            cameraMgr_->Update();
+            lightMgr_->Update();
 
             // シーン内のすべてのオブジェクトを更新して行列再計算（位置・色変更）を即座に反映させる（アニメーションは停止）
             const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
@@ -342,8 +347,13 @@ void App::Run() {
     // --- 描画 ---
     engine_->BeginFrame();
 
-    // ポーズ中かつ Game View が非表示の場合は、本編 3D レンダリングを完全にスキップして負荷を最小にする
-    bool shouldDraw = !(isPaused && !isGameViewVisible);
+#ifdef _USEIMGUI
+    bool isEditorViewportVisible = isGameViewVisible || SceneViewWindow::IsSceneViewVisible();
+#else
+    bool isEditorViewportVisible = isGameViewVisible;
+#endif
+    // ポーズ中でもエディタビューポート（GameView または SceneView）が表示されている場合は 3D レンダリングを実行
+    bool shouldDraw = !isPaused || isEditorViewportVisible;
 
     if (shouldDraw) {
         // 1. 3Dシーン描画パス（RenderTextureへの描画）

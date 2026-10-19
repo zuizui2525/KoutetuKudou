@@ -1,6 +1,9 @@
 #include "Scripts/Sample/SamplePlayerScript.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/GameObject.h"
+#include "Engine/Component/Components/BoxColliderComponent.h"
+#include "Engine/Math/Collision/Collision.h"
+#include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Base/BaseResource.h"
 #include <cmath>
@@ -85,6 +88,35 @@ void SamplePlayerScript::OnUpdate() {
             currentPos.z += moveDir.z * moveSpeed_ * kFixedDeltaTime;
             owner_->SetPosition(currentPos);
         }
+    }
+
+    // 他のBoxColliderとの押し返し判定（重なり解消）
+    if (auto* selfCol = owner_->GetComponent<BoxColliderComponent>()) {
+        const auto& allObjects = SceneHierarchy::GetInstance()->GetObjects();
+        bool anyColliding = false;
+        Vector3 currentPos = owner_->GetPosition();
+
+        for (auto* obj : allObjects) {
+            auto* go = dynamic_cast<GameObject*>(obj);
+            if (!go || go == owner_) continue;
+
+            if (auto* otherCol = go->GetComponent<BoxColliderComponent>()) {
+                AABB otherAABB = otherCol->GetWorldAABB();
+                AABB selfAABB = selfCol->GetWorldAABB();
+
+                Vector3 pushVec{};
+                if (CalculateAABBPushVector(otherAABB, selfAABB, pushVec)) {
+                    currentPos.x += pushVec.x;
+                    currentPos.y += pushVec.y;
+                    currentPos.z += pushVec.z;
+                    owner_->SetPosition(currentPos);
+
+                    anyColliding = true;
+                    otherCol->SetColliding(true);
+                }
+            }
+        }
+        selfCol->SetColliding(anyColliding);
     }
 }
 

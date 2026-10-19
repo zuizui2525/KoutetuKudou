@@ -142,6 +142,11 @@ void Scene::Initialize() {
             return (n == "GameDirector" || n == "TitleDirector" || n == "ClearDirector" || n == "GameOverDirector");
         });
     if (legacyIt != gameObjects_.end()) {
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                dxCommon->FlushGPU();
+            }
+        }
         for (auto iter = legacyIt; iter != gameObjects_.end(); ++iter) {
             if (*iter) {
                 SceneHierarchy::GetInstance()->Unregister(iter->get());

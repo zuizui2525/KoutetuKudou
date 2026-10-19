@@ -65,9 +65,11 @@ namespace {
     constexpr const char* kTypeBoxCollider = "BoxCollider";
     constexpr const char* kTypeSphereCollider = "SphereCollider";
     constexpr const char* kKeyCenter = "center";
+    constexpr const char* kKeyCenterOffset = "center_offset";
     constexpr const char* kKeyRadius = "radius";
     constexpr const char* kKeyIsTrigger = "is_trigger";
     constexpr const char* kKeyShowGizmo = "show_gizmo";
+    constexpr const char* kKeyWireThickness = "wire_thickness";
 
     // AudioSource キー
     constexpr const char* kTypeAudioSource = "AudioSource";
@@ -539,6 +541,27 @@ std::string SceneSerializer::SerializeToString(
                     ofs << "          \"" << kKeyScriptName << "\": \"" << sc->GetScriptName() << "\",\n";
                     ofs << "          \"" << kKeyTargetUUID << "\": \"" << sc->GetTargetUUID() << "\"";
                 }
+            } else if (typeName == kTypeBoxCollider) {
+                if (auto* bc = dynamic_cast<BoxColliderComponent*>(comp.get())) {
+                    ofs << ",\n";
+                    const auto& off = bc->GetCenterOffset();
+                    const auto& sz = bc->GetSize();
+                    ofs << "          \"" << kKeyCenterOffset << "\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
+                    ofs << "          \"" << kKeySize << "\": [" << sz.x << ", " << sz.y << ", " << sz.z << "],\n";
+                    ofs << "          \"" << kKeyIsTrigger << "\": " << (bc->IsTrigger() ? "true" : "false") << ",\n";
+                    ofs << "          \"" << kKeyShowGizmo << "\": " << (bc->IsShowDebugGizmo() ? "true" : "false") << ",\n";
+                    ofs << "          \"" << kKeyWireThickness << "\": " << bc->GetGizmoWireThickness();
+                }
+            } else if (typeName == kTypeSphereCollider) {
+                if (auto* sc = dynamic_cast<SphereColliderComponent*>(comp.get())) {
+                    ofs << ",\n";
+                    const auto& off = sc->GetCenterOffset();
+                    ofs << "          \"" << kKeyCenterOffset << "\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
+                    ofs << "          \"" << kKeyRadius << "\": " << sc->GetRadius() << ",\n";
+                    ofs << "          \"" << kKeyIsTrigger << "\": " << (sc->IsTrigger() ? "true" : "false") << ",\n";
+                    ofs << "          \"" << kKeyShowGizmo << "\": " << (sc->IsShowDebugGizmo() ? "true" : "false") << ",\n";
+                    ofs << "          \"" << kKeyWireThickness << "\": " << sc->GetGizmoWireThickness();
+                }
             }
 
             ofs << "\n        }";
@@ -797,6 +820,20 @@ bool SceneSerializer::DeserializeFromString(
                     script->SetTargetUUID(targetUUID);
                     go->AddComponentInstance(std::move(script));
                 }
+            } else if (type == kTypeBoxCollider) {
+                auto* bc = go->AddComponent<BoxColliderComponent>();
+                bc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenterOffset, { 0.0f, 0.0f, 0.0f }));
+                bc->SetSize(ExtractVector3(compBlock, kKeySize, { 1.0f, 1.0f, 1.0f }));
+                bc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
+                bc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
+                bc->SetGizmoWireThickness(ExtractFloat(compBlock, kKeyWireThickness, 0.03f));
+            } else if (type == kTypeSphereCollider) {
+                auto* sc = go->AddComponent<SphereColliderComponent>();
+                sc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenterOffset, { 0.0f, 0.0f, 0.0f }));
+                sc->SetRadius(ExtractFloat(compBlock, kKeyRadius, 0.5f));
+                sc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
+                sc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
+                sc->SetGizmoWireThickness(ExtractFloat(compBlock, kKeyWireThickness, 0.03f));
             }
         }
 

@@ -8,7 +8,7 @@
 class LineObject : public Object3D {
 public:
     LineObject() = default;
-    ~LineObject() = default;
+    ~LineObject() override;
 
     /// @brief 初期化（線なのでデフォルトでライティング無効(0)を推奨）
     void Initialize(int lightingMode = 0);

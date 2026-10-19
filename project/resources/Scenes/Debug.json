@@ -98,6 +98,14 @@
           "type": "ScriptComponent",
           "script_name": "SamplePlayerScript",
           "target_uuid": ""
+        },
+        {
+          "type": "BoxCollider",
+          "center_offset": [0, 0, 0],
+          "size": [1, 1, 1],
+          "is_trigger": false,
+          "show_gizmo": true,
+          "wire_thickness": 0.03
         }
       ]
     },
@@ -129,6 +137,14 @@
           "type": "ScriptComponent",
           "script_name": "SampleFollowerScript",
           "target_uuid": "sample-player-uuid-0001"
+        },
+        {
+          "type": "BoxCollider",
+          "center_offset": [0, 0, 0],
+          "size": [1, 1, 1],
+          "is_trigger": false,
+          "show_gizmo": true,
+          "wire_thickness": 0.03
         }
       ]
     }

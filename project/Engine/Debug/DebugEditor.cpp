@@ -1092,7 +1092,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 if (ImGui::MenuItem(label.c_str(), nullptr, isSelected)) {
                     if (!isSelected) {
                         CacheCurrentSceneAction(currentSceneName);
-                        SceneManager::GetInstance()->ChangeScene(sName);
+                        SceneManager::GetInstance()->ChangeScene(sName, false);
                     }
                 }
 
@@ -1148,7 +1148,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 std::vector<std::unique_ptr<GameObject>> emptyObjects;
                 SceneSerializer::SaveScene(newPath, newName, emptyObjects);
 
-                SceneManager::GetInstance()->ChangeScene(newName);
+                SceneManager::GetInstance()->ChangeScene(newName, false);
 
                 newSceneNameBuf[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -1397,7 +1397,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                     fallbackTarget = "Game";
                 }
 
-                SceneManager::GetInstance()->ChangeScene(fallbackTarget);
+                SceneManager::GetInstance()->ChangeScene(fallbackTarget, false);
             }
 
             sSceneNameToDelete.clear();

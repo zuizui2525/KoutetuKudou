@@ -17,19 +17,19 @@ void SceneManagerWindow::Draw(bool* show) {
         static const std::string kGameOverSceneName = "GameOver";
 
         if (ImGui::Button("デバッグシーンにリセット")) {
-            SceneManager::GetInstance()->ChangeScene(kDebugSceneName);
+            SceneManager::GetInstance()->ChangeScene(kDebugSceneName, false);
         }
         if (ImGui::Button("タイトルシーンにリセット")) {
-            SceneManager::GetInstance()->ChangeScene(kTitleSceneName);
+            SceneManager::GetInstance()->ChangeScene(kTitleSceneName, false);
         }
         if (ImGui::Button("ゲームシーンにリセット")) {
-            SceneManager::GetInstance()->ChangeScene(kGameSceneName);
+            SceneManager::GetInstance()->ChangeScene(kGameSceneName, false);
         }
         if (ImGui::Button("クリアシーンにリセット")) {
-            SceneManager::GetInstance()->ChangeScene(kClearSceneName);
+            SceneManager::GetInstance()->ChangeScene(kClearSceneName, false);
         }
         if (ImGui::Button("ゲームオーバーシーンにリセット")) {
-            SceneManager::GetInstance()->ChangeScene(kGameOverSceneName);
+            SceneManager::GetInstance()->ChangeScene(kGameOverSceneName, false);
         }
     }
     ImGui::End();

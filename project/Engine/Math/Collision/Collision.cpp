@@ -1,4 +1,4 @@
-﻿#include "Engine/Math/Collision/Collision.h"
+#include "Engine/Math/Collision/Collision.h"
 #include "Engine/Math/Matrix/Matrix.h"
 #include <algorithm>
 
@@ -78,6 +78,42 @@ bool IsCollision(const AABB& a, const AABB& b) {
 	return (a.min.x <= b.max.x && a.max.x >= b.min.x) &&
 		(a.min.y <= b.max.y && a.max.y >= b.min.y) &&
 		(a.min.z <= b.max.z && a.max.z >= b.min.z);
+}
+
+// AABB同士の重なりを解消するための押し出しベクトル（bをaから離すベクトル）を計算
+bool CalculateAABBPushVector(const AABB& a, const AABB& b, Vector3& outPushVector) {
+	outPushVector = { 0.0f, 0.0f, 0.0f };
+	if (!IsCollision(a, b)) {
+		return false;
+	}
+
+	// 各軸の重なり幅を計算
+	float overlapX = (std::min)(a.max.x, b.max.x) - (std::max)(a.min.x, b.min.x);
+	float overlapY = (std::min)(a.max.y, b.max.y) - (std::max)(a.min.y, b.min.y);
+	float overlapZ = (std::min)(a.max.z, b.max.z) - (std::max)(a.min.z, b.min.z);
+
+	if (overlapX <= 0.0f || overlapY <= 0.0f || overlapZ <= 0.0f) {
+		return false;
+	}
+
+	// 中心座標から押し出し方向（離脱符号）を判定
+	constexpr float kHalf = 0.5f;
+	float centerAX = (a.min.x + a.max.x) * kHalf;
+	float centerAZ = (a.min.z + a.max.z) * kHalf;
+	float centerBX = (b.min.x + b.max.x) * kHalf;
+	float centerBZ = (b.min.z + b.max.z) * kHalf;
+
+	float signX = (centerBX >= centerAX) ? 1.0f : -1.0f;
+	float signZ = (centerBZ >= centerAZ) ? 1.0f : -1.0f;
+
+	// ゲームプレイ上、水平面（XZ）で最も侵入の浅い軸に沿って押し出す
+	if (overlapX < overlapZ) {
+		outPushVector.x = overlapX * signX;
+	} else {
+		outPushVector.z = overlapZ * signZ;
+	}
+
+	return true;
 }
 
 // AABBと点の当たり判定

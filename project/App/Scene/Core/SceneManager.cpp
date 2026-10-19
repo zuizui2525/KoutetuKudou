@@ -18,6 +18,7 @@
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Base/Utils/StringUtility.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include <format>
 #ifdef _USEIMGUI
 #include <imgui.h>
@@ -114,11 +115,27 @@ bool SceneManager::ProcessPendingSceneChange() {
         // 新しいシーンの初期化
         currentScene_->Initialize();
 
+        // 新シーンのカメラ・ライトの定数バッファおよび行列を直ちにGPUへ反映
+        if (auto camMgr = CameraResource::GetCameraManager()) {
+            camMgr->Update();
+        }
+        if (auto lightMgr = LightResource::GetLightManager()) {
+            lightMgr->Update();
+        }
+        EffectManager::GetInstance()->UpdateMatrices();
+
         // ポーズ中でも即座に描画行列が確定するように、新シーンの全オブジェクトの行列・レンダラーを1度更新
         const auto objectsSnapshot = SceneHierarchy::GetInstance()->GetObjects();
         for (auto* obj : objectsSnapshot) {
             if (obj) {
                 obj->UpdateEditor();
+            }
+        }
+
+        // 古いシーンの破棄や新シーンの初期化・定数バッファ転送完了をGPUと同期待機
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                dxCommon->FlushGPU();
             }
         }
     }

@@ -1,6 +1,8 @@
 #include "Scripts/Sample/SampleFollowerScript.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/GameObject.h"
+#include "Engine/Component/Components/BoxColliderComponent.h"
+#include "Engine/Math/Collision/Collision.h"
 #include <cmath>
 
 #ifdef _USEIMGUI
@@ -69,6 +71,34 @@ void SampleFollowerScript::OnUpdate() {
         selfPos.z += dir.z * moveDist;
 
         owner_->SetPosition(selfPos);
+    }
+
+    // ---------------------------------------------------------
+    // コライダーによる当たり判定と押し返し処理 (Collision Push-back)
+    // ---------------------------------------------------------
+    auto* selfCol = owner_->GetComponent<BoxColliderComponent>();
+    auto* targetCol = targetObject_->GetComponent<BoxColliderComponent>();
+
+    if (selfCol && targetCol) {
+        AABB targetAABB = targetCol->GetWorldAABB();
+        AABB selfAABB = selfCol->GetWorldAABB();
+
+        Vector3 pushVec{};
+        if (CalculateAABBPushVector(targetAABB, selfAABB, pushVec)) {
+            // 重なりが発生しているため、自身を侵入深さ分押し戻す
+            selfPos.x += pushVec.x;
+            selfPos.y += pushVec.y;
+            selfPos.z += pushVec.z;
+            owner_->SetPosition(selfPos);
+
+            // 衝突中フラグをON（枠線を赤色にハイライト！）
+            selfCol->SetColliding(true);
+            targetCol->SetColliding(true);
+        } else {
+            // 衝突していない場合はフラグをクリア（通常色・緑色）
+            selfCol->SetColliding(false);
+            targetCol->SetColliding(false);
+        }
     }
 }
 

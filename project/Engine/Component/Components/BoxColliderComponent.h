@@ -3,17 +3,22 @@
 #include "Engine/Math/MathStructs.h"
 #include "Engine/Math/Collision/CollisionStructs.h"
 #include <string>
+#include <vector>
+#include <memory>
+
+class LineObject;
 
 /// <summary>
 /// 直方体 (AABB) 当たり判定コンポーネント (UnityライクなBoxCollider)
 /// </summary>
 class BoxColliderComponent : public IComponent {
 public:
-    BoxColliderComponent() = default;
-    ~BoxColliderComponent() override = default;
+    BoxColliderComponent();
+    ~BoxColliderComponent() override;
 
     void Initialize() override {}
     void Update() override {}
+    void Draw() override;
     void DrawInspector() override;
 
     std::string GetComponentTypeName() const override { return "BoxCollider"; }
@@ -38,9 +43,23 @@ public:
     bool IsShowDebugGizmo() const { return showDebugGizmo_; }
     void SetShowDebugGizmo(bool show) { showDebugGizmo_ = show; }
 
+    float GetGizmoWireThickness() const { return gizmoWireThickness_; }
+    void SetGizmoWireThickness(float thickness) { gizmoWireThickness_ = thickness; }
+
+    bool IsColliding() const { return isColliding_; }
+    void SetColliding(bool colliding) { isColliding_ = colliding; }
+
+private:
+    void EnsureGizmoLines();
+
 private:
     Vector3 centerOffset_ = { 0.0f, 0.0f, 0.0f };
     Vector3 size_ = { 1.0f, 1.0f, 1.0f };
     bool isTrigger_ = false;
     bool showDebugGizmo_ = true;
+    bool isColliding_ = false;
+    float gizmoWireThickness_ = 0.03f;
+
+    // 12本のエッジ描画用ラインオブジェクト
+    std::vector<std::unique_ptr<LineObject>> gizmoLines_;
 };
