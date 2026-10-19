@@ -8,7 +8,6 @@
 #include "Engine/Debug/IGameObject.h"
 #include "Engine/Zuizui.h"
 #include "App/Scene/Core/SceneManager.h"
-#include "App/Scene/Game/GameScene.h"
 #include "Engine/Base/Log/Log.h"
 #include "externals/imgui/imgui.h"
 #include "Engine/Base/BaseResource.h"
@@ -16,6 +15,7 @@
 #include "Engine/Graphics/PostProcess/PostProcess.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Component/GameObject.h"
+#include "Engine/Component/PrefabManager.h"
 #include "Engine/Component/Components/MeshRendererComponent.h"
 #include "Engine/Component/Components/SpriteRendererComponent.h"
 #include "Engine/Component/Components/CameraComponent.h"
@@ -23,7 +23,13 @@
 #include "Engine/Component/Components/TextRenderer2DComponent.h"
 #include "Engine/Component/Components/TextRenderer3DComponent.h"
 #include "App/Scene/Core/SceneSerializer.h"
+#include "App/Scene/Core/SceneMemoryCache.h"
+#include "App/Scene/Core/Scene.h"
+#include "App/Scene/Core/SceneDirector.h"
+#include "Engine/Component/ScriptComponent.h"
+#include "Engine/Component/ScriptRegistry.h"
 #include "App/Scene/Generic/GenericScene.h"
+#include "App/Scene/Core/SceneTransitionManager.h"
 #include "Engine/Debug/Command/CommandHistory.h"
 #include "Engine/Debug/Command/CreateGameObjectCommand.h"
 #include "Engine/Debug/Command/DeleteGameObjectCommand.h"
@@ -35,15 +41,173 @@
 
 namespace {
     const std::string kScenesDirectory = "resources/Scenes";
+    constexpr const char* kDedicatedSceneGame = "Game";
+    constexpr const char* kTransitionsConfigFileName = "Transitions";
+
+    // トランジション設定（IN: 入場演出 / OUT: 退場演出）表示用定数 (マジックナンバー排除)
+    constexpr ImVec4 kTransitionColorIn   = ImVec4(0.2f, 0.8f, 1.0f, 1.0f); // シアン（IN）
+    constexpr ImVec4 kTransitionColorOut  = ImVec4(1.0f, 0.6f, 0.2f, 1.0f); // オレンジ（OUT）
+    constexpr float  kTransitionStarSpacingX = 4.0f;                         // 星アイコンの水平余白
+    constexpr const char* kTransitionStarSymbol = "*";                       // 星アイコン記号
+
 
     // シーン削除モーダルID、フォールバックシーン名、最低シーン保持数 (マジックナンバー・ストリング排除)
     constexpr const char* kDeleteSceneModalId = "DeleteSceneConfirmModal";
     const std::string kFallbackPrioritySceneName = "Title";
     constexpr size_t kMinSceneCount = 1;
 
+    // Prefab ドラッグ＆ドロップ用定数 (マジックナンバー・ストリング排除)
+    constexpr const char* kPayloadPrefab = "CONTENT_BROWSER_PREFAB";
+    constexpr float kMinDropAreaHeight = 32.0f;
+
     // シーン削除モーダル用ステート変数
     static std::string sSceneNameToDelete = "";
     static bool sTriggerOpenDeleteSceneModal = false;
+
+    // 単一フェーズ（INまたはOUT）のGUI描画ヘルパー
+    bool RenderSingleTransitionSettingUI(const char* idPrefix, SingleTransitionSetting& setting, bool isOut) {
+        bool changed = false;
+
+        // 1. 有効化チェックボックス
+        std::string enableLabel = isOut ? "退場演出 (OUT) を有効にする##" : "入場演出 (IN) を有効にする##";
+        enableLabel += idPrefix;
+        if (ImGui::Checkbox(enableLabel.c_str(), &setting.enabled)) {
+            changed = true;
+        }
+
+        if (!setting.enabled) {
+            ImGui::TextDisabled(isOut ? "※退場演出は無効です（即座に切り替わります）" : "※入場演出は無効です（即座に出現します）");
+            return changed;
+        }
+
+        // 2. 種類選択 (Combo)
+        const char* effectTypes[] = {
+            "なし (None)",
+            "カラーフェード (Color Fade)",
+            "ディゾルブ (Dissolve)",
+            "ラジアルブラー (Radial Blur)",
+            "ガウスぼかし (Gaussian Blur)",
+            "TVノイズ (TV Noise)",
+            "モノクロフェード (Grayscale)",
+            "左ワイプ (Wipe Left)",
+            "右ワイプ (Wipe Right)"
+        };
+        int currentType = static_cast<int>(setting.effectType);
+        std::string comboLabel = "種類##";
+        comboLabel += idPrefix;
+        if (ImGui::Combo(comboLabel.c_str(), &currentType, effectTypes, IM_ARRAYSIZE(effectTypes))) {
+            setting.effectType = static_cast<TransitionEffectType>(currentType);
+            changed = true;
+        }
+
+        // 3. 所要秒数 (DragFloat)
+        std::string durationLabel = "秒数##";
+        durationLabel += idPrefix;
+        if (ImGui::DragFloat(durationLabel.c_str(), &setting.duration, 0.05f, TransitionConstants::kMinDuration, TransitionConstants::kMaxDuration, "%.2f 秒")) {
+            changed = true;
+        }
+
+        // 4. 遷移カラー & 最大透明度 (ColorEdit4)
+        float col[4] = { setting.color.x, setting.color.y, setting.color.z, setting.color.w };
+        std::string colorLabel = "色・透明度##";
+        colorLabel += idPrefix;
+        if (ImGui::ColorEdit4(colorLabel.c_str(), col, ImGuiColorEditFlags_AlphaBar)) {
+            setting.color = { col[0], col[1], col[2], col[3] };
+            changed = true;
+        }
+
+        // 5. エフェクト個別パラメータ
+        if (setting.effectType == TransitionEffectType::Dissolve) {
+            float edgeCol[3] = { setting.edgeColor.x, setting.edgeColor.y, setting.edgeColor.z };
+            std::string edgeColorLabel = "発光色##";
+            edgeColorLabel += idPrefix;
+            if (ImGui::ColorEdit3(edgeColorLabel.c_str(), edgeCol)) {
+                setting.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
+                changed = true;
+            }
+            std::string edgeWidthLabel = "境界幅##";
+            edgeWidthLabel += idPrefix;
+            if (ImGui::DragFloat(edgeWidthLabel.c_str(), &setting.edgeWidth, 0.01f, 0.01f, 0.2f, "%.2f")) {
+                changed = true;
+            }
+        } else if (setting.effectType == TransitionEffectType::RadialBlur ||
+                   setting.effectType == TransitionEffectType::GaussianBlur ||
+                   setting.effectType == TransitionEffectType::TVNoise) {
+            std::string strengthLabel = "エフェクト強度##";
+            strengthLabel += idPrefix;
+            if (ImGui::DragFloat(strengthLabel.c_str(), &setting.blurStrength, 0.05f, 0.1f, 3.0f, "%.2f 倍")) {
+                changed = true;
+            }
+        }
+
+        ImGui::Spacing();
+        // 6. 単体プレビュー再生ボタン
+        std::string previewBtnLabel = isOut ? "▶ OUT 単体プレビュー##" : "▶ IN 単体プレビュー##";
+        previewBtnLabel += idPrefix;
+        if (ImGui::Button(previewBtnLabel.c_str())) {
+            if (isOut) {
+                SceneTransitionManager::GetInstance()->TriggerPreviewOut(setting);
+            } else {
+                SceneTransitionManager::GetInstance()->TriggerPreviewIn(setting);
+            }
+        }
+
+        return changed;
+    }
+
+    // 画面切り替え（トランジション）設定ポップアップの描画ヘルパー (右クリック)
+    void RenderSceneTransitionContextMenu(const std::string& sceneName) {
+        if (ImGui::BeginPopupContextItem("TransitionContextMenu")) {
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), "画面切り替え設定: %s", sceneName.c_str());
+            ImGui::Separator();
+
+            auto transitionMgr = SceneTransitionManager::GetInstance();
+            SceneTransitionConfig config = transitionMgr->GetConfig(sceneName);
+            bool changed = false;
+
+            // タブバーで OUT（退場）と IN（入場）を明確に分割
+            if (ImGui::BeginTabBar("TransitionTabBar")) {
+                // OUT タブ（退場演出）: 橙色
+                if (ImGui::BeginTabItem("OUT (退場演出)###OutTab")) {
+                    ImGui::TextColored(kTransitionColorOut, "【OUT】このシーンから抜ける時の演出");
+                    ImGui::Separator();
+                    if (RenderSingleTransitionSettingUI("OutSetting", config.outSetting, true)) {
+                        changed = true;
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                // IN タブ（入場演出）: 青色/シアン
+                if (ImGui::BeginTabItem("IN (入場演出)###InTab")) {
+                    ImGui::TextColored(kTransitionColorIn, "【IN】このシーンに入ってくる時の演出");
+                    ImGui::Separator();
+                    if (RenderSingleTransitionSettingUI("InSetting", config.inSetting, false)) {
+                        changed = true;
+                    }
+                    ImGui::EndTabItem();
+                }
+
+                ImGui::EndTabBar();
+            }
+
+            if (changed) {
+                transitionMgr->SetConfig(sceneName, config);
+            }
+
+            ImGui::Separator();
+
+            // 通しプレビューボタン
+            if (ImGui::Button("▶ 通しプレビュー (OUT → IN)")) {
+                transitionMgr->TriggerPreviewFull(config.outSetting, config.inSetting);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("閉じる")) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+    }
 
     enum class CreationType {
         Empty,
@@ -74,6 +238,24 @@ namespace {
         SpotLight,
     };
 
+    // 現在のシーン状態をディスクではなく「メモリ一時キャッシュ」に退避（シーン切り替え時用）
+    void CacheCurrentSceneAction(const std::string& currentSceneName) {
+        if (currentSceneName.empty() || currentSceneName == "None") return;
+
+        // SceneHierarchy から GameObject を収集
+        const auto& allObjects = SceneHierarchy::GetInstance()->GetObjects();
+        std::vector<GameObject*> gameObjects;
+        for (auto* obj : allObjects) {
+            if (auto* go = dynamic_cast<GameObject*>(obj)) {
+                gameObjects.push_back(go);
+            }
+        }
+
+        std::string jsonStr = SceneSerializer::SerializeToString(currentSceneName, gameObjects);
+        SceneMemoryCache::GetInstance()->SetCache(currentSceneName, jsonStr);
+    }
+
+    // 現在のシーン状態をディスク（.json）へ明示的に正式保存（Ctrl+S またはメニュー保存用）
     void SaveCurrentSceneAction(const std::string& currentSceneName) {
         if (currentSceneName.empty() || currentSceneName == "None") {
             Log::Write(L"[Scene] 有効なシーンが開かれていないため、保存をスキップしました。");
@@ -93,6 +275,8 @@ namespace {
 
         bool success = SceneSerializer::SaveScene(scenePath, currentSceneName, gameObjects);
         if (success) {
+            // ディスク保存に成功したため、メモリキャッシュの未保存ダーティ状態を解消
+            SceneMemoryCache::GetInstance()->ClearCache(currentSceneName);
             Log::Write(std::format(L"[Scene] 現在のシーン「{}」({} 個の GameObject) を「{}」に正常保存しました！",
                 ConvertString(currentSceneName), gameObjects.size(), ConvertString(scenePath)));
         } else {
@@ -104,19 +288,22 @@ namespace {
     // アプリケーション終了時のセーブ確認ダイアログ
     bool ConfirmExitAndSave(HWND hwnd) {
         std::string currentSceneName = SceneManager::GetInstance()->GetCurrentSceneName();
-        if (currentSceneName.empty() || currentSceneName == "None") {
-            return true;
-        }
 
-        std::wstring msg = L"現在のシーン「" + ConvertString(currentSceneName) + L"」を保存してから終了しますか？\n\n"
-                           L"【はい】: 保存して終了\n"
-                           L"【いいえ】: 保存せずに終了\n"
+        std::wstring msg = L"エディタでの変更を保存してから終了しますか？\n\n"
+                           L"【はい】: 変更を保存して終了\n"
+                           L"【いいえ】: 保存せずに終了 (変更を破棄して元通りにする)\n"
                            L"【キャンセル】: 終了を取り消す";
         int result = MessageBoxW(hwnd, msg.c_str(), L"終了の確認 - ZuizuiEngine", MB_YESNOCANCEL | MB_ICONQUESTION);
         if (result == IDYES) {
-            SaveCurrentSceneAction(currentSceneName);
+            // 現在のシーンも一時キャッシュに入れてから全変更をディスクへ保存
+            if (!currentSceneName.empty() && currentSceneName != "None") {
+                CacheCurrentSceneAction(currentSceneName);
+            }
+            SceneMemoryCache::GetInstance()->SaveAllDirtyToDisk(kScenesDirectory);
             return true;
         } else if (result == IDNO) {
+            // 【いいえ】: 一時キャッシュを全て破棄！ディスクファイルには1文字も触らないため完全元通り！
+            SceneMemoryCache::GetInstance()->ClearAll();
             return true;
         }
         return false; // キャンセル時は終了を中断
@@ -551,6 +738,78 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
             }
             ImGui::Separator();
 
+            // 🎬 シーン＆SceneDirector の特別ルートノード描画
+            auto* currentSceneObj = dynamic_cast<Scene*>(SceneManager::GetInstance()->GetCurrentScene());
+            if (currentSceneObj) {
+                constexpr float kSceneNodeHeight = 24.0f;
+                constexpr ImVec4 kSceneActiveBgColor = { 0.18f, 0.32f, 0.52f, 1.0f };
+                constexpr ImVec4 kSceneNormalBgColor = { 0.10f, 0.15f, 0.24f, 0.85f };
+                constexpr ImVec4 kSceneActiveTextColor = { 0.45f, 0.85f, 1.0f, 1.0f };
+                constexpr ImVec4 kSceneDirectorSubColor = { 0.35f, 0.75f, 0.95f, 0.8f };
+
+                std::string sceneTitle = "[Scene] " + currentSceneObj->GetSceneName() + " [Active]";
+
+                ImGui::PushStyleColor(ImGuiCol_Header, isSceneSelected_ ? kSceneActiveBgColor : kSceneNormalBgColor);
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kSceneActiveBgColor);
+                ImGui::PushStyleColor(ImGuiCol_Text, kSceneActiveTextColor);
+
+                bool isNodeClicked = ImGui::Selectable(sceneTitle.c_str(), isSceneSelected_, 0, ImVec2(0.0f, kSceneNodeHeight));
+
+                ImGui::PopStyleColor(3);
+
+                if (isNodeClicked) {
+                    isSceneSelected_ = true;
+                    SceneHierarchy::GetInstance()->SetSelected(nullptr);
+                }
+
+                // シーン項目の右クリックコンテキストメニュー
+                if (ImGui::BeginPopupContextItem("SceneContextMenu")) {
+                    ImGui::TextColored(kSceneActiveTextColor, "[Scene] %s", currentSceneObj->GetSceneName().c_str());
+                    ImGui::Separator();
+
+                    if (ImGui::MenuItem("Inspect SceneDirector (ディレクターを開く)")) {
+                        isSceneSelected_ = true;
+                        SceneHierarchy::GetInstance()->SetSelected(nullptr);
+                    }
+
+                    // スクリプトのアタッチサブメニュー
+                    auto* director = currentSceneObj->GetDirector();
+                    if (director) {
+                        auto registeredScripts = ScriptRegistry::GetInstance().GetRegisteredScriptNames();
+                        if (ImGui::BeginMenu("+ Attach Script (スクリプトを追加)")) {
+                            if (registeredScripts.empty()) {
+                                ImGui::TextDisabled("登録済みスクリプトがありません");
+                            } else {
+                                for (const auto& sName : registeredScripts) {
+                                    if (ImGui::MenuItem(sName.c_str())) {
+                                        auto newScript = ScriptRegistry::GetInstance().CreateScript(sName);
+                                        if (newScript) {
+                                            director->AddScript(std::move(newScript));
+                                        }
+                                    }
+                                }
+                            }
+                            ImGui::EndMenu();
+                        }
+                    }
+
+                    ImGui::Separator();
+
+                    if (ImGui::MenuItem("Save Scene (シーン保存)")) {
+                        SaveCurrentSceneAction(currentSceneObj->GetSceneName());
+                    }
+
+                    if (ImGui::MenuItem("Reload Scene (シーン再読み込み)")) {
+                        SceneManager::GetInstance()->ChangeSceneImmediate(currentSceneObj->GetSceneName());
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("── GameObjects ──");
+            }
+
             const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
             IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
             GameObject* objToDelete = nullptr;
@@ -602,18 +861,43 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         ImGui::PopStyleColor();
                     }
 
+                    // GameObject参照用のドラッグ＆ドロップソース (インスペクターのスロットへD&D可能)
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+                        const std::string& uuid = go->GetUUID();
+                        ImGui::SetDragDropPayload("DND_GAMEOBJECT_UUID", uuid.c_str(), (uuid.length() + 1) * sizeof(char));
+                        ImGui::Text("GameObject: %s", go->GetName().c_str());
+                        ImGui::EndDragDropSource();
+                    }
+
                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                        isSceneSelected_ = false;
                         SceneHierarchy::GetInstance()->SetSelected(obj);
                         FocusOnSelectedObject();
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                        isSceneSelected_ = false;
                         SceneHierarchy::GetInstance()->SetSelected(obj);
                         if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpTranslate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
+                        isSceneSelected_ = false;
                         SceneHierarchy::GetInstance()->SetSelected(obj);
                         if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpRotate);
                     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                        isSceneSelected_ = false;
                         SceneHierarchy::GetInstance()->SetSelected(obj);
                         if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
+                    }
+
+                    // GameObject項目の右クリックコンテキストメニュー
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (ImGui::MenuItem("Save as Prefab (プレハブとして保存)")) {
+                            std::string prefabFilePath = "resources/Prefabs/" + go->GetName() + ".prefab";
+                            PrefabManager::GetInstance().SavePrefab(prefabFilePath, go);
+                        }
+                        ImGui::Separator();
+                        if (ImGui::MenuItem("削除 (Delete)")) {
+                            objToDelete = go;
+                        }
+                        ImGui::EndPopup();
                     }
 
                     ImGui::SameLine();
@@ -639,6 +923,16 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         SceneHierarchy::GetInstance()->SetSelected(obj);
                         if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
                     }
+                    // オブジェクト行の上へのプレハブドロップ受け取り
+                    if (ImGui::BeginDragDropTarget()) {
+                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadPrefab)) {
+                            const char* prefabPath = static_cast<const char*>(payload->Data);
+                            if (auto* newObj = SceneManager::GetInstance()->Instantiate(prefabPath)) {
+                                SceneHierarchy::GetInstance()->SetSelected(newObj);
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
                 }
 
                 ImGui::PopID();
@@ -646,6 +940,20 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
             if (objToDelete) {
                 DestroyGameObjectInCurrentScene(objToDelete);
+            }
+
+            // Prefab のドラッグ＆ドロップ受け取り (Hierarchy ウィンドウ全体の余白領域)
+            ImVec2 remainingSpace = ImGui::GetContentRegionAvail();
+            float dropHeight = (remainingSpace.y > kMinDropAreaHeight) ? remainingSpace.y : kMinDropAreaHeight;
+            ImGui::Dummy(ImVec2(remainingSpace.x, dropHeight));
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadPrefab)) {
+                    const char* prefabPath = static_cast<const char*>(payload->Data);
+                    if (auto* newObj = SceneManager::GetInstance()->Instantiate(prefabPath)) {
+                        SceneHierarchy::GetInstance()->SetSelected(newObj);
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
 
             // 空白エリアの右クリックコンテキストメニュー
@@ -661,13 +969,28 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
     if (showInspector_) {
         if (ImGui::Begin("インスペクター###Inspector", &showInspector_)) {
             IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
-            if (selected) {
+            auto* currentSceneObj = dynamic_cast<Scene*>(SceneManager::GetInstance()->GetCurrentScene());
+
+            if (isSceneSelected_ && currentSceneObj && currentSceneObj->GetDirector()) {
+                currentSceneObj->GetDirector()->DrawInspector();
+            } else if (selected) {
                 // 名前の編集
                 constexpr int kNameBufferSize = 128;
                 char nameBuf[kNameBufferSize];
                 strcpy_s(nameBuf, selected->GetName().c_str());
                 if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
                     selected->SetName(nameBuf);
+                }
+
+                if (auto* selectedGo = dynamic_cast<GameObject*>(selected)) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("Save as Prefab##InspectorSavePrefab")) {
+                        std::string prefabFilePath = "resources/Prefabs/" + selectedGo->GetName() + ".prefab";
+                        PrefabManager::GetInstance().SavePrefab(prefabFilePath, selectedGo);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("このオブジェクトをプレハブとして保存します (resources/Prefabs/)");
+                    }
                 }
 
                 ImGui::Separator();
@@ -738,38 +1061,73 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             std::vector<std::string> jsonScenes;
             for (const auto& entry : std::filesystem::directory_iterator(kScenesDirectory)) {
                 if (entry.is_regular_file() && entry.path().extension() == ".json") {
-                    jsonScenes.push_back(entry.path().stem().string());
+                    std::string stemName = entry.path().stem().string();
+                    // 設定用JSONは通常シーン一覧から除外
+                    if (stemName == kTransitionsConfigFileName) {
+                        continue;
+                    }
+                    jsonScenes.push_back(stemName);
                 }
             }
 
             // シーン一覧表示
             for (const auto& sName : jsonScenes) {
-                ImGui::PushID(sName.c_str());
+                std::string itemId = "json_scene_" + sName;
+                ImGui::PushID(itemId.c_str());
                 bool isSelected = (sName == currentSceneName);
-                if (ImGui::MenuItem(sName.c_str(), nullptr, isSelected)) {
+
+                // トランジション設定の有無を取得（IN/OUT独立バッジ）
+                auto transCfg = SceneTransitionManager::GetInstance()->GetConfig(sName);
+                bool hasOut = transCfg.HasOut();
+                bool hasIn = transCfg.HasIn();
+
+                // 星を描画するための余白を確保したラベル
+                std::string label = sName;
+                if (hasIn && hasOut) {
+                    label += "    ";
+                } else if (hasIn || hasOut) {
+                    label += "  ";
+                }
+
+                if (ImGui::MenuItem(label.c_str(), nullptr, isSelected)) {
                     if (!isSelected) {
-                        SaveCurrentSceneAction(currentSceneName);
+                        CacheCurrentSceneAction(currentSceneName);
                         SceneManager::GetInstance()->ChangeScene(sName);
                     }
                 }
+
+                // シアン（IN）とオレンジ（OUT）の星を描画
+                if (hasIn || hasOut) {
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    ImVec2 itemMin = ImGui::GetItemRectMin();
+                    ImVec2 itemMax = ImGui::GetItemRectMax();
+                    float textWidth = ImGui::CalcTextSize(sName.c_str()).x;
+                    float lineHeight = ImGui::GetTextLineHeight();
+                    float posY = itemMin.y + (itemMax.y - itemMin.y - lineHeight) * 0.5f;
+                    float currentX = itemMin.x + textWidth + kTransitionStarSpacingX;
+
+                    if (hasIn) {
+                        drawList->AddText(ImVec2(currentX, posY), ImColor(kTransitionColorIn), kTransitionStarSymbol);
+                        currentX += ImGui::CalcTextSize(kTransitionStarSymbol).x + kTransitionStarSpacingX;
+                    }
+                    if (hasOut) {
+                        drawList->AddText(ImVec2(currentX, posY), ImColor(kTransitionColorOut), kTransitionStarSymbol);
+                    }
+                }
+
+                // 各シーンの右クリックでトランジション設定
+                RenderSceneTransitionContextMenu(sName);
+
                 ImGui::PopID();
             }
 
-            // 専用C++シーン（Game）
+
+
             ImGui::Separator();
-            ImGui::TextDisabled("専用シーン");
-            const std::vector<std::string> cppScenes = { "Game" };
-            for (const auto& cs : cppScenes) {
-                ImGui::PushID(cs.c_str());
-                bool isSelected = (cs == currentSceneName);
-                if (ImGui::MenuItem(cs.c_str(), nullptr, isSelected)) {
-                    if (!isSelected) {
-                        SaveCurrentSceneAction(currentSceneName);
-                        SceneManager::GetInstance()->ChangeScene(cs);
-                    }
-                }
-                ImGui::PopID();
-            }
+            ImGui::TextDisabled("※各シーン右クリック: 画面切り替え設定");
+            ImGui::TextColored(kTransitionColorIn, " * : 入場演出");
+            ImGui::SameLine();
+            ImGui::TextColored(kTransitionColorOut, " * : 退場演出");
 
             ImGui::Separator();
 
@@ -782,7 +1140,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             bool newBtnClicked = ImGui::Button("New Scene");
 
             if ((enterPressed || newBtnClicked) && strlen(newSceneNameBuf) > 0) {
-                SaveCurrentSceneAction(currentSceneName);
+                CacheCurrentSceneAction(currentSceneName);
 
                 std::string newName = newSceneNameBuf;
                 std::string newPath = kScenesDirectory + "/" + newName + ".json";
@@ -836,13 +1194,6 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             ImGui::MenuItem("パフォーマンス監視", nullptr, &showPerfMonitor_);
             ImGui::MenuItem("コンテンツブラウザ", nullptr, &showContentBrowser_);
             
-            GameScene* gameScene = dynamic_cast<GameScene*>(SceneManager::GetInstance()->GetCurrentScene());
-            if (gameScene) {
-                ImGui::Separator();
-                ImGui::MenuItem("ルートエディタ", nullptr, gameScene->GetShowRouteEditorPtr());
-                ImGui::MenuItem("敵エディタ", nullptr, gameScene->GetShowStageEditorPtr());
-            }
-
             ImGui::EndMenu();
         }
         

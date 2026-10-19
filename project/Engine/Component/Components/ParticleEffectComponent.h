@@ -9,7 +9,9 @@
 class ParticleEffectComponent : public IComponent {
 public:
     ParticleEffectComponent() = default;
-    ~ParticleEffectComponent() override = default;
+    ~ParticleEffectComponent() override {
+        Stop();
+    }
 
     void Initialize() override {}
     void Update() override;

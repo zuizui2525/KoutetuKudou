@@ -9,6 +9,7 @@
 #ifdef _USEIMGUI
 #include "Engine/Graphics/PostProcess/PostProcess.h"
 #include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Core/SceneTransitionManager.h"
 #include "externals/imgui/imgui.h"
 #include "Engine/Debug/DebugEditor.h"
 
@@ -84,6 +85,14 @@ void GameViewWindow::Draw(bool* show, bool* isVisible) {
             ImDrawList* drawList = ImGui::GetWindowDrawList();
             ImU32 borderColor = isPaused ? kPausedBorderColor : kRunningBorderColor;
             ImVec2 imgPosMax = ImVec2(imgPosMin.x + width, imgPosMin.y + height);
+
+            // シーン画面遷移オーバーレイ（フェード、透明度、ワイプ）の描画
+            SceneTransitionManager::GetInstance()->DrawEditorOverlay(
+                drawList,
+                Vector2{ imgPosMin.x, imgPosMin.y },
+                Vector2{ imgPosMax.x, imgPosMax.y }
+            );
+
             drawList->AddRect(imgPosMin, imgPosMax, borderColor, 0.0f, 0, kGameViewBorderThickness);
 
             // 中央座標の計算

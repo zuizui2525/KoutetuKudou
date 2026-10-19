@@ -31,7 +31,6 @@
 #include "Engine/Debug/Command/CommandHistory.h"
 #include "Engine/Debug/Command/TransformCommand.h"
 #include "Engine/Debug/Command/LinePointsCommand.h"
-#include "App/Scene/Game/Stage/StageEditor.h"
 #include <algorithm>
 
 namespace {
@@ -109,6 +108,11 @@ namespace {
 
     // トランスフォームの変化検知しきい値 (マジックナンバー排除)
     static constexpr float kTransformChangeThreshold = 1e-4f;
+
+    // Prefab ドラッグ＆ドロップ配置用定数 (マジックナンバー排除)
+    static constexpr const char* kPayloadPrefab = "CONTENT_BROWSER_PREFAB";
+    static constexpr float kDefaultPrefabSpawnDistance = 10.0f;
+    static constexpr Vector3 kDefaultSpawnPosition = { 0.0f, 0.0f, 0.0f };
 
     // ギズモ操作前後の Undo/Redo コマンド記録用の状態変数
     bool sWasUsingGizmo = false;
@@ -190,6 +194,30 @@ void SceneViewWindow::Draw(bool* show) {
             
             ImVec2 imgPosMin = ImGui::GetCursorScreenPos();
             ImGui::Image(texID, ImVec2(width, height));
+
+            // Prefab のドラッグ＆ドロップ受け取り (SceneView 3Dビューポートへの直接配置)
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kPayloadPrefab)) {
+                    const char* prefabPath = static_cast<const char*>(payload->Data);
+                    Vector3 spawnPos = kDefaultSpawnPosition;
+                    if (auto camMgr = CameraResource::GetCameraManager()) {
+                        if (auto* activeCam = camMgr->GetActiveCamera()) {
+                            if (activeCam->IsUseTarget()) {
+                                spawnPos = activeCam->GetTarget();
+                            } else {
+                                Vector3 rot = activeCam->GetRotation();
+                                Matrix4x4 rotMat = Math::MakeRotateMatrix(rot.x, rot.y, rot.z);
+                                Vector3 forward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+                                spawnPos = Math::Add(activeCam->GetPosition(), Math::Multiply(kDefaultPrefabSpawnDistance, forward));
+                            }
+                        }
+                    }
+                    if (auto* newObj = SceneManager::GetInstance()->Instantiate(prefabPath, spawnPos)) {
+                        SceneHierarchy::GetInstance()->SetSelected(newObj);
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
 
             // マウスがゲーム描画画像上にあるか判定（ドラッグ中も判定を維持）
             sIsMouseOnSceneView_ = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
@@ -353,8 +381,7 @@ void SceneViewWindow::Draw(bool* show) {
 
             // ゲーム停止中（ポーズ中）のみピッキングを実行（ゲーム中の誤クリックを防止）
             BaseCamera* camera = CameraResource::GetCameraManager()->GetActiveCamera();
-            bool isEditorPlacing = StageEditor::IsPlacingNow();
-            if (isPaused && camera && sIsMouseOnSceneView_ && !isEditorPlacing) {
+            if (isPaused && camera && sIsMouseOnSceneView_) {
                 // ギズモの操作子をホバー中・操作中、あるいはCtrlキー押下中、右クリック中、オーバーレイホバー中の場合はレイキャストを一切行わない（誤クリック防止）
                 auto input = InputResource::GetInput();
                 bool isCtrlPressed = input && (input->Press(DIK_LCONTROL) || input->Press(DIK_RCONTROL));

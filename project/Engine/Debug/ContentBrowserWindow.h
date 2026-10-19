@@ -41,11 +41,31 @@ private:
     std::string FormatFileSize(uintmax_t bytes) const;
     std::string FormatFileTime(std::filesystem::file_time_type ftime) const;
 
+    // ファイル操作
+    void DuplicateEntry(const std::filesystem::path& targetPath);
+    void DeleteEntry(const std::filesystem::path& targetPath);
+    void ShowInExplorer(const std::filesystem::path& targetPath) const;
+    void DrawDeleteConfirmModal();
+
+    enum class RootCategory {
+        Resources,
+        Scripts
+    };
+
+    void SwitchRootCategory(RootCategory category);
+
+    RootCategory currentCategory_ = RootCategory::Resources;
+    std::filesystem::path resourcesRoot_ = "resources";
+    std::filesystem::path scriptsRoot_ = "Scripts";
     std::filesystem::path rootDirectory_;
     std::filesystem::path currentDirectory_;
     std::vector<std::filesystem::path> history_;
     size_t historyIndex_ = 0;
     bool iconsLoaded_ = false;
+
+    // 削除確認モーダル用ステート変数
+    std::filesystem::path itemToDelete_;
+    bool showDeleteConfirmModal_ = false;
 
     // マジックナンバー排除のためのUIレイアウト定数
     static constexpr float kDefaultThumbnailSize = 64.0f;

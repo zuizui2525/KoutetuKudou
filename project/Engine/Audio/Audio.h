@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <xaudio2.h>
 #include <wrl.h>
 #include <mfapi.h>
@@ -14,9 +14,17 @@ public:
     Audio();
     ~Audio();
 
+    // シングルトンインスタンス取得
+    static Audio* GetInstance();
+
     // 初期化と終了処理
     void Initialize();
     void Finalize();
+
+    // 一括ポーズ / レジューム
+    void PauseAll();
+    void ResumeAll();
+    bool IsPaused() const { return isPaused_; }
 
     // 音声読み込み (.wav / .mp3対応)
     SoundData LoadSound(const std::string& filePath);
@@ -29,4 +37,5 @@ public:
 private:
     Microsoft::WRL::ComPtr<IXAudio2> xAudio2_;
     IXAudio2MasteringVoice* masterVoice_ = nullptr;
+    bool isPaused_ = false;
 };

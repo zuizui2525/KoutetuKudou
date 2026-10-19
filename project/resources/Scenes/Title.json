@@ -2,6 +2,7 @@
   "scene_name": "Title",
   "game_objects": [
     {
+      "uuid": "4943d7a8-18fc-4075-be44-7bf36fd88c49",
       "name": "TitleCamera",
       "visible": true,
       "transform": {
@@ -29,6 +30,7 @@
       ]
     },
     {
+      "uuid": "ae99eaae-ea7c-4fb5-99bf-99992bdf52ea",
       "name": "MainLight",
       "visible": true,
       "transform": {
@@ -50,6 +52,7 @@
       ]
     },
     {
+      "uuid": "e32580ef-8d55-464b-807c-7642eb25ae5f",
       "name": "SubLight",
       "visible": true,
       "transform": {
@@ -71,11 +74,12 @@
       ]
     },
     {
+      "uuid": "ffadb9c0-76a0-461a-bf01-e2181dcd8ca2",
       "name": "MechanicalCore",
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0.0199999, 0.0499999, 0.015],
+        "rotation": [4.7379, 5.55984, 3.55336],
         "scale": [3.5, 3.5, 3.5]
       },
       "components": [
@@ -100,11 +104,12 @@
       ]
     },
     {
+      "uuid": "d96ed803-8630-43d0-a3e2-983c02981c69",
       "name": "MechanicalRing1",
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0, -0.0700002, 0],
+        "rotation": [0, -4.01469, 0],
         "scale": [5.5, 0.6, 5.5]
       },
       "components": [
@@ -129,11 +134,12 @@
       ]
     },
     {
+      "uuid": "705dfdb1-d7ef-41eb-9ccb-1c04288225d1",
       "name": "MechanicalRing2",
       "visible": true,
       "transform": {
         "position": [0, 2, 0],
-        "rotation": [0.0349999, 0, 0.0280001],
+        "rotation": [2.00664, 0, 4.11908],
         "scale": [6, 6, 0.5]
       },
       "components": [
@@ -158,6 +164,7 @@
       ]
     },
     {
+      "uuid": "031a3145-c6a9-4a9e-b027-73f5581c7cfc",
       "name": "PedestalBase",
       "visible": true,
       "transform": {
@@ -183,10 +190,11 @@
       ]
     },
     {
+      "uuid": "d3dca224-87ff-44c5-9b3f-d4391d84dbe5",
       "name": "SteelDriveLogo",
       "visible": true,
       "transform": {
-        "position": [640, 161.08, 0],
+        "position": [640, 164.778, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]
       },
@@ -217,10 +225,11 @@
       ]
     },
     {
+      "uuid": "fd60caa7-5aac-4433-afa4-15124fd18993",
       "name": "Subtitle",
       "visible": true,
       "transform": {
-        "position": [640, 279.948, 0],
+        "position": [640, 293.622, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]
       },
@@ -251,6 +260,7 @@
       ]
     },
     {
+      "uuid": "720e000b-c99e-4285-a8d9-1fd1b78034cd",
       "name": "StartPrompt",
       "visible": true,
       "transform": {
@@ -284,6 +294,7 @@
       ]
     },
     {
+      "uuid": "ec48715c-55f9-4688-88a6-f83c8bc25874",
       "name": "TitleAudio",
       "visible": true,
       "transform": {

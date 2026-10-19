@@ -1,4 +1,5 @@
 #include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Core/SceneTransitionManager.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Base/BaseResource.h"
@@ -9,6 +10,7 @@
 #include "Engine/Graphics/Objects/3d/Frustum/CameraFrustumObject.h"
 #include "Engine/Graphics/Objects/3d/LightGizmo/LightGizmoObject.h"
 #include "Engine/Component/GameObject.h"
+#include "Engine/Component/PrefabManager.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Debug/SceneHierarchy.h"
@@ -17,10 +19,39 @@
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Base/Utils/StringUtility.h"
 #include <format>
+#ifdef _USEIMGUI
+#include <imgui.h>
+#endif
 
 SceneManager* SceneManager::GetInstance() {
     static SceneManager instance;
     return &instance;
+}
+
+void SceneManager::Initialize() {
+    auto transitionMgr = SceneTransitionManager::GetInstance();
+    transitionMgr->Initialize();
+    transitionMgr->SetOnSceneSwitchCallback([this](const std::string& sceneName) {
+        // 即座に破棄せず、Update冒頭（フレーム境界）で安全に切り替えるよう予約のみ行う
+        this->nextSceneName_ = sceneName;
+    });
+}
+
+void SceneManager::SetPostProcess(PostProcess* postProcess) {
+    postProcess_ = postProcess;
+    SceneTransitionManager::GetInstance()->SetPostProcess(postProcess);
+}
+
+void SceneManager::ChangeScene(const std::string& sceneName, bool useTransition) {
+    if (useTransition) {
+        SceneTransitionManager::GetInstance()->StartTransition(currentSceneName_, sceneName);
+    } else {
+        ChangeSceneImmediate(sceneName);
+    }
+}
+
+void SceneManager::ChangeSceneImmediate(const std::string& sceneName) {
+    nextSceneName_ = sceneName;
 }
 
 void SceneManager::ClearCurrentScene() {
@@ -83,11 +114,11 @@ bool SceneManager::ProcessPendingSceneChange() {
         // 新しいシーンの初期化
         currentScene_->Initialize();
 
-        // ポーズ中でも即座に描画行列が確定するように、新シーンの全オブジェクトを1度更新
-        const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
-        for (auto* obj : objects) {
+        // ポーズ中でも即座に描画行列が確定するように、新シーンの全オブジェクトの行列・レンダラーを1度更新
+        const auto objectsSnapshot = SceneHierarchy::GetInstance()->GetObjects();
+        for (auto* obj : objectsSnapshot) {
             if (obj) {
-                obj->Update();
+                obj->UpdateEditor();
             }
         }
     }
@@ -98,11 +129,26 @@ bool SceneManager::ProcessPendingSceneChange() {
 }
 
 void SceneManager::Update() {
+    // 画面切り替えトランジションの更新
+    constexpr float kDefaultDeltaTime = 1.0f / 60.0f;
+    constexpr float kMaxValidDeltaTime = 0.5f;
+    float deltaTime = kDefaultDeltaTime;
+#ifdef _USEIMGUI
+    deltaTime = ImGui::GetIO().DeltaTime;
+    if (deltaTime <= 0.0f || deltaTime > kMaxValidDeltaTime) {
+        deltaTime = kDefaultDeltaTime;
+    }
+#endif
+    SceneTransitionManager::GetInstance()->Update(deltaTime);
+
     // 未処理のシーン切り替え予約があれば処理
     ProcessPendingSceneChange();
 
     if (currentScene_) {
-        currentScene_->Update();
+        // ロード画面表示中（暗転・Now Loading...表示中）は新シーンの更新処理を一時停止
+        if (!SceneTransitionManager::GetInstance()->IsLoading()) {
+            currentScene_->Update();
+        }
     }
 }
 
@@ -206,4 +252,22 @@ void SceneManager::Draw2D() {
     if (currentScene_) {
         currentScene_->Draw2D();
     }
+}
+
+GameObject* SceneManager::Instantiate(
+    const std::string& prefabName,
+    const Vector3& position,
+    const Vector3& rotation
+) {
+    if (!currentScene_) return nullptr;
+
+    auto go = PrefabManager::GetInstance().Instantiate(prefabName, position, rotation);
+    if (!go) return nullptr;
+
+    GameObject* rawPtr = go.get();
+
+    // カレントシーンへ追加（ヒエラルキー登録も自動で行われる）
+    currentScene_->AddGameObject(std::move(go));
+
+    return rawPtr;
 }

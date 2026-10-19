@@ -14,15 +14,22 @@
 #include "Engine/Component/Components/SinOscillatorComponent.h"
 #include "Engine/Component/Components/BlinkComponent.h"
 #include "Engine/Component/Components/CameraOrbitComponent.h"
+#include "Engine/Component/ScriptComponent.h"
+#include "Engine/Component/ScriptRegistry.h"
 
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 #include <algorithm>
 #include <iomanip>
+#include <unordered_map>
 
 namespace {
     // JSON構文・キー定数 (マジックナンバー・マジックストリング排除)
+    constexpr const char* kKeyUUID = "uuid";
+    constexpr const char* kTypeScriptComponent = "ScriptComponent";
+    constexpr const char* kKeyScriptName = "script_name";
+    constexpr const char* kKeyTargetUUID = "target_uuid";
     constexpr const char* kKeySceneName = "scene_name";
     constexpr const char* kKeyGameObjects = "game_objects";
     constexpr const char* kKeyName = "name";
@@ -304,8 +311,7 @@ namespace {
     }
 }
 
-bool SceneSerializer::SaveScene(
-    const std::string& filePath,
+std::string SceneSerializer::SerializeToString(
     const std::string& sceneName,
     const std::vector<std::unique_ptr<GameObject>>& gameObjects) {
     std::vector<GameObject*> rawList;
@@ -313,23 +319,14 @@ bool SceneSerializer::SaveScene(
     for (const auto& go : gameObjects) {
         if (go) rawList.push_back(go.get());
     }
-    return SaveScene(filePath, sceneName, rawList);
+    return SerializeToString(sceneName, rawList);
 }
 
-bool SceneSerializer::SaveScene(
-    const std::string& filePath,
+std::string SceneSerializer::SerializeToString(
     const std::string& sceneName,
     const std::vector<GameObject*>& gameObjects) {
 
-    // 保存先フォルダの作成
-    std::filesystem::path path(filePath);
-    if (path.has_parent_path()) {
-        std::error_code ec;
-        std::filesystem::create_directories(path.parent_path(), ec);
-    }
-
-    std::ofstream ofs(filePath);
-    if (!ofs.is_open()) return false;
+    std::ostringstream ofs;
 
     ofs << "{\n";
     ofs << "  \"" << kKeySceneName << "\": \"" << sceneName << "\",\n";
@@ -341,6 +338,7 @@ bool SceneSerializer::SaveScene(
 
         const auto& t = go->GetTransform();
         ofs << "    {\n";
+        ofs << "      \"" << kKeyUUID << "\": \"" << go->GetUUID() << "\",\n";
         ofs << "      \"" << kKeyName << "\": \"" << go->GetName() << "\",\n";
         ofs << "      \"" << kKeyVisible << "\": " << (go->IsVisible() ? "true" : "false") << ",\n";
         ofs << "      \"" << kKeyTransform << "\": {\n";
@@ -535,6 +533,12 @@ bool SceneSerializer::SaveScene(
                     ofs << "          \"" << kKeyHeight << "\": " << co->GetHeight() << ",\n";
                     ofs << "          \"" << kKeyOrbitSpeed << "\": " << co->GetOrbitSpeed();
                 }
+            } else if (typeName == kTypeScriptComponent) {
+                if (auto* sc = dynamic_cast<ScriptComponent*>(comp.get())) {
+                    ofs << ",\n";
+                    ofs << "          \"" << kKeyScriptName << "\": \"" << sc->GetScriptName() << "\",\n";
+                    ofs << "          \"" << kKeyTargetUUID << "\": \"" << sc->GetTargetUUID() << "\"";
+                }
             }
 
             ofs << "\n        }";
@@ -551,6 +555,36 @@ bool SceneSerializer::SaveScene(
     ofs << "  ]\n";
     ofs << "}\n";
 
+    return ofs.str();
+}
+
+bool SceneSerializer::SaveScene(
+    const std::string& filePath,
+    const std::string& sceneName,
+    const std::vector<std::unique_ptr<GameObject>>& gameObjects) {
+    std::vector<GameObject*> rawList;
+    rawList.reserve(gameObjects.size());
+    for (const auto& go : gameObjects) {
+        if (go) rawList.push_back(go.get());
+    }
+    return SaveScene(filePath, sceneName, rawList);
+}
+
+bool SceneSerializer::SaveScene(
+    const std::string& filePath,
+    const std::string& sceneName,
+    const std::vector<GameObject*>& gameObjects) {
+
+    std::filesystem::path path(filePath);
+    if (path.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+    }
+
+    std::ofstream ofs(filePath);
+    if (!ofs.is_open()) return false;
+
+    ofs << SerializeToString(sceneName, gameObjects);
     return true;
 }
 
@@ -566,7 +600,13 @@ bool SceneSerializer::LoadScene(
 
     std::stringstream ss;
     ss << ifs.rdbuf();
-    std::string json = ss.str();
+    return DeserializeFromString(ss.str(), outSceneName, outGameObjects);
+}
+
+bool SceneSerializer::DeserializeFromString(
+    const std::string& json,
+    std::string& outSceneName,
+    std::vector<std::unique_ptr<GameObject>>& outGameObjects) {
 
     // 1. シーン名の抽出
     outSceneName = ExtractString(json, kKeySceneName, "Untitled");
@@ -578,9 +618,13 @@ bool SceneSerializer::LoadScene(
 
     for (const auto& goBlock : goBlocks) {
         std::string name = ExtractString(goBlock, kKeyName, "GameObject");
+        std::string uuid = ExtractString(goBlock, kKeyUUID, "");
         bool visible = ExtractBool(goBlock, kKeyVisible, true);
 
         auto go = std::make_unique<GameObject>(name);
+        if (!uuid.empty()) {
+            go->SetUUID(uuid);
+        }
         go->SetVisible(visible);
 
         // Transform の復元
@@ -745,10 +789,35 @@ bool SceneSerializer::LoadScene(
                 co->SetRadius(ExtractFloat(compBlock, kKeyRadius, 25.0f));
                 co->SetHeight(ExtractFloat(compBlock, kKeyHeight, 4.0f));
                 co->SetOrbitSpeed(ExtractFloat(compBlock, kKeyOrbitSpeed, 0.15f));
+            } else if (type == kTypeScriptComponent) {
+                std::string scriptName = ExtractString(compBlock, kKeyScriptName, "ScriptComponent");
+                std::string targetUUID = ExtractString(compBlock, kKeyTargetUUID, "");
+                auto script = ScriptRegistry::GetInstance().CreateScript(scriptName);
+                if (script) {
+                    script->SetTargetUUID(targetUUID);
+                    go->AddComponentInstance(std::move(script));
+                }
             }
         }
 
         outGameObjects.push_back(std::move(go));
+    }
+
+    // 4. 2パス目: スクリプト間・コンポーネント間の参照解決 (ResolveReferences)
+    std::unordered_map<std::string, GameObject*> uuidMap;
+    for (const auto& obj : outGameObjects) {
+        if (obj) {
+            uuidMap[obj->GetUUID()] = obj.get();
+        }
+    }
+
+    for (const auto& obj : outGameObjects) {
+        if (!obj) continue;
+        for (const auto& comp : obj->GetComponents()) {
+            if (auto* sc = dynamic_cast<ScriptComponent*>(comp.get())) {
+                sc->ResolveReferences(uuidMap);
+            }
+        }
     }
 
     return true;

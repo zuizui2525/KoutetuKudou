@@ -1,7 +1,11 @@
-#include "App/Scene/Generic/GenericScene.h"
+#include "App/Scene/Core/Scene.h"
+#include "App/Scene/Core/SceneDirector.h"
 #include "App/Scene/Core/SceneManager.h"
 #include "App/Scene/Core/SceneSerializer.h"
+#include "App/Scene/Core/SceneMemoryCache.h"
 #include "Engine/Component/GameObject.h"
+#include "Engine/Component/ScriptComponent.h"
+#include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Base/BaseResource.h"
@@ -10,10 +14,6 @@
 #include "Engine/Graphics/Objects/Light/Manager/LightManager.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Graphics/PostProcess/PostProcess.h"
-#include "Engine/Graphics/Objects/3d/Skybox/Skybox.h"
-#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
-#include "Engine/Graphics/Objects/Effect/Manager/EffectFactory.h"
-#include "Engine/Input/Input.h"
 #include "Engine/Base/Log/Log.h"
 #include "Engine/Base/Utils/StringUtility.h"
 #include "Engine/Zuizui.h"
@@ -22,81 +22,38 @@
 #include <filesystem>
 #include <format>
 #include <algorithm>
-#include <cstdlib>
 
 namespace {
     const std::string kScenesDirectory = "resources/Scenes";
-    const std::string kDefaultMainCameraName = "Main";
-    const std::string kDefaultGameObjectPrefix = "GameObject";
-
-    // シーン名定数 (マジックストリング排除)
-    const std::string kSceneNameTitle = "Title";
-    const std::string kSceneNameGame = "Game";
-    const std::string kSceneNameClear = "Clear";
-    const std::string kSceneNameGameOver = "GameOver";
-
-    // Titleシーン用定数 (マジックナンバー・ストリング排除)
-    const std::string kTitleSkyboxTextureKey = "white";
-    constexpr Vector4 kTitleSkyboxColor = { 0.02f, 0.02f, 0.03f, 1.0f }; // 重厚なダークブラック背景
-
-    // Clearシーン用花火定数 (マジックナンバー排除)
-    const std::string kFireworkEffectName = "FireworksSet";
-    constexpr int kFireworkMinInterval = 30;         // 最小間隔（フレーム）
-    constexpr int kFireworkMaxIntervalRange = 61;    // ランダム幅（フレーム）
-    constexpr float kFireworkRangeX = 60.0f;         // 打ち上げ位置の左右幅
-    constexpr float kFireworkRangeZ = 20.0f;         // 打ち上げ位置の前後幅
-    constexpr float kFireworkMinY = -5.0f;           // 打ち上げ位置の高さの最小値
-
-    // GameOverシーン用TVノイズ定数 (マジックナンバー排除)
-    constexpr float kGameOverTVNoiseStrength = 0.1f;
 }
 
-GenericScene::GenericScene(const std::string& sceneName)
+Scene::Scene(const std::string& sceneName)
     : sceneName_(sceneName) {
 }
 
-GenericScene::~GenericScene() = default;
+Scene::~Scene() = default;
 
-void GenericScene::Initialize() {
+void Scene::Initialize() {
     // ポストプロセスの取得
     postProcess_ = SceneManager::GetInstance()->GetPostProcess();
     cameraMgr_ = CameraResource::GetCameraManager();
 
-    // シーン固有のポストプロセス演出設定
-    if (postProcess_) {
-        if (sceneName_ == kSceneNameTitle) {
-            postProcess_->SetDepthOutlineActive(true);
-            postProcess_->SetGrayscaleActive(false);
-            postProcess_->SetVignetteActive(true);
-        } else if (sceneName_ == kSceneNameClear) {
-            postProcess_->SetRadialBlurActive(true);
-        } else if (sceneName_ == kSceneNameGameOver) {
-            postProcess_->SetVignetteActive(true);
-            postProcess_->SetTVNoiseActive(true);
-            postProcess_->SetTVNoiseStrength(kGameOverTVNoiseStrength);
-            postProcess_->SetClearColorMode(PostClearColorMode::Red);
+    std::string sceneFilePath = kScenesDirectory + "/" + sceneName_ + ".json";
+    bool fileExisted = std::filesystem::exists(sceneFilePath);
+
+    // シーンデータの自動読み込み（メモリ一時キャッシュを最優先、無ければディスクの .json から読み込む）
+    bool loaded = false;
+    if (SceneMemoryCache::GetInstance()->HasCache(sceneName_)) {
+        std::string cachedJson = SceneMemoryCache::GetInstance()->GetCache(sceneName_);
+        std::string loadedName;
+        loaded = SceneSerializer::DeserializeFromString(cachedJson, loadedName, gameObjects_);
+        if (loaded) {
+            Log::Write(std::format(L"[GenericScene] メモリ一時キャッシュからシーン「{}」({} 個のオブジェクト) を復元しました。",
+                ConvertString(sceneName_), gameObjects_.size()));
         }
     }
 
-    // Titleシーン用 Skybox の初期化
-    if (sceneName_ == kSceneNameTitle) {
-        skybox_ = std::make_unique<Skybox>();
-        skybox_->Initialize();
-        skybox_->SetColor(kTitleSkyboxColor);
-    }
-
-    // Clearシーン用 エフェクトマネージャの初期化
-    if (sceneName_ == kSceneNameClear) {
-        auto effectMgr = EffectManager::GetInstance();
-        effectMgr->Initialize();
-        EffectFactory::GetInstance()->RegisterAllEffects();
-        fireworkTimer_ = 0;
-    }
-
-    // シーンJSONファイルの自動読み込み
-    std::string sceneFilePath = kScenesDirectory + "/" + sceneName_ + ".json";
-    bool fileExisted = std::filesystem::exists(sceneFilePath);
-    if (fileExisted) {
+    if (!loaded && fileExisted) {
         std::string loadedName;
         bool success = SceneSerializer::LoadScene(sceneFilePath, loadedName, gameObjects_);
         if (success) {
@@ -145,81 +102,138 @@ void GenericScene::Initialize() {
         Log::Write(L"[GenericScene] デフォルトの DirectionalLight GameObject を追加しました。");
     }
 
+    // シーン専属ディレクター（SceneDirector）の自動生成と各シーン標準スクリプトの設定
+    if (!director_) {
+        director_ = std::make_unique<SceneDirector>(this);
+    }
+
+    if (director_->GetScripts().empty()) {
+        if (sceneName_ == "Game") {
+            auto routeMgr = ScriptRegistry::GetInstance().CreateScript("RouteManagerScript");
+            auto enemySpawn = ScriptRegistry::GetInstance().CreateScript("EnemySpawnManagerScript");
+            auto phaseCtrl = ScriptRegistry::GetInstance().CreateScript("GamePhaseControllerScript");
+            auto routeRenderer = ScriptRegistry::GetInstance().CreateScript("RouteRendererScript");
+            auto stageMgr = ScriptRegistry::GetInstance().CreateScript("StageManagerScript");
+
+            if (routeMgr) director_->AddScript(std::move(routeMgr));
+            if (enemySpawn) director_->AddScript(std::move(enemySpawn));
+            if (phaseCtrl) director_->AddScript(std::move(phaseCtrl));
+            if (routeRenderer) director_->AddScript(std::move(routeRenderer));
+            if (stageMgr) director_->AddScript(std::move(stageMgr));
+        } else if (sceneName_ == "Title") {
+            auto titleDir = ScriptRegistry::GetInstance().CreateScript("TitleDirectorScript");
+            if (titleDir) director_->AddScript(std::move(titleDir));
+        } else if (sceneName_ == "Clear") {
+            auto clearDir = ScriptRegistry::GetInstance().CreateScript("ClearDirectorScript");
+            if (clearDir) director_->AddScript(std::move(clearDir));
+        } else if (sceneName_ == "GameOver") {
+            auto gameOverDir = ScriptRegistry::GetInstance().CreateScript("GameOverDirectorScript");
+            if (gameOverDir) director_->AddScript(std::move(gameOverDir));
+        }
+    }
+    director_->Initialize();
+    Log::Write(std::format(L"[Scene] シーン「{}」の SceneDirector を初期化しました。", ConvertString(sceneName_)));
+
+    // 旧バージョンの空のDirectorゲームオブジェクト（GameDirector等）をシーンから完全に除去
+    auto legacyIt = std::remove_if(gameObjects_.begin(), gameObjects_.end(),
+        [](const std::unique_ptr<GameObject>& obj) {
+            if (!obj) return false;
+            const std::string& n = obj->GetName();
+            return (n == "GameDirector" || n == "TitleDirector" || n == "ClearDirector" || n == "GameOverDirector");
+        });
+    if (legacyIt != gameObjects_.end()) {
+        for (auto iter = legacyIt; iter != gameObjects_.end(); ++iter) {
+            if (*iter) {
+                SceneHierarchy::GetInstance()->Unregister(iter->get());
+            }
+        }
+        gameObjects_.erase(legacyIt, gameObjects_.end());
+    }
+
     // ファイルが存在しなかった場合はメモリ上のデフォルト構成のまま開始（勝手にディスク保存して復活させない）
     if (!fileExisted) {
-        Log::Write(std::format(L"[GenericScene] シーンファイル「{}」が存在しないため、デフォルト構成で開始します。",
+        Log::Write(std::format(L"[Scene] シーンファイル「{}」が存在しないため、デフォルト構成で開始します。",
             ConvertString(sceneFilePath)));
     }
 }
 
-void GenericScene::Update() {
-    // スペースキー押下によるシーン遷移（Title -> Game / Clear or GameOver -> Title）
-    auto input = InputResource::GetInput();
-    if (input && input->Trigger(DIK_SPACE)) {
-        if (sceneName_ == kSceneNameTitle) {
-            SceneManager::GetInstance()->ChangeScene(kSceneNameGame);
-        } else if (sceneName_ == kSceneNameClear || sceneName_ == kSceneNameGameOver) {
-            SceneManager::GetInstance()->ChangeScene(kSceneNameTitle);
-        }
+void Scene::Update() {
+    // 1. シーン専属ディレクターの更新（フェーズ制御・進行管理を最優先実行）
+    if (director_) {
+        director_->Update();
     }
 
-    // Skybox の更新
-    if (skybox_) {
-        skybox_->Update();
+    // 2. 全 GameObject の更新（イテレーション中の動的生成・破棄に耐えうるようインデックスで安全にループ）
+    isUpdating_ = true;
+    for (size_t i = 0; i < gameObjects_.size(); ++i) {
+        if (gameObjects_[i]) {
+            gameObjects_[i]->Update();
+        }
+    }
+    isUpdating_ = false;
+
+    // 遅延追加キューの処理（Instantiate等で生成されたオブジェクトをシーンにマージ）
+    if (!pendingAddObjects_.empty()) {
+        for (auto& newObj : pendingAddObjects_) {
+            if (newObj) {
+                SceneHierarchy::GetInstance()->Register(newObj.get(), newObj->GetName());
+                gameObjects_.push_back(std::move(newObj));
+            }
+        }
+        pendingAddObjects_.clear();
     }
 
-    // Clearシーンの花火エフェクト処理
-    if (sceneName_ == kSceneNameClear) {
-        if (--fireworkTimer_ <= 0) {
-            fireworkTimer_ = kFireworkMinInterval + rand() % kFireworkMaxIntervalRange;
-            EffectPlayParam param;
-            float rx = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * kFireworkRangeX;
-            float rz = (static_cast<float>(rand()) / RAND_MAX + 2.0f) * kFireworkRangeZ;
-            float ry = (static_cast<float>(rand()) / RAND_MAX + 3.0f) * kFireworkMinY;
-            param.position = { rx, ry, rz };
-            param.scale = { 1.0f, 1.0f, 1.0f };
-            param.isLoop = false;
-            EffectManager::GetInstance()->PlayEffect3D(kFireworkEffectName, param);
+    // 遅延削除キューの処理（DestroyGameObject で破棄予約されたオブジェクトを一括破棄）
+    if (!pendingDestroyObjects_.empty()) {
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                dxCommon->FlushGPU();
+            }
         }
-        EffectManager::GetInstance()->Update();
-    }
-
-    // 全 GameObject の更新
-    for (auto& obj : gameObjects_) {
-        if (obj) {
-            obj->Update();
+        for (auto* deadObj : pendingDestroyObjects_) {
+            if (!deadObj) continue;
+            SceneHierarchy::GetInstance()->Unregister(deadObj);
+            auto it = std::remove_if(gameObjects_.begin(), gameObjects_.end(),
+                [deadObj](const std::unique_ptr<GameObject>& ptr) {
+                    return ptr.get() == deadObj;
+                });
+            if (it != gameObjects_.end()) {
+                gameObjects_.erase(it, gameObjects_.end());
+            }
         }
+        pendingDestroyObjects_.clear();
     }
 }
 
-void GenericScene::Draw() {
-    // Skybox の描画 (Titleシーン等)
-    if (skybox_) {
-        skybox_->Draw(kTitleSkyboxTextureKey);
-    }
-
-    // 全 GameObject の 3D 描画
+void Scene::Draw() {
+    // 1. 全 GameObject の 3D 描画
     for (auto& obj : gameObjects_) {
         if (obj) {
             obj->Draw();
         }
     }
 
-    // Clearシーンのエフェクト描画
-    if (sceneName_ == kSceneNameClear) {
-        EffectManager::GetInstance()->Draw();
+    // 2. シーン専属ディレクターの 3D 描画（3Dルート線等）
+    if (director_) {
+        director_->Draw();
     }
 }
 
-void GenericScene::Draw2D() {
+void Scene::Draw2D() {
+    // 1. 各 GameObject の 2D 描画
     for (auto& obj : gameObjects_) {
         if (obj) {
             obj->Draw2D();
         }
     }
+
+    // 2. シーン専属ディレクターの 2D 描画（UI・マップ等の最前面描画）
+    if (director_) {
+        director_->Draw2D();
+    }
 }
 
-void GenericScene::ImGuiControl() {
+void Scene::ImGuiControl() {
 #ifdef _USEIMGUI
     if (cameraMgr_) {
         cameraMgr_->ImGuiControl();
@@ -227,25 +241,52 @@ void GenericScene::ImGuiControl() {
     if (postProcess_) {
         postProcess_->ImGuiControl();
     }
+
+    // シーン内 GameObject のスクリプトコンポーネントによるゲーム画面 HUD / UI 描画 (UnityのOnGUI相当)
+    for (auto& obj : gameObjects_) {
+        if (obj && obj->IsVisible()) {
+            for (const auto& comp : obj->GetComponents()) {
+                if (comp && comp->IsActive()) {
+                    if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+                        script->OnGUI();
+                    }
+                }
+            }
+        }
+    }
 #endif
 }
 
-GameObject* GenericScene::CreateGameObject(const std::string& name) {
+GameObject* Scene::CreateGameObject(const std::string& name) {
     auto obj = std::make_unique<GameObject>(name);
     GameObject* rawPtr = obj.get();
     gameObjects_.push_back(std::move(obj));
     return rawPtr;
 }
 
-void GenericScene::AddGameObject(std::unique_ptr<GameObject> gameObject) {
-    if (gameObject) {
+void Scene::AddGameObject(std::unique_ptr<GameObject> gameObject) {
+    if (!gameObject) return;
+
+    if (isUpdating_) {
+        // Update実行中はイテレータ破壊を防ぐため待機キューに退避
+        pendingAddObjects_.push_back(std::move(gameObject));
+    } else {
         SceneHierarchy::GetInstance()->Register(gameObject.get(), gameObject->GetName());
         gameObjects_.push_back(std::move(gameObject));
     }
 }
 
-void GenericScene::DestroyGameObject(GameObject* gameObject) {
+void Scene::DestroyGameObject(GameObject* gameObject) {
     if (!gameObject) {
+        return;
+    }
+
+    if (isUpdating_) {
+        // Update実行中はイテレータ破壊を防ぐため即座に非表示にし待機キューに退避
+        gameObject->SetVisible(false);
+        if (std::find(pendingDestroyObjects_.begin(), pendingDestroyObjects_.end(), gameObject) == pendingDestroyObjects_.end()) {
+            pendingDestroyObjects_.push_back(gameObject);
+        }
         return;
     }
 
@@ -270,7 +311,7 @@ void GenericScene::DestroyGameObject(GameObject* gameObject) {
     }
 }
 
-std::unique_ptr<GameObject> GenericScene::DetachGameObject(GameObject* gameObject) {
+std::unique_ptr<GameObject> Scene::DetachGameObject(GameObject* gameObject) {
     if (!gameObject) return nullptr;
 
     // GPU同期

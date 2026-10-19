@@ -8,17 +8,6 @@
 #endif
 
 namespace {
-    // 共有Audioエンジンインスタンス
-    std::unique_ptr<Audio> gSharedAudioEngine = nullptr;
-
-    Audio* GetSharedAudioEngine() {
-        if (!gSharedAudioEngine) {
-            gSharedAudioEngine = std::make_unique<Audio>();
-            gSharedAudioEngine->Initialize();
-        }
-        return gSharedAudioEngine.get();
-    }
-
     // インスペクター編集用定数 (マジックナンバー排除)
     constexpr size_t kPathBufferSize = 256;
     constexpr float kMinVolume = 0.0f;
@@ -58,7 +47,7 @@ void AudioSourceComponent::Load(const std::string& filePath) {
         return;
     }
 
-    Audio* audio = GetSharedAudioEngine();
+    Audio* audio = Audio::GetInstance();
     if (audio) {
         soundData_ = audio->LoadSound(filePath_);
         isLoaded_ = (soundData_.wfex != nullptr);
@@ -73,16 +62,17 @@ void AudioSourceComponent::Play() {
     }
 
     if (isLoaded_) {
-        Audio* audio = GetSharedAudioEngine();
+        Audio* audio = Audio::GetInstance();
         if (audio) {
             audio->PlaySoundW(soundData_, volume_, isLoop_);
+            hasAutoPlayed_ = true; // 明示的に再生されたら二重自動再生を防止
         }
     }
 }
 
 void AudioSourceComponent::Stop() {
     if (isLoaded_) {
-        Audio* audio = GetSharedAudioEngine();
+        Audio* audio = Audio::GetInstance();
         if (audio) {
             audio->StopSound(soundData_);
         }
@@ -91,7 +81,7 @@ void AudioSourceComponent::Stop() {
 
 void AudioSourceComponent::UnloadSound() {
     if (isLoaded_) {
-        Audio* audio = GetSharedAudioEngine();
+        Audio* audio = Audio::GetInstance();
         if (audio) {
             audio->Unload(soundData_);
         }

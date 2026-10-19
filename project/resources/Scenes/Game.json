@@ -1,0 +1,149 @@
+{
+  "scene_name": "Game",
+  "game_objects": [
+    {
+      "uuid": "11111111-2222-3333-4444-555555550001",
+      "name": "MainCamera",
+      "visible": true,
+      "transform": {
+        "position": [0, 120, 60],
+        "rotation": [1.57079, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Camera",
+          "fov": 0.45,
+          "near_z": 0.1,
+          "far_z": 1000,
+          "is_main_camera": true,
+          "use_target": false,
+          "target": [0, 0, 0]
+        },
+        {
+          "type": "ScriptComponent",
+          "script_name": "FPSCameraControllerScript",
+          "target_uuid": "11111111-2222-3333-4444-555555550004"
+        }
+      ]
+    },
+    {
+      "uuid": "11111111-2222-3333-4444-555555550002",
+      "name": "DirectionalLight",
+      "visible": true,
+      "transform": {
+        "position": [20, 40, -10],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Light",
+          "light_type": "Directional",
+          "color": [1, 0.98, 0.95, 1],
+          "intensity": 1.5,
+          "range": 50,
+          "decay": 1,
+          "spot_angle": 45,
+          "spot_falloff_start": 30
+        }
+      ]
+    },
+    {
+      "uuid": "11111111-2222-3333-4444-555555550004",
+      "name": "Player",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0, 0.3, 1, 1],
+          "lighting_mode": 1,
+          "shininess": 30,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        },
+        {
+          "type": "BoxCollider",
+          "center": [0, 0, 0],
+          "size": [1, 1, 1],
+          "is_trigger": false,
+          "show_gizmo": true
+        },
+        {
+          "type": "ScriptComponent",
+          "script_name": "PlayerControllerScript",
+          "target_uuid": ""
+        }
+      ]
+    },
+    {
+      "uuid": "11111111-2222-3333-4444-555555550005",
+      "name": "StageFloor",
+      "visible": true,
+      "transform": {
+        "position": [0, -0.1, 240],
+        "rotation": [0, 0, 0],
+        "scale": [100, 0.2, 500]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.12, 0.12, 0.16, 1],
+          "lighting_mode": 1,
+          "shininess": 20,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "11111111-2222-3333-4444-555555550006",
+      "name": "ReticleUI",
+      "visible": true,
+      "transform": {
+        "position": [640, 360, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "SpriteRenderer",
+          "shape_type": 0,
+          "texture_key": "reticle",
+          "size": [128, 128],
+          "radius": 10,
+          "inner_radius": 0,
+          "line_start": [0, 0],
+          "line_end": [0, 0],
+          "thickness": 1,
+          "color": [1, 1, 1, 1],
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        },
+        {
+          "type": "ScriptComponent",
+          "script_name": "ReticleControllerScript",
+          "target_uuid": ""
+        }
+      ]
+    }
+  ]
+}

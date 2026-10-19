@@ -53,6 +53,31 @@ public:
     );
 
     /// <summary>
+    /// シーン状態をJSON文字列へシリアライズ (生ポインタ配列版)
+    /// </summary>
+    static std::string SerializeToString(
+        const std::string& sceneName,
+        const std::vector<GameObject*>& gameObjects
+    );
+
+    /// <summary>
+    /// シーン状態をJSON文字列へシリアライズ (unique_ptr配列版)
+    /// </summary>
+    static std::string SerializeToString(
+        const std::string& sceneName,
+        const std::vector<std::unique_ptr<GameObject>>& gameObjects
+    );
+
+    /// <summary>
+    /// JSON文字列からシーン状態を読み込み復元
+    /// </summary>
+    static bool DeserializeFromString(
+        const std::string& jsonString,
+        std::string& outSceneName,
+        std::vector<std::unique_ptr<GameObject>>& outGameObjects
+    );
+
+    /// <summary>
     /// 動的コンポーネントの保存・復元の単体自動テストを実行
     /// </summary>
     /// <returns>テストが成功したか</returns>

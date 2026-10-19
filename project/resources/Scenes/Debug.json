@@ -1,5 +1,136 @@
 {
   "scene_name": "Debug",
   "game_objects": [
+    {
+      "uuid": "debug-camera-uuid",
+      "name": "Camera",
+      "visible": true,
+      "transform": {
+        "position": [0, 12, -26],
+        "rotation": [0.38, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Camera",
+          "fov": 0.45,
+          "near_z": 0.1,
+          "far_z": 1000,
+          "is_main_camera": true,
+          "use_target": false,
+          "target": [0, 0, 0]
+        }
+      ]
+    },
+    {
+      "uuid": "debug-light-uuid",
+      "name": "DirectionalLight",
+      "visible": true,
+      "transform": {
+        "position": [0, 20, -10],
+        "rotation": [0.785, 0.785, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "Light",
+          "light_type": "Directional",
+          "color": [1, 0.98, 0.92, 1],
+          "intensity": 1.2,
+          "range": 50,
+          "decay": 1,
+          "spot_angle": 45,
+          "spot_falloff_start": 30
+        }
+      ]
+    },
+    {
+      "uuid": "debug-ground-uuid",
+      "name": "Ground",
+      "visible": true,
+      "transform": {
+        "position": [0, -1, 0],
+        "rotation": [0, 0, 0],
+        "scale": [40, 0.2, 40]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.18, 0.2, 0.24, 1],
+          "lighting_mode": 1,
+          "shininess": 32,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "sample-player-uuid-0001",
+      "name": "SamplePlayer",
+      "visible": true,
+      "transform": {
+        "position": [0, 0.5, 0],
+        "rotation": [0, 0, 0],
+        "scale": [2, 2, 2]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [1, 0.35, 0.3, 1],
+          "lighting_mode": 1,
+          "shininess": 64,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        },
+        {
+          "type": "ScriptComponent",
+          "script_name": "SamplePlayerScript",
+          "target_uuid": ""
+        }
+      ]
+    },
+    {
+      "uuid": "sample-follower-uuid-0002",
+      "name": "SampleFollower",
+      "visible": true,
+      "transform": {
+        "position": [1.76777, 0.5, -1.76777],
+        "rotation": [0, -45, 0],
+        "scale": [1.8, 1.8, 1.8]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.65, 1, 1],
+          "lighting_mode": 1,
+          "shininess": 96,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        },
+        {
+          "type": "ScriptComponent",
+          "script_name": "SampleFollowerScript",
+          "target_uuid": "sample-player-uuid-0001"
+        }
+      ]
+    }
   ]
 }

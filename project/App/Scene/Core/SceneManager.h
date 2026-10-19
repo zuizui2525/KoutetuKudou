@@ -19,6 +19,7 @@ class SceneManager {
 public:
     static SceneManager* GetInstance();
 
+    void Initialize();
     void Update();
     void Draw();
     void Draw2D();
@@ -28,18 +29,20 @@ public:
     /// @return シーン遷移が実行された場合は true
     bool ProcessPendingSceneChange();
 
-    void SetPostProcess(PostProcess* postProcess) { postProcess_ = postProcess; }
+    void SetPostProcess(PostProcess* postProcess);
     PostProcess* GetPostProcess() const { return postProcess_; }
 
+    /**
+     * @brief 次のシーンへの遷移を要求する（トランジション演出対応）
+     * @param sceneName 遷移先シーン名
+     * @param useTransition 画面切り替えトランジションを適用するかどうか
+     */
+    void ChangeScene(const std::string& sceneName, bool useTransition = true);
 
     /**
-     * @brief 次のシーンを名前で予約する
-     * 旧：template <typename T> void ChangeScene(...)
-     * 新：文字列のみを受け取る
+     * @brief トランジションなしで即座にシーンを切り替える
      */
-    void ChangeScene(const std::string& sceneName) {
-        nextSceneName_ = sceneName;
-    }
+    void ChangeSceneImmediate(const std::string& sceneName);
 
     /**
      * @brief 使用する工場（Factory）を設定する
@@ -52,6 +55,19 @@ public:
     void ClearCurrentScene();
     const std::string& GetCurrentSceneName() const { return currentSceneName_; }
     IScene* GetCurrentScene() const { return currentScene_.get(); }
+
+    /**
+     * @brief プレハブから新しいGameObjectを動的に実体化し、現在のシーンに追加する
+     * @param prefabName プレハブ名（例: "Bullet", "Enemy"）
+     * @param position 初期配置座標
+     * @param rotation 初期回転角
+     * @return 生成されたGameObjectの生ポインタ（失敗時はnullptr）
+     */
+    GameObject* Instantiate(
+        const std::string& prefabName,
+        const Vector3& position = { 0.0f, 0.0f, 0.0f },
+        const Vector3& rotation = { 0.0f, 0.0f, 0.0f }
+    );
 
 private:
     SceneManager() = default;

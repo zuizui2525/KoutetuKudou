@@ -14,6 +14,7 @@
 #include "Engine/Debug/Command/CommandHistory.h"
 #include "Engine/Debug/SceneViewWindow.h"
 #include "Engine/Debug/GameViewWindow.h"
+#include "Engine/Audio/Audio.h"
 #include <psapi.h> // メモリ取得用（追加）
 
 
@@ -55,9 +56,10 @@ void App::Initialize() {
 
     sceneFactory_ = std::make_unique<SceneFactory>();
     SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
+    SceneManager::GetInstance()->Initialize();
 
     static const std::string kDefaultInitialSceneName = "Title";
-    SceneManager::GetInstance()->ChangeScene(kDefaultInitialSceneName);
+    SceneManager::GetInstance()->ChangeSceneImmediate(kDefaultInitialSceneName);
 
     // --- PostProcess の初期化 ---
     postProcess_ = std::make_unique<PostProcess>();
@@ -172,6 +174,19 @@ void App::Run() {
         isPaused = debugEditor->IsPaused();
     }
 #endif
+
+    // --- ゲーム停止状態と音声（BGM・SE）再生の自動連動 ---
+    static bool sLastPausedState = false;
+    static bool sIsFirstAudioCheck = true;
+    if (sIsFirstAudioCheck || isPaused != sLastPausedState) {
+        sLastPausedState = isPaused;
+        sIsFirstAudioCheck = false;
+        if (isPaused) {
+            Audio::GetInstance()->PauseAll();
+        } else {
+            Audio::GetInstance()->ResumeAll();
+        }
+    }
 
     // --- カメラ制御（ユーザー設計：ゲーム画面優先 ＆ シーン画面時のみ俯瞰 ＆ 復帰時は直前ゲームカメラ） ---
     static std::string sCurrentGameCamera = "";

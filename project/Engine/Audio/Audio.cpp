@@ -9,8 +9,32 @@
 #pragma comment(lib, "mfuuid.lib")
 #pragma comment(lib, "XAudio2.lib")
 
+Audio* Audio::GetInstance() {
+    static Audio instance;
+    if (!instance.xAudio2_) {
+        instance.Initialize();
+    }
+    return &instance;
+}
+
 Audio::Audio() {}
 Audio::~Audio() { Finalize(); }
+
+void Audio::PauseAll() {
+    if (xAudio2_ && !isPaused_) {
+        xAudio2_->StopEngine();
+        isPaused_ = true;
+        Log::Write(L" ├─ 【音声一括ポーズ】 すべての音声再生を一時停止しました。");
+    }
+}
+
+void Audio::ResumeAll() {
+    if (xAudio2_ && isPaused_) {
+        xAudio2_->StartEngine();
+        isPaused_ = false;
+        Log::Write(L" ├─ 【音声一括再開】 すべての音声再生を再開しました。");
+    }
+}
 
 void Audio::Initialize() {
     // COM と Media Foundation の初期化
@@ -122,10 +146,19 @@ SoundData Audio::LoadSound(const std::string& filePath) {
 }
 
 void Audio::PlaySoundW(SoundData& soundData, float volume, bool loop) {
-    if (!xAudio2_ || !soundData.wfex) return;
+    if (!xAudio2_ || !soundData.wfex || soundData.audioData.empty()) return;
+
+    // 既にボイスが存在する場合は、古いボイスを安全に停止・破棄してから新規作成する（孤立リーク完全防止）
+    if (soundData.sourceVoice) {
+        soundData.sourceVoice->Stop(0);
+        soundData.sourceVoice->FlushSourceBuffers();
+        soundData.sourceVoice->DestroyVoice();
+        soundData.sourceVoice = nullptr;
+    }
 
     HRESULT hr = xAudio2_->CreateSourceVoice(&soundData.sourceVoice, soundData.wfex);
     assert(SUCCEEDED(hr));
+    if (FAILED(hr) || !soundData.sourceVoice) return;
 
     hr = soundData.sourceVoice->SetVolume(volume);
     assert(SUCCEEDED(hr));
@@ -145,9 +178,11 @@ void Audio::PlaySoundW(SoundData& soundData, float volume, bool loop) {
 
 void Audio::StopSound(SoundData& soundData) {
     if (soundData.sourceVoice) {
-        soundData.sourceVoice->Stop();
+        soundData.sourceVoice->Stop(0);
         soundData.sourceVoice->FlushSourceBuffers();
-        Log::Write(L" ├─ 【音声再生停止】 音声の再生を強制終了しました。");
+        soundData.sourceVoice->DestroyVoice();
+        soundData.sourceVoice = nullptr;
+        Log::Write(L" ├─ 【音声再生停止】 音声の再生を強制終了し、ボイスを破棄しました。");
     }
 }
 
@@ -156,12 +191,19 @@ void Audio::Unload(SoundData& soundData) {
         Log::Write(std::format(L" ├─ 【音声リソース解放開始】 チャンネル数: {} | サンプリングレート: {}Hz の音声データを解放します。",
             soundData.wfex->nChannels, soundData.wfex->nSamplesPerSec));
     }
+
+    // 波形バッファを破棄する前に、必ずボイスを安全に停止・破棄する（アクセス違反クラッシュ防止）
     if (soundData.sourceVoice) {
+        soundData.sourceVoice->Stop(0);
+        soundData.sourceVoice->FlushSourceBuffers();
         soundData.sourceVoice->DestroyVoice();
         soundData.sourceVoice = nullptr;
     }
-    delete soundData.wfex;
-    soundData.wfex = nullptr;
+
+    if (soundData.wfex) {
+        delete soundData.wfex;
+        soundData.wfex = nullptr;
+    }
     soundData.audioData.clear();
     Log::Write(L" └─ 【音声リソース解放完了】 音声バッファメモリおよび再生用ボイスの破棄が完了しました。");
 }

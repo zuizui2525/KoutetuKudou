@@ -91,6 +91,18 @@ public:
     }
 
     /// <summary>
+    /// 動的生成されたコンポーネント（ScriptComponent等）を追加
+    /// </summary>
+    IComponent* AddComponentInstance(std::unique_ptr<IComponent> comp) {
+        if (!comp) return nullptr;
+        comp->SetOwner(this);
+        comp->Initialize();
+        IComponent* rawPtr = comp.get();
+        components_.push_back(std::move(comp));
+        return rawPtr;
+    }
+
+    /// <summary>
     /// 指定型のコンポーネントを取得
     /// </summary>
     template <typename T>
@@ -168,7 +180,14 @@ public:
     /// </summary>
     bool IsPosition2DScale() const;
 
+    /// <summary>
+    /// 一意識別子（UUID）の取得・設定
+    /// </summary>
+    const std::string& GetUUID() const { return uuid_; }
+    void SetUUID(const std::string& uuid) { uuid_ = uuid; }
+
 private:
+    std::string uuid_{};
     Transform transform_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
     Matrix4x4 matWorld_{};
     bool isMatrixDirty_ = true;

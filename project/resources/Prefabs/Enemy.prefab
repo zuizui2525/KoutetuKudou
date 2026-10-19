@@ -1,0 +1,40 @@
+{
+  "prefab_name": "Enemy",
+  "game_object": {
+    "name": "Enemy",
+    "visible": true,
+    "transform": {
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    },
+    "components": [
+      {
+        "type": "MeshRenderer",
+        "mesh_type": 0,
+        "texture_key": "white",
+        "model_key": "cube",
+        "env_map_key": "",
+        "color": [1, 0.1, 0.1, 1],
+        "lighting_mode": 1,
+        "shininess": 30,
+        "environment_coefficient": 0,
+        "offset_position": [0, 0, 0],
+        "offset_rotation": [0, 0, 0],
+        "offset_scale": [1, 1, 1]
+      },
+      {
+        "type": "BoxCollider",
+        "center": [0, 0, 0],
+        "size": [1, 1, 1],
+        "is_trigger": false,
+        "show_gizmo": true
+      },
+      {
+        "type": "ScriptComponent",
+        "script_name": "EnemyAIScript",
+        "target_uuid": ""
+      }
+    ]
+  }
+}

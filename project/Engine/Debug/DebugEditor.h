@@ -50,5 +50,6 @@ private:
     WINDOWPLACEMENT wpPrev_ = { sizeof(WINDOWPLACEMENT) };
     AspectType currentAspect_ = AspectType::Aspect16_9_Low;
     bool isPaused_ = false;
+    bool isSceneSelected_ = false;
 };
 #endif

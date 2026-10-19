@@ -1,0 +1,40 @@
+{
+  "prefab_name": "BossEnemy",
+  "game_object": {
+    "name": "BossEnemy",
+    "visible": true,
+    "transform": {
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [3, 3, 3]
+    },
+    "components": [
+      {
+        "type": "MeshRenderer",
+        "mesh_type": 0,
+        "texture_key": "white",
+        "model_key": "cube",
+        "env_map_key": "",
+        "color": [0.8, 0, 0.2, 1],
+        "lighting_mode": 1,
+        "shininess": 50,
+        "environment_coefficient": 0.2,
+        "offset_position": [0, 0, 0],
+        "offset_rotation": [0, 0, 0],
+        "offset_scale": [1, 1, 1]
+      },
+      {
+        "type": "BoxCollider",
+        "center": [0, 0, 0],
+        "size": [3, 3, 3],
+        "is_trigger": false,
+        "show_gizmo": true
+      },
+      {
+        "type": "ScriptComponent",
+        "script_name": "EnemyAIScript",
+        "target_uuid": ""
+      }
+    ]
+  }
+}

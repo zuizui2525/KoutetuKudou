@@ -37,6 +37,10 @@ namespace {
     constexpr size_t kPassIndexRadialBlur = 9;
     constexpr size_t kPassIndexDissolve = 10;
     constexpr size_t kPassIndexTVNoise = 11;
+
+    // ビューポート深度定数
+    constexpr float kViewportMinDepth = 0.0f;
+    constexpr float kViewportMaxDepth = 1.0f;
 }
 
 void PostProcess::Initialize() {
@@ -127,6 +131,24 @@ void PostProcess::PreDraw() {
 
     // メインのレンダーテクスチャを描画ターゲットに設定してクリア
     renderTexture_->PreDraw(commandList, dsvHandle);
+
+    // 3D描画用ビューポートおよびシザー矩形の設定（レンダーテクスチャ解像度1280x720に統一）
+    D3D12_VIEWPORT vp{};
+    vp.Width = static_cast<float>(WindowApp::kClientWidth);
+    vp.Height = static_cast<float>(WindowApp::kClientHeight);
+    vp.TopLeftX = 0.0f;
+    vp.TopLeftY = 0.0f;
+    vp.MinDepth = kViewportMinDepth;
+    vp.MaxDepth = kViewportMaxDepth;
+
+    D3D12_RECT sr{};
+    sr.left = 0;
+    sr.right = static_cast<LONG>(WindowApp::kClientWidth);
+    sr.top = 0;
+    sr.bottom = static_cast<LONG>(WindowApp::kClientHeight);
+
+    commandList->RSSetViewports(1, &vp);
+    commandList->RSSetScissorRects(1, &sr);
 }
 
 void PostProcess::PostDraw() {
@@ -190,29 +212,20 @@ void PostProcess::PreDraw2D() {
     // 既存のポストエフェクト結果を保持したまま描画ターゲットに設定
     finalTarget->PreDrawWithoutClear(commandList);
 
-    // 2D描画用ビューポートおよびシザー矩形の設定
-    HWND hwnd = engine->GetWindow()->GetHWND();
-    RECT clientRect{};
-    GetClientRect(hwnd, &clientRect);
-    float width = static_cast<float>(clientRect.right - clientRect.left);
-    float height = static_cast<float>(clientRect.bottom - clientRect.top);
-
-    constexpr float kMinDepth = 0.0f;
-    constexpr float kMaxDepth = 1.0f;
-
+    // 2D描画用ビューポートおよびシザー矩形の設定（レンダーターゲット解像度1280x720と完全一致）
     D3D12_VIEWPORT vp{};
-    vp.Width = width;
-    vp.Height = height;
+    vp.Width = static_cast<float>(WindowApp::kClientWidth);
+    vp.Height = static_cast<float>(WindowApp::kClientHeight);
     vp.TopLeftX = 0.0f;
     vp.TopLeftY = 0.0f;
-    vp.MinDepth = kMinDepth;
-    vp.MaxDepth = kMaxDepth;
+    vp.MinDepth = kViewportMinDepth;
+    vp.MaxDepth = kViewportMaxDepth;
 
     D3D12_RECT sr{};
     sr.left = 0;
-    sr.right = static_cast<LONG>(width);
+    sr.right = static_cast<LONG>(WindowApp::kClientWidth);
     sr.top = 0;
-    sr.bottom = static_cast<LONG>(height);
+    sr.bottom = static_cast<LONG>(WindowApp::kClientHeight);
 
     commandList->RSSetViewports(1, &vp);
     commandList->RSSetScissorRects(1, &sr);

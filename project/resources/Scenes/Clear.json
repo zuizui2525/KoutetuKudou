@@ -2,6 +2,7 @@
   "scene_name": "Clear",
   "game_objects": [
     {
+      "uuid": "f24325f7-f70c-45fa-80ad-e8c9aa94ea4e",
       "name": "Camera",
       "visible": true,
       "transform": {
@@ -22,6 +23,7 @@
       ]
     },
     {
+      "uuid": "e702382d-c0b2-4421-9233-91c1a25e1484",
       "name": "DirectionalLight",
       "visible": true,
       "transform": {
@@ -43,6 +45,7 @@
       ]
     },
     {
+      "uuid": "4fd1e8b0-12d3-43be-9f63-1e114c790940",
       "name": "Cube",
       "visible": true,
       "transform": {
@@ -59,7 +62,11 @@
           "env_map_key": "",
           "color": [1, 1, 1, 1],
           "lighting_mode": 2,
-          "shininess": 30
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     }

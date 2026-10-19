@@ -13,11 +13,17 @@
 #include "Engine/Component/Components/SinOscillatorComponent.h"
 #include "Engine/Component/Components/BlinkComponent.h"
 #include "Engine/Component/Components/CameraOrbitComponent.h"
+#include "Engine/Component/ScriptComponent.h"
+#include "Engine/Component/ScriptRegistry.h"
+#include "Engine/Base/Utils/UUIDUtility.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Zuizui.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <cstring>
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
@@ -36,6 +42,65 @@ namespace {
     // 3D適正座標判定用定数 (マジックナンバー排除)
     constexpr float kMax3DReasonableDistance = 50.0f; // これを超えるX/Y座標は2Dスクリーンピクセル座標の残留と判定
 
+    // スクリプト生成用定数・変数
+    constexpr const char* kScriptsDirectory = "Scripts";
+    constexpr size_t kScriptBufferLength = 64;
+    char sNewScriptBuffer[kScriptBufferLength] = "";
+    bool sOpenNewScriptModal = false;
+
+    void CreateScriptTemplateFiles(const std::string& scriptName) {
+        std::filesystem::create_directories(kScriptsDirectory);
+
+        std::filesystem::path headerPath = std::filesystem::path(kScriptsDirectory) / (scriptName + ".h");
+        std::filesystem::path sourcePath = std::filesystem::path(kScriptsDirectory) / (scriptName + ".cpp");
+
+        // .h テンプレート生成
+        if (!std::filesystem::exists(headerPath)) {
+            std::ofstream ofs(headerPath);
+            if (ofs.is_open()) {
+                ofs << "#pragma once\n";
+                ofs << "#include \"Engine/Component/ScriptComponent.h\"\n\n";
+                ofs << "class " << scriptName << " : public ScriptComponent {\n";
+                ofs << "public:\n";
+                ofs << "    " << scriptName << "() : ScriptComponent(\"" << scriptName << "\") {}\n";
+                ofs << "    ~" << scriptName << "() override = default;\n\n";
+                ofs << "    void Awake() override;\n";
+                ofs << "    void Start() override;\n";
+                ofs << "    void OnUpdate() override;\n";
+                ofs << "    void OnInspectorGUI() override;\n";
+                ofs << "};\n";
+            }
+        }
+
+        // .cpp テンプレート生成
+        if (!std::filesystem::exists(sourcePath)) {
+            std::ofstream ofs(sourcePath);
+            if (ofs.is_open()) {
+                ofs << "#include \"" << scriptName << ".h\"\n";
+                ofs << "#include \"Engine/Component/ScriptRegistry.h\"\n";
+                ofs << "#ifdef _USEIMGUI\n";
+                ofs << "#include <imgui.h>\n";
+                ofs << "#endif\n\n";
+                ofs << "// スクリプト自動登録マクロ（エディタ認識用）\n";
+                ofs << "REGISTER_SCRIPT(" << scriptName << ")\n\n";
+                ofs << "void " << scriptName << "::Awake() {\n";
+                ofs << "    // コンポーネント生成直後の初期化\n";
+                ofs << "}\n\n";
+                ofs << "void " << scriptName << "::Start() {\n";
+                ofs << "    // 初回フレーム前の初期化\n";
+                ofs << "}\n\n";
+                ofs << "void " << scriptName << "::OnUpdate() {\n";
+                ofs << "    // 毎フレームの更新ロジック\n";
+                ofs << "}\n\n";
+                ofs << "void " << scriptName << "::OnInspectorGUI() {\n";
+                ofs << "#ifdef _USEIMGUI\n";
+                ofs << "    ImGui::Text(\"Hello from " << scriptName << "!\");\n";
+                ofs << "#endif\n";
+                ofs << "}\n";
+            }
+        }
+    }
+
     void SyncGPUForDeletion() {
         if (auto engine = EngineResource::GetEngine()) {
             if (auto dxCommon = engine->GetDxCommon()) {
@@ -47,6 +112,7 @@ namespace {
 
 GameObject::GameObject(const std::string& name) {
     name_ = name;
+    uuid_ = UUIDUtility::GenerateUUID();
     Initialize();
 }
 
@@ -269,6 +335,18 @@ void GameObject::DrawInspector() {
         ImGui::OpenPopup("AddComponentPopup");
     }
 
+    // スクリプトのドラッグ＆ドロップ受け取り (ContentBrowserからのスクリプトアタッチ)
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_SCRIPT")) {
+            const char* scriptFilePath = static_cast<const char*>(payload->Data);
+            std::filesystem::path p(scriptFilePath);
+            std::string stemName = p.stem().string(); // "PlayerController.cpp" -> "PlayerController"
+            auto scriptInst = ScriptRegistry::GetInstance().CreateScript(stemName);
+            AddComponentInstance(std::move(scriptInst));
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     // サブメニューが右側（矢印の方向）に展開できるよう、右側余白を確保した座標にポップアップを配置
     constexpr float kPopupWidthEstimate = 200.0f;
     constexpr float kSubmenuWidthEstimate = 240.0f;
@@ -371,6 +449,76 @@ void GameObject::DrawInspector() {
                 AddComponent<CameraOrbitComponent>();
             }
             ImGui::EndMenu();
+        }
+
+        // スクリプト追加メニュー (最下部に配置)
+        ImGui::Separator();
+
+        auto registeredScripts = ScriptRegistry::GetInstance().GetRegisteredScriptNames();
+        if (!registeredScripts.empty()) {
+            if (ImGui::BeginMenu("Scripts (登録済みスクリプト)")) {
+                for (const auto& sName : registeredScripts) {
+                    if (ImGui::MenuItem(sName.c_str())) {
+                        auto scriptInst = ScriptRegistry::GetInstance().CreateScript(sName);
+                        AddComponentInstance(std::move(scriptInst));
+                    }
+                }
+                ImGui::EndMenu();
+            }
+        }
+
+        // Add Component の一番下の [+ New Script...] 項目
+        if (ImGui::MenuItem("+ New Script... (新規スクリプト作成)")) {
+            sOpenNewScriptModal = true;
+            std::memset(sNewScriptBuffer, 0, sizeof(sNewScriptBuffer));
+        }
+
+        ImGui::EndPopup();
+    }
+
+    // スクリプト名入力モーダルダイアログ
+    if (sOpenNewScriptModal) {
+        ImGui::OpenPopup("NewScriptModal");
+        sOpenNewScriptModal = false;
+    }
+
+    if (ImGui::BeginPopupModal("NewScriptModal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("新しいスクリプト名を入力してください:");
+        ImGui::Spacing();
+
+        constexpr float kInputWidth = 260.0f;
+        constexpr float kModalBtnWidth = 130.0f;
+        constexpr float kModalCancelBtnWidth = 90.0f;
+
+        ImGui::SetNextItemWidth(kInputWidth);
+        ImGui::InputText("##ScriptNameInput", sNewScriptBuffer, sizeof(sNewScriptBuffer));
+
+        bool hasValidName = (std::strlen(sNewScriptBuffer) > 0);
+        ImGui::Spacing();
+
+        if (!hasValidName) {
+            ImGui::BeginDisabled();
+        }
+
+        if (ImGui::Button("作成してアタッチ", ImVec2(kModalBtnWidth, 0.0f))) {
+            std::string scriptName = sNewScriptBuffer;
+            // テンプレートファイルを自動生成
+            CreateScriptTemplateFiles(scriptName);
+
+            // スクリプトコンポーネントを即時生成してアタッチ
+            auto scriptInst = ScriptRegistry::GetInstance().CreateScript(scriptName);
+            AddComponentInstance(std::move(scriptInst));
+
+            ImGui::CloseCurrentPopup();
+        }
+
+        if (!hasValidName) {
+            ImGui::EndDisabled();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("キャンセル", ImVec2(kModalCancelBtnWidth, 0.0f))) {
+            ImGui::CloseCurrentPopup();
         }
 
         ImGui::EndPopup();

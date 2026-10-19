@@ -9,6 +9,9 @@
 #include <chrono>
 #include <ctime>
 #include <format>
+#define NOMINMAX
+#include <windows.h>
+#include <shellapi.h>
 
 namespace {
     // ペイロード識別子定数（ドラッグ＆ドロップ用）
@@ -16,6 +19,8 @@ namespace {
     constexpr const char* kPayloadModel   = "CONTENT_BROWSER_ITEM_MODEL";
     constexpr const char* kPayloadAudio   = "CONTENT_BROWSER_ITEM_AUDIO";
     constexpr const char* kPayloadScene   = "CONTENT_BROWSER_ITEM_SCENE";
+    constexpr const char* kPayloadScript  = "CONTENT_BROWSER_SCRIPT";
+    constexpr const char* kPayloadPrefab  = "CONTENT_BROWSER_PREFAB";
     constexpr const char* kPayloadGeneric = "CONTENT_BROWSER_ITEM_GENERIC";
 
     // 拡張子判定用
@@ -35,11 +40,21 @@ namespace {
         return ext == ".json";
     }
 
+    bool IsScriptExtension(const std::string& ext) {
+        return ext == ".h" || ext == ".hpp" || ext == ".cpp" || ext == ".c";
+    }
+
+    bool IsPrefabExtension(const std::string& ext) {
+        return ext == ".prefab";
+    }
+
     const char* GetPayloadType(const std::string& ext) {
         if (IsTextureExtension(ext)) return kPayloadTexture;
         if (IsModelExtension(ext)) return kPayloadModel;
         if (IsAudioExtension(ext)) return kPayloadAudio;
         if (IsSceneExtension(ext)) return kPayloadScene;
+        if (IsScriptExtension(ext)) return kPayloadScript;
+        if (IsPrefabExtension(ext)) return kPayloadPrefab;
         return kPayloadGeneric;
     }
 
@@ -61,10 +76,28 @@ namespace {
 }
 
 ContentBrowserWindow::ContentBrowserWindow()
-    : rootDirectory_("resources"),
+    : currentCategory_(RootCategory::Resources),
+      resourcesRoot_("resources"),
+      scriptsRoot_("Scripts"),
+      rootDirectory_(resourcesRoot_),
       currentDirectory_(rootDirectory_),
       history_({ rootDirectory_ }),
       historyIndex_(0) {
+    std::filesystem::create_directories(resourcesRoot_);
+    std::filesystem::create_directories(scriptsRoot_);
+}
+
+void ContentBrowserWindow::SwitchRootCategory(RootCategory category) {
+    if (currentCategory_ == category) return;
+
+    currentCategory_ = category;
+    rootDirectory_ = (currentCategory_ == RootCategory::Resources) ? resourcesRoot_ : scriptsRoot_;
+    std::filesystem::create_directories(rootDirectory_);
+
+    history_.clear();
+    history_.push_back(rootDirectory_);
+    historyIndex_ = 0;
+    currentDirectory_ = rootDirectory_;
 }
 
 void ContentBrowserWindow::NavigateTo(const std::filesystem::path& newPath) {
@@ -161,6 +194,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE ContentBrowserWindow::GetIconHandleForEntry(const st
     if (IsSceneExtension(ext)) {
         return texMgr->GetGpuHandle(kIconSceneKey);
     }
+    if (IsPrefabExtension(ext)) {
+        return texMgr->GetGpuHandle(kIconModelKey);
+    }
 
     return texMgr->GetGpuHandle(kIconFileKey);
 }
@@ -174,11 +210,45 @@ void ContentBrowserWindow::Draw(bool* pOpen) {
         DrawNavigationBar();
         ImGui::Separator();
         DrawFileGrid();
+
+        // 空白エリアの右クリックメニュー
+        if (ImGui::BeginPopupContextWindow("ContentBrowserBgContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
+            if (ImGui::MenuItem("エクスプローラーでこのフォルダを開く")) {
+                std::string fullPath = std::filesystem::absolute(currentDirectory_).string();
+                ShellExecuteA(nullptr, "open", fullPath.c_str(), nullptr, nullptr, SW_SHOW);
+            }
+            ImGui::EndPopup();
+        }
     }
     ImGui::End();
+
+    DrawDeleteConfirmModal();
 }
 
 void ContentBrowserWindow::DrawNavigationBar() {
+    // 0. ルートカテゴリ切替ボタングループ ([Resources] / [Scripts])
+    bool isRes = (currentCategory_ == RootCategory::Resources);
+    bool isScr = (currentCategory_ == RootCategory::Scripts);
+
+    constexpr ImVec4 kActiveCategoryColor = ImVec4(0.2f, 0.55f, 0.85f, 1.0f);
+    if (isRes) ImGui::PushStyleColor(ImGuiCol_Button, kActiveCategoryColor);
+    if (ImGui::Button("Resources##CategoryRes", ImVec2(0.0f, kNavButtonHeight))) {
+        SwitchRootCategory(RootCategory::Resources);
+    }
+    if (isRes) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+
+    if (isScr) ImGui::PushStyleColor(ImGuiCol_Button, kActiveCategoryColor);
+    if (ImGui::Button("Scripts##CategoryScr", ImVec2(0.0f, kNavButtonHeight))) {
+        SwitchRootCategory(RootCategory::Scripts);
+    }
+    if (isScr) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+
     // 1. [ < ] 戻る (Back) ボタン
     bool canGoBack = CanGoBack();
     if (!canGoBack) {
@@ -250,7 +320,10 @@ void ContentBrowserWindow::DrawBreadcrumbs() {
     std::filesystem::path rel = std::filesystem::relative(currentDirectory_, rootDirectory_);
     
     // ルートフォルダのボタン
-    if (ImGui::Button("Assets: Resources##BreadcrumbRoot", ImVec2(0.0f, kNavButtonHeight))) {
+    std::string rootLabel = (currentCategory_ == RootCategory::Resources) 
+        ? "Resources##BreadcrumbRoot" 
+        : "Scripts##BreadcrumbRoot";
+    if (ImGui::Button(rootLabel.c_str(), ImVec2(0.0f, kNavButtonHeight))) {
         NavigateTo(rootDirectory_);
     }
 
@@ -371,6 +444,11 @@ void ContentBrowserWindow::DrawItemNode(const std::filesystem::directory_entry& 
     if (isDir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         NavigateTo(path);
     }
+    // ファイルのダブルクリックで既定のエディタ（Visual Studio / VS Code 等）で開く
+    else if (!isDir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        std::string fullPath = std::filesystem::absolute(path).string();
+        ShellExecuteA(nullptr, "open", fullPath.c_str(), nullptr, nullptr, SW_SHOW);
+    }
 
     // サムネイル幅に応じた最大表示文字数の計算（サムネイルサイズ拡大時に長く表示）
     size_t maxLen = kBaseFilenameLength;
@@ -394,6 +472,29 @@ void ContentBrowserWindow::DrawItemNode(const std::filesystem::directory_entry& 
     ImGui::TextUnformatted(displayName.c_str());
 
     ImGui::EndGroup();
+
+    // アイテムの右クリックコンテキストメニュー (複製・削除・エクスプローラー表示)
+    if (ImGui::BeginPopupContextItem("ItemContextMenu")) {
+        ImGui::TextDisabled("%s", filename.c_str());
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("複製 (Duplicate)")) {
+            DuplicateEntry(path);
+        }
+
+        if (ImGui::MenuItem("削除 (Delete)")) {
+            itemToDelete_ = path;
+            showDeleteConfirmModal_ = true;
+        }
+
+        ImGui::Separator();
+
+        if (ImGui::MenuItem("エクスプローラーで表示")) {
+            ShowInExplorer(path);
+        }
+
+        ImGui::EndPopup();
+    }
 
     // アイテム全体（アイコンまたはラベル）にホバーした際にツールチップを表示
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
@@ -482,6 +583,9 @@ std::string ContentBrowserWindow::GetFileTypeDescription(const std::filesystem::
     if (IsSceneExtension(ext)) {
         return std::format("シーンデータ ({})", ext);
     }
+    if (IsPrefabExtension(ext)) {
+        return std::format("プレハブアセット ({})", ext);
+    }
     if (ext == ".ttf" || ext == ".otf") {
         return std::format("フォントファイル ({})", ext);
     }
@@ -537,6 +641,84 @@ std::string ContentBrowserWindow::FormatFileTime(std::filesystem::file_time_type
             tm.tm_year + kYearOffset, tm.tm_mon + kMonthOffset, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
     } catch (...) {
         return "-";
+    }
+}
+
+void ContentBrowserWindow::DuplicateEntry(const std::filesystem::path& targetPath) {
+    if (!std::filesystem::exists(targetPath)) return;
+
+    std::filesystem::path parent = targetPath.parent_path();
+    std::string stem = targetPath.stem().string();
+    std::string ext = targetPath.extension().string();
+
+    std::filesystem::path newPath = parent / (stem + "_Copy" + ext);
+    int copyIndex = 2;
+    while (std::filesystem::exists(newPath)) {
+        newPath = parent / (stem + "_Copy" + std::to_string(copyIndex) + ext);
+        ++copyIndex;
+    }
+
+    try {
+        if (std::filesystem::is_directory(targetPath)) {
+            std::filesystem::copy(targetPath, newPath, std::filesystem::copy_options::recursive);
+        } else {
+            std::filesystem::copy_file(targetPath, newPath);
+        }
+    } catch (const std::exception& e) {
+        (void)e;
+    }
+}
+
+void ContentBrowserWindow::DeleteEntry(const std::filesystem::path& targetPath) {
+    if (!std::filesystem::exists(targetPath)) return;
+
+    try {
+        if (std::filesystem::is_directory(targetPath)) {
+            std::filesystem::remove_all(targetPath);
+        } else {
+            std::filesystem::remove(targetPath);
+        }
+    } catch (const std::exception& e) {
+        (void)e;
+    }
+}
+
+void ContentBrowserWindow::ShowInExplorer(const std::filesystem::path& targetPath) const {
+    if (!std::filesystem::exists(targetPath)) return;
+
+    std::string fullPath = std::filesystem::absolute(targetPath).string();
+    std::string params = "/select,\"" + fullPath + "\"";
+    ShellExecuteA(nullptr, "open", "explorer.exe", params.c_str(), nullptr, SW_SHOW);
+}
+
+void ContentBrowserWindow::DrawDeleteConfirmModal() {
+    if (showDeleteConfirmModal_) {
+        ImGui::OpenPopup("アイテムの削除確認###DeleteModal");
+    }
+
+    constexpr float kModalBtnWidth = 100.0f;
+    constexpr ImVec4 kDangerColor = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+
+    if (ImGui::BeginPopupModal("アイテムの削除確認###DeleteModal", &showDeleteConfirmModal_, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("本当に以下のアイテムを削除しますか？");
+        ImGui::Spacing();
+        ImGui::TextColored(kDangerColor, "  %s", itemToDelete_.filename().string().c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("※この操作は取り消せません。ファイルが完全に削除されます。");
+        ImGui::Separator();
+
+        if (ImGui::Button("削除", ImVec2(kModalBtnWidth, 0.0f))) {
+            DeleteEntry(itemToDelete_);
+            showDeleteConfirmModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("キャンセル", ImVec2(kModalBtnWidth, 0.0f))) {
+            showDeleteConfirmModal_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 }
 #endif
