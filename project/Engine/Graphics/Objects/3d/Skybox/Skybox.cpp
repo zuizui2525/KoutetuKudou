@@ -5,6 +5,22 @@
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Texture/TextureManager.h"
 #include "Engine/Graphics/PSO/Manager/PSOManager.h"
+#include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
+
+Skybox::~Skybox() {
+    auto deferredMgr = DeferredReleaseManager::GetInstance();
+    if (deferredMgr) {
+        if (vertexResource_) {
+            deferredMgr->Enqueue(std::move(vertexResource_));
+        }
+        if (indexResource_) {
+            deferredMgr->Enqueue(std::move(indexResource_));
+        }
+        if (wvpResource_) {
+            deferredMgr->Enqueue(std::move(wvpResource_));
+        }
+    }
+}
 
 void Skybox::Initialize() {
     auto device = EngineResource::GetEngine()->GetDevice();

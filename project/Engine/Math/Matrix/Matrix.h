@@ -46,7 +46,7 @@ namespace Math {
 	// 回転行列
 	Matrix4x4 MakeRotateMatrix(float roll, float pitch, float yaw);
 	// アフィン変換行列(Matrix4x4)
-	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, Vector3& translate);
+	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
 	// 投視投影行列
 	Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
 	// 正射影行列

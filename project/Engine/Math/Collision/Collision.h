@@ -24,3 +24,7 @@ bool IsCollision(const AABB& aabb, const Segment& segment);
 bool IsCollision(const OBB& obb, const Sphere& sphere);
 // OBBと線の当たり判定
 bool IsCollision(const OBB& obb, const Segment& segment);
+// OBB同士の当たり判定
+bool IsCollision(const OBB& a, const OBB& b);
+// OBB同士の重なりを解消するための押し出しベクトル（bをaから離すベクトル）を計算。接触中であればtrueを返す。
+bool CalculateOBBPushVector(const OBB& a, const OBB& b, Vector3& outPushVector, Vector3* outNormal = nullptr);

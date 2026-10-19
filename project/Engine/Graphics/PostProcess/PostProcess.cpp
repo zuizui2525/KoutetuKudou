@@ -252,6 +252,24 @@ void PostProcess::ProcessEffects() {
     // ポストプロセスのフルスクリーンパス描画用にプリミティブトポロジーを確実にTRIANGLELISTに設定
     commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    // エフェクト描画用ビューポートおよびシザー矩形の設定（レンダーテクスチャ基準解像度1280x720に完全統一）
+    D3D12_VIEWPORT vpEffect{};
+    vpEffect.Width = static_cast<float>(WindowApp::kClientWidth);
+    vpEffect.Height = static_cast<float>(WindowApp::kClientHeight);
+    vpEffect.TopLeftX = 0.0f;
+    vpEffect.TopLeftY = 0.0f;
+    vpEffect.MinDepth = kViewportMinDepth;
+    vpEffect.MaxDepth = kViewportMaxDepth;
+
+    D3D12_RECT srEffect{};
+    srEffect.left = 0;
+    srEffect.right = static_cast<LONG>(WindowApp::kClientWidth);
+    srEffect.top = 0;
+    srEffect.bottom = static_cast<LONG>(WindowApp::kClientHeight);
+
+    commandList->RSSetViewports(1, &vpEffect);
+    commandList->RSSetScissorRects(1, &srEffect);
+
     // アクティブなパスを収集（CopyImagePassは除く）
     std::vector<IPostProcessPass*> activePasses;
     for (size_t i = 1; i < passes_.size(); ++i) {
@@ -303,30 +321,48 @@ void PostProcess::CopyToSwapChain(D3D12_CPU_DESCRIPTOR_HANDLE targetRtv) {
     // 指定されたレンダーターゲット（スワップチェーン等）にコピー描画する
     commandList->OMSetRenderTargets(1, &targetRtv, FALSE, nullptr);
 
-    // ウィンドウの現在のクライアント領域サイズに合わせてビューポートを動的に更新（アスペクト比崩れ・ずれ防止）
+    // ウィンドウ全体のクライアント矩形サイズを取得
     HWND hwnd = engine->GetWindow()->GetHWND();
     RECT clientRect{};
     GetClientRect(hwnd, &clientRect);
     
-    float width = static_cast<float>(clientRect.right - clientRect.left);
-    float height = static_cast<float>(clientRect.bottom - clientRect.top);
-    
-    constexpr float kMinDepth = 0.0f;
-    constexpr float kMaxDepth = 1.0f;
+    float windowWidth = static_cast<float>(clientRect.right - clientRect.left);
+    float windowHeight = static_cast<float>(clientRect.bottom - clientRect.top);
+    if (windowWidth <= 0.0f || windowHeight <= 0.0f) return;
+
+    // 余白（レターボックス）を黒色でクリア
+    const float kBlackClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    commandList->ClearRenderTargetView(targetRtv, kBlackClearColor, 0, nullptr);
+
+    // 16:9 アスペクト比を維持した中央描画矩形（Aspect Fit）を計算
+    constexpr float kGameAspectWidth = 16.0f;
+    constexpr float kGameAspectHeight = 9.0f;
+    constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
+
+    float drawWidth = windowWidth;
+    float drawHeight = windowWidth / kGameAspectRatio;
+
+    if (drawHeight > windowHeight) {
+        drawHeight = windowHeight;
+        drawWidth = windowHeight * kGameAspectRatio;
+    }
+
+    float offsetX = (windowWidth - drawWidth) * 0.5f;
+    float offsetY = (windowHeight - drawHeight) * 0.5f;
 
     D3D12_VIEWPORT vp{};
-    vp.Width = width;
-    vp.Height = height;
-    vp.TopLeftX = 0.0f;
-    vp.TopLeftY = 0.0f;
-    vp.MinDepth = kMinDepth;
-    vp.MaxDepth = kMaxDepth;
+    vp.Width = drawWidth;
+    vp.Height = drawHeight;
+    vp.TopLeftX = offsetX;
+    vp.TopLeftY = offsetY;
+    vp.MinDepth = kViewportMinDepth;
+    vp.MaxDepth = kViewportMaxDepth;
     
     D3D12_RECT sr{};
-    sr.left = 0;
-    sr.right = static_cast<LONG>(width);
-    sr.top = 0;
-    sr.bottom = static_cast<LONG>(height);
+    sr.left = static_cast<LONG>(offsetX);
+    sr.right = static_cast<LONG>(offsetX + drawWidth);
+    sr.top = static_cast<LONG>(offsetY);
+    sr.bottom = static_cast<LONG>(offsetY + drawHeight);
     
     commandList->RSSetViewports(1, &vp);
     commandList->RSSetScissorRects(1, &sr);

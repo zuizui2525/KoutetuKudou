@@ -25,6 +25,11 @@ void BulletScript::Awake() {
 void BulletScript::Start() {
 }
 
+namespace {
+    constexpr float kHitShakeIntensity = 0.05f;
+    constexpr float kHitShakeDuration = 0.10f;
+}
+
 void BulletScript::OnUpdate() {
     if (isDead_ || !owner_) {
         return;
@@ -35,9 +40,7 @@ void BulletScript::OnUpdate() {
     if (currentLifeTimer_ >= maxLifeTime_) {
         isDead_ = true;
         owner_->SetVisible(false);
-        if (auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene())) {
-            scene->DestroyGameObject(owner_);
-        }
+        Destroy(owner_);
         return;
     }
 
@@ -88,9 +91,8 @@ void BulletScript::CheckCollisions() {
                         // 命中フラグ設定
                         isDead_ = true;
                         owner_->SetVisible(false);
-                        if (auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene())) {
-                            scene->DestroyGameObject(owner_);
-                        }
+                        ShakeCamera(kHitShakeIntensity, kHitShakeDuration);
+                        Destroy(owner_);
                         break;
                     }
                 }
@@ -106,9 +108,8 @@ void BulletScript::CheckCollisions() {
                     if (IsCollision(targetAABB, bulletSphere)) {
                         isDead_ = true;
                         owner_->SetVisible(false);
-                        if (auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene())) {
-                            scene->DestroyGameObject(owner_);
-                        }
+                        ShakeCamera(kHitShakeIntensity, kHitShakeDuration);
+                        Destroy(owner_);
                         break;
                     }
                 }

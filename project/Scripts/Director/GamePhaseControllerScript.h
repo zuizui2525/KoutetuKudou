@@ -41,6 +41,9 @@ public:
     Phase GetCurrentPhase() const { return currentPhase_; }
     int GetCurrentArea() const { return currentArea_; }
 
+    float GetPlayerMoveSpeed() const { return playerMoveSpeed_; }
+    void SetPlayerMoveSpeed(float speed) { playerMoveSpeed_ = speed; }
+
 private:
     void UpdateDrawRoutePhase();
     void UpdatePlayPhase();
@@ -59,7 +62,9 @@ private:
 private:
     // マジックナンバー排除のための定数
     static constexpr int kMaxAreas = 4;
-    static constexpr float kPlayerMoveSpeed = 0.5f; // 毎フレームの走行速度
+    static constexpr float kDefaultPlayerMoveSpeed = 0.15f; // 毎フレームの標準走行速度（適正値）
+    static constexpr float kMinPlayerMoveSpeed = 0.01f;     // 最小速度
+    static constexpr float kMaxPlayerMoveSpeed = 2.0f;      // 最大速度
     static constexpr float kDrawCameraHeight = 65.0f;     // 斜め立体俯瞰のカメラ高さ
     static constexpr float kDrawCameraZOffset = -18.0f;   // スタート地点手前のオフセット
     static constexpr float kDrawCameraPitch = 0.98f;      // 約56度の斜め見下ろし角度
@@ -94,6 +99,7 @@ private:
     Phase currentPhase_ = Phase::DrawRoute;
     int currentArea_ = 0;
     float currentDistance_ = 0.0f;
+    float playerMoveSpeed_ = kDefaultPlayerMoveSpeed;
 
     RouteManagerScript* routeMgr_ = nullptr;
     PlayerControllerScript* playerScript_ = nullptr;

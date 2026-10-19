@@ -25,5 +25,6 @@ public:
 
     // GameObject 管理 (Undo/Redo 等でシーンとオブジェクトの着脱に使用)
     virtual void AddGameObject(std::unique_ptr<GameObject> gameObject) {}
+    virtual void DestroyGameObject(GameObject* gameObject) {}
     virtual std::unique_ptr<GameObject> DetachGameObject(GameObject* gameObject) { return nullptr; }
 };

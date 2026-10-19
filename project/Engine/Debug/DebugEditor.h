@@ -44,6 +44,7 @@ private:
     bool showContentBrowser_ = true;
     bool showShortcutsWindow_ = false;
     bool isGameViewVisible_ = false;
+    bool showInternalObjects_ = false; // 内部オブジェクト（柱など）をヒエラルキーに表示するかどうか
 
     // ウィンドウ状態管理のメンバ変数
     bool isFullscreen_ = false;

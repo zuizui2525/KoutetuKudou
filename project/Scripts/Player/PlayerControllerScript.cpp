@@ -77,15 +77,19 @@ void PlayerControllerScript::HandleShooting() {
     auto* input = InputResource::GetInput();
     if (!input) return;
 
-    if (reloadTimer_ <= 0 && shotIntervalTimer_ <= 0 && ammo_ > 0) {
-        if (input->MouseTrigger(kShotMouseKey)) {
+    bool canShoot = shotIntervalTimer_ <= 0 && (infiniteAmmo_ || (reloadTimer_ <= 0 && ammo_ > 0));
+    if (canShoot) {
+        // 左クリック（単発入力または長押し連射）
+        if (input->MouseTrigger(kShotMouseKey) || input->MousePress(kShotMouseKey)) {
             Fire();
         }
     }
 }
 
 void PlayerControllerScript::Fire() {
-    ammo_--;
+    if (!infiniteAmmo_) {
+        ammo_--;
+    }
     shotIntervalTimer_ = shotInterval_;
 
     Vector3 playerPos = owner_->GetPosition();
@@ -145,6 +149,9 @@ void PlayerControllerScript::Fire() {
             bulletScript->SetIsPlayerBullet(true);
         }
     }
+
+    // 射撃反動のカメラシェイク演出
+    ShakeCamera(kShootShakeIntensity, kShootShakeDuration);
 }
 
 void PlayerControllerScript::TakeDamage(int amount) {
@@ -160,6 +167,10 @@ void PlayerControllerScript::TakeDamage(int amount) {
 void PlayerControllerScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
     constexpr ImVec4 kHeaderColor = { 0.2f, 0.7f, 1.0f, 1.0f };
+    constexpr ImVec4 kActionColor = { 0.4f, 0.9f, 0.5f, 1.0f };
+    constexpr float kTestBtnWidth = 200.0f;
+    constexpr float kTestBtnHeight = 26.0f;
+
     ImGui::TextColored(kHeaderColor, "【プレイヤーコントローラー設定】");
     ImGui::Separator();
 
@@ -167,6 +178,7 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::ProgressBar(static_cast<float>(hp_) / static_cast<float>(maxHp_), ImVec2(0.0f, 0.0f),
         std::to_string(hp_).append(" / ").append(std::to_string(maxHp_)).c_str());
 
+    ImGui::Checkbox("残弾無限(デバッグ)##InfiniteAmmo", &infiniteAmmo_);
     ImGui::DragInt("最大装弾数##MaxAmmo", &maxAmmo_, 1, kMinAmmoLimit, kMaxAmmoLimit);
     ImGui::Text("残弾数: %d / %d %s", ammo_, maxAmmo_, (reloadTimer_ > 0 ? "[Reloading...]" : ""));
 
@@ -177,5 +189,11 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::Separator();
     ImGui::Checkbox("自動走行中##IsAutoMoving", &isAutoMoving_);
     ImGui::Text("状態: %s", isDead_ ? "撃墜(Dead)" : "健在(Alive)");
+
+    ImGui::Spacing();
+    ImGui::TextColored(kActionColor, "【射撃テスト】");
+    if (ImGui::Button("テスト発射 (左クリック相当)##TestFireBtn", ImVec2(kTestBtnWidth, kTestBtnHeight))) {
+        Fire();
+    }
 #endif
 }

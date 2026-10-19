@@ -12,7 +12,7 @@ public:
     };
 
     Skybox() = default;
-    ~Skybox() = default;
+    ~Skybox();
 
     void Initialize();
     void Update();

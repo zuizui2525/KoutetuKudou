@@ -50,7 +50,7 @@ public:
     /// <summary>
     /// ワールド行列の更新
     /// </summary>
-    void UpdateMatrix();
+    void UpdateMatrix() const;
 
     // ========================================================
     // トランスフォーム操作
@@ -65,12 +65,20 @@ public:
     Vector3& GetRotate() { return transform_.rotate; }
     const Vector3& GetRotate() const { return transform_.rotate; }
     void SetRotate(const Vector3& rot) { transform_.rotate = rot; isMatrixDirty_ = true; }
+    Vector3& GetRotation() { return transform_.rotate; }
+    const Vector3& GetRotation() const { return transform_.rotate; }
+    void SetRotation(const Vector3& rot) { transform_.rotate = rot; isMatrixDirty_ = true; }
 
     Vector3& GetScale() { return transform_.scale; }
     const Vector3& GetScale() const { return transform_.scale; }
     void SetScale(const Vector3& scale) { transform_.scale = scale; isMatrixDirty_ = true; }
 
-    const Matrix4x4& GetWorldMatrix() const { return matWorld_; }
+    const Matrix4x4& GetWorldMatrix() const {
+        if (isMatrixDirty_) {
+            UpdateMatrix();
+        }
+        return matWorld_;
+    }
 
     // ========================================================
     // コンポーネント管理 (UnityライクなテンプレートAPI)
@@ -189,8 +197,8 @@ public:
 private:
     std::string uuid_{};
     Transform transform_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
-    Matrix4x4 matWorld_{};
-    bool isMatrixDirty_ = true;
+    mutable Matrix4x4 matWorld_{};
+    mutable bool isMatrixDirty_ = true;
 
     std::vector<std::unique_ptr<IComponent>> components_;
 };

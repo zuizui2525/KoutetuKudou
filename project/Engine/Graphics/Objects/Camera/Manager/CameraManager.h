@@ -66,6 +66,9 @@ public:
         return "";
     }
 
+    // --- カメラシェイク演出 ---
+    void TriggerShake(float intensity, float duration);
+
     // --- 3D行列ゲッター (アクティブカメラから取得) ---
     const Matrix4x4& GetViewMatrix3D() const {
         if (!activeCamera_) {
@@ -76,6 +79,10 @@ public:
                 0,0,0,1
             };
             return identity;
+        }
+        // シェイク演出中かつ有効な合成行列が存在する場合のみシェイク後行列を返す
+        if (shakeTimer_ > 0.0f && currentViewMatrix3D_.m[3][3] != 0.0f) {
+            return currentViewMatrix3D_;
         }
         return activeCamera_->GetViewMatrix();
     }
@@ -110,6 +117,14 @@ private:
     // 2D用行列
     Matrix4x4 viewMatrix2D_;
     Matrix4x4 projectionMatrix2D_;
+
+    // 3Dシェイク合成後ビュー行列
+    Matrix4x4 currentViewMatrix3D_ = {};
+
+    // カメラシェイクパラメータ
+    float shakeTimer_ = 0.0f;
+    float shakeDuration_ = 0.0f;
+    float shakeIntensity_ = 0.0f;
 
     // 定数バッファ関連
     Microsoft::WRL::ComPtr<ID3D12Resource> resource_;

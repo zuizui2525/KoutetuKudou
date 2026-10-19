@@ -26,6 +26,16 @@ public:
     );
 
     /// <summary>
+    /// GameObjectを安全に現在のシーンから破棄（Unityライクな破棄API）
+    /// </summary>
+    static void Destroy(GameObject* gameObject);
+
+    /// <summary>
+    /// 画面演出用カメラシェイク（画面揺れ）を発生させるヘルパー
+    /// </summary>
+    static void ShakeCamera(float intensity, float duration);
+
+    /// <summary>
     /// コンポーネント生成直後に1度だけ呼ばれる処理
     /// </summary>
     virtual void Awake() {}
@@ -34,6 +44,16 @@ public:
     /// 初回更新フレーム直前に1度だけ呼ばれる処理
     /// </summary>
     virtual void Start() {}
+
+    /// <summary>
+    /// Start() を二重実行しないよう安全に呼び出す
+    /// </summary>
+    void CallStart() {
+        if (!hasStarted_) {
+            hasStarted_ = true;
+            Start();
+        }
+    }
 
     /// <summary>
     /// 初期化（IComponent::Initialize のオーバーライド）
@@ -46,10 +66,7 @@ public:
     /// 毎フレームの更新処理
     /// </summary>
     void Update() override {
-        if (!hasStarted_) {
-            Start();
-            hasStarted_ = true;
-        }
+        CallStart();
         OnUpdate();
     }
 

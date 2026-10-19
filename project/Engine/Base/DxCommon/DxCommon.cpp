@@ -1,4 +1,5 @@
 #include "Engine/Base/DxCommon/DxCommon.h"
+#include "Engine/Base/WindowApp/WindowApp.h"
 #include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/Log/Log.h"
@@ -483,8 +484,9 @@ void DxCommon::ResizeSwapChain(int32_t width, int32_t height) {
 		);
 	}
 
-	// 6. 深度ステンシル（DSV）の再生成
-	CreateDepthStencil(width, height);
+	// 6. 深度ステンシル（DSV）はゲーム基準解像度 (1280x720) に固定
+	// (レンダーテクスチャと深度バッファの寸法一致制約を常に充足し、ゲーム画面の縮小崩れを防止)
+	CreateDepthStencil(WindowApp::kClientWidth, WindowApp::kClientHeight);
 
 	// 7. デフォルトのビューポート・シザー矩形の再初期化
 	InitializeViewport(width, height);

@@ -4,6 +4,7 @@
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Zuizui.h"
+#include "Engine/Math/Matrix/Matrix.h"
 #include <cmath>
 #include <array>
 #include <utility>
@@ -73,28 +74,31 @@ void BoxColliderComponent::Draw() {
 
     EnsureGizmoLines();
 
-    AABB aabb = GetWorldAABB();
-    // モデルと重なって見えなくなるのを防ぐため、わずかに外側にマージンを持たせて描画
-    const Vector3 pMin = {
-        aabb.min.x - kGizmoVisualPadding,
-        aabb.min.y - kGizmoVisualPadding,
-        aabb.min.z - kGizmoVisualPadding
-    };
-    const Vector3 pMax = {
-        aabb.max.x + kGizmoVisualPadding,
-        aabb.max.y + kGizmoVisualPadding,
-        aabb.max.z + kGizmoVisualPadding
-    };
+    OBB obb = GetWorldOBB();
 
+    // モデル表面との埋もれ・Zファイティングを防止するため、外側に微小マージンを付加して展開
+    Vector3 extX = Math::Multiply(obb.size.x + kGizmoVisualPadding, obb.orientations[0]);
+    Vector3 extY = Math::Multiply(obb.size.y + kGizmoVisualPadding, obb.orientations[1]);
+    Vector3 extZ = Math::Multiply(obb.size.z + kGizmoVisualPadding, obb.orientations[2]);
+
+    // OBB の中心と3つの回転軸から8つの頂点を計算
     const std::array<Vector3, kBoxVertexCount> vertices = {{
-        { pMin.x, pMin.y, pMin.z }, // 0
-        { pMax.x, pMin.y, pMin.z }, // 1
-        { pMax.x, pMax.y, pMin.z }, // 2
-        { pMin.x, pMax.y, pMin.z }, // 3
-        { pMin.x, pMin.y, pMax.z }, // 4
-        { pMax.x, pMin.y, pMax.z }, // 5
-        { pMax.x, pMax.y, pMax.z }, // 6
-        { pMin.x, pMax.y, pMax.z }  // 7
+        // 0: (-x, -y, -z)
+        { obb.center.x - extX.x - extY.x - extZ.x, obb.center.y - extX.y - extY.y - extZ.y, obb.center.z - extX.z - extY.z - extZ.z },
+        // 1: (+x, -y, -z)
+        { obb.center.x + extX.x - extY.x - extZ.x, obb.center.y + extX.y - extY.y - extZ.y, obb.center.z + extX.z - extY.z - extZ.z },
+        // 2: (+x, +y, -z)
+        { obb.center.x + extX.x + extY.x - extZ.x, obb.center.y + extX.y + extY.y - extZ.y, obb.center.z + extX.z + extY.z - extZ.z },
+        // 3: (-x, +y, -z)
+        { obb.center.x - extX.x + extY.x - extZ.x, obb.center.y - extX.y + extY.y - extZ.y, obb.center.z - extX.z + extY.z - extZ.z },
+        // 4: (-x, -y, +z)
+        { obb.center.x - extX.x - extY.x + extZ.x, obb.center.y - extX.y - extY.y + extZ.y, obb.center.z - extX.z - extY.z + extZ.z },
+        // 5: (+x, -y, +z)
+        { obb.center.x + extX.x - extY.x + extZ.x, obb.center.y + extX.y - extY.y + extZ.y, obb.center.z + extX.z - extY.z + extZ.z },
+        // 6: (+x, +y, +z)
+        { obb.center.x + extX.x + extY.x + extZ.x, obb.center.y + extX.y + extY.y + extZ.y, obb.center.z + extX.z + extY.z + extZ.z },
+        // 7: (-x, +y, +z)
+        { obb.center.x - extX.x + extY.x + extZ.x, obb.center.y - extX.y + extY.y + extZ.y, obb.center.z - extX.z + extY.z + extZ.z }
     }};
 
     const Vector4& wireColor = isColliding_ ? kCollidingWireColor :
@@ -114,27 +118,67 @@ void BoxColliderComponent::Draw() {
     }
 }
 
-AABB BoxColliderComponent::GetWorldAABB() const {
-    Vector3 worldCenter = centerOffset_;
+OBB BoxColliderComponent::GetWorldOBB() const {
+    OBB obb{};
+    Vector3 worldPos = { 0.0f, 0.0f, 0.0f };
+    Vector3 worldRotate = { 0.0f, 0.0f, 0.0f };
     Vector3 worldScale = { 1.0f, 1.0f, 1.0f };
 
     if (owner_) {
-        worldCenter.x += owner_->GetPosition().x;
-        worldCenter.y += owner_->GetPosition().y;
-        worldCenter.z += owner_->GetPosition().z;
-
+        worldPos = owner_->GetPosition();
+        worldRotate = owner_->GetRotate();
         worldScale = owner_->GetScale();
     }
 
-    Vector3 halfSize = {
+    // オブジェクトの回転行列を作成
+    Matrix4x4 rotMat = Math::MakeRotateMatrix(worldRotate.x, worldRotate.y, worldRotate.z);
+
+    // 回転軸（正規化されたX, Y, Z基底ベクトル）
+    obb.orientations[0] = { rotMat.m[0][0], rotMat.m[0][1], rotMat.m[0][2] };
+    obb.orientations[1] = { rotMat.m[1][0], rotMat.m[1][1], rotMat.m[1][2] };
+    obb.orientations[2] = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+
+    // 中心座標（オフセットにも回転を適用）
+    Vector3 rotatedOffset = Math::TransformNormal(centerOffset_, rotMat);
+    obb.center = {
+        worldPos.x + rotatedOffset.x,
+        worldPos.y + rotatedOffset.y,
+        worldPos.z + rotatedOffset.z
+    };
+
+    // 各軸方向の半径（ハーフサイズ）
+    obb.size = {
         std::abs(size_.x * worldScale.x) * kHalfFactor,
         std::abs(size_.y * worldScale.y) * kHalfFactor,
         std::abs(size_.z * worldScale.z) * kHalfFactor
     };
+    obb.color = kDefaultColliderColor;
+
+    return obb;
+}
+
+AABB BoxColliderComponent::GetWorldAABB() const {
+    OBB obb = GetWorldOBB();
+
+    Vector3 extX = Math::Multiply(obb.size.x, obb.orientations[0]);
+    Vector3 extY = Math::Multiply(obb.size.y, obb.orientations[1]);
+    Vector3 extZ = Math::Multiply(obb.size.z, obb.orientations[2]);
+
+    // OBBの8頂点から外接AABBを算出
+    Vector3 pMin = {
+        obb.center.x - std::abs(extX.x) - std::abs(extY.x) - std::abs(extZ.x),
+        obb.center.y - std::abs(extX.y) - std::abs(extY.y) - std::abs(extZ.y),
+        obb.center.z - std::abs(extX.z) - std::abs(extY.z) - std::abs(extZ.z)
+    };
+    Vector3 pMax = {
+        obb.center.x + std::abs(extX.x) + std::abs(extY.x) + std::abs(extZ.x),
+        obb.center.y + std::abs(extX.y) + std::abs(extY.y) + std::abs(extZ.y),
+        obb.center.z + std::abs(extX.z) + std::abs(extY.z) + std::abs(extZ.z)
+    };
 
     AABB aabb{};
-    aabb.min = { worldCenter.x - halfSize.x, worldCenter.y - halfSize.y, worldCenter.z - halfSize.z };
-    aabb.max = { worldCenter.x + halfSize.x, worldCenter.y + halfSize.y, worldCenter.z + halfSize.z };
+    aabb.min = pMin;
+    aabb.max = pMax;
     aabb.color = kDefaultColliderColor;
     return aabb;
 }

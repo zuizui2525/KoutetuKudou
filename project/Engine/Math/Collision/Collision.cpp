@@ -1,6 +1,7 @@
 #include "Engine/Math/Collision/Collision.h"
 #include "Engine/Math/Matrix/Matrix.h"
 #include <algorithm>
+#include <cmath>
 
 using namespace Math;
 
@@ -285,5 +286,96 @@ bool IsCollision(const OBB& obb, const Segment& segment) {
 	}
 
 	// 線分とOBBが交差している
+	return true;
+}
+
+namespace {
+	constexpr float kEpsilonAxis = 0.0001f;
+	constexpr float kContactTolerance = 0.03f; // 押し出し後・静止時でも接触状態を維持するためのマージン
+
+	// 任意軸へのOBBの投影半径（Half-span）を計算
+	float CalculateProjectedRadius(const OBB& obb, const Vector3& axis) {
+		return obb.size.x * std::abs(Math::Dot(obb.orientations[0], axis)) +
+		       obb.size.y * std::abs(Math::Dot(obb.orientations[1], axis)) +
+		       obb.size.z * std::abs(Math::Dot(obb.orientations[2], axis));
+	}
+}
+
+// OBB同士の当たり判定
+bool IsCollision(const OBB& a, const OBB& b) {
+	Vector3 push{};
+	return CalculateOBBPushVector(a, b, push);
+}
+
+// OBB同士の重なりを解消するための押し出しベクトル（bをaから離すベクトル）を計算。接触中であればtrueを返す。
+bool CalculateOBBPushVector(const OBB& a, const OBB& b, Vector3& outPushVector, Vector3* outNormal) {
+	outPushVector = { 0.0f, 0.0f, 0.0f };
+	if (outNormal) {
+		*outNormal = { 0.0f, 0.0f, 0.0f };
+	}
+
+	// 中心間ベクトル (a -> b)
+	Vector3 diff = Math::Subtract(b.center, a.center);
+
+	// 高さ（Y軸）の判定（接触マージン込み）
+	float rAy = a.size.y;
+	float rBy = b.size.y;
+	float distY = std::abs(diff.y);
+	if (distY > (rAy + rBy + kContactTolerance)) {
+		return false; // Y軸方向で完全に離れている
+	}
+
+	// 分離軸候補（水平面XZでの押し返し用：aのローカルX/Z軸、bのローカルX/Z軸）
+	std::vector<Vector3> testAxes;
+	testAxes.reserve(4);
+
+	auto addXZAxis = [&](const Vector3& rawAxis) {
+		Vector3 ax = { rawAxis.x, 0.0f, rawAxis.z };
+		float lenSq = ax.x * ax.x + ax.z * ax.z;
+		if (lenSq > kEpsilonAxis) {
+			float invLen = 1.0f / std::sqrtf(lenSq);
+			ax.x *= invLen;
+			ax.z *= invLen;
+			testAxes.push_back(ax);
+		}
+	};
+
+	addXZAxis(a.orientations[0]); // AのローカルX軸
+	addXZAxis(a.orientations[2]); // AのローカルZ軸
+	addXZAxis(b.orientations[0]); // BのローカルX軸
+	addXZAxis(b.orientations[2]); // BのローカルZ軸
+
+	float minOverlap = FLT_MAX;
+	Vector3 bestAxis = { 0.0f, 0.0f, 0.0f };
+
+	for (const auto& axis : testAxes) {
+		float rA = CalculateProjectedRadius(a, axis);
+		float rB = CalculateProjectedRadius(b, axis);
+		float d = Math::Dot(diff, axis);
+		float dist = std::abs(d);
+
+		float overlap = (rA + rB) - dist;
+		// 接触マージン外（完全に離れている軸がある）なら接触していない
+		if (overlap < -kContactTolerance) {
+			return false;
+		}
+
+		if (overlap < minOverlap) {
+			minOverlap = overlap;
+			// aからbに向かう符号
+			float sign = (d >= 0.0f) ? 1.0f : -1.0f;
+			bestAxis = { axis.x * sign, 0.0f, axis.z * sign };
+		}
+	}
+
+	if (outNormal) {
+		*outNormal = bestAxis;
+	}
+
+	// 実際に幾何学的なめり込み（overlap > 0）が発生している場合のみ位置を押し出す
+	if (minOverlap > 0.0f) {
+		outPushVector = { bestAxis.x * minOverlap, 0.0f, bestAxis.z * minOverlap };
+	}
+
 	return true;
 }

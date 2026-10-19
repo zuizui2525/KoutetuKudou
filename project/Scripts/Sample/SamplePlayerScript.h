@@ -22,4 +22,8 @@ private:
     float orbitRadius_ = 5.0f;
     float orbitSpeed_ = 1.5f;
     Vector3 initialPosition_ = { 0.0f, 0.0f, 0.0f };
+
+    // 射撃・演出設定
+    float bulletSpeed_ = 0.6f;
+    float shootCooldown_ = 0.0f;
 };

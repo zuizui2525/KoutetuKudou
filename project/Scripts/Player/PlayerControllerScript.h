@@ -49,6 +49,8 @@ private:
     static constexpr float kDefaultBulletSpeed = 0.5f;
     static constexpr float kBulletSpawnDistance = 1.0f; // 銃口の前方オフセット距離
     static constexpr int kShotMouseKey = 0;           // 左クリック
+    static constexpr float kShootShakeIntensity = 0.06f; // 射撃時の反動カメラシェイク振幅
+    static constexpr float kShootShakeDuration = 0.10f;  // 射撃時の反動カメラシェイク持続時間
     static constexpr int kMinHpLimit = 1;
     static constexpr int kMaxHpLimit = 100;
     static constexpr int kMinAmmoLimit = 1;
@@ -59,6 +61,7 @@ private:
     int hp_ = kDefaultMaxHp;
     int maxAmmo_ = kDefaultMaxAmmo;
     int ammo_ = kDefaultMaxAmmo;
+    bool infiniteAmmo_ = true; // デバッグ用: 残弾無限（弾切れによる不発を防止）
     int reloadDuration_ = kDefaultReloadTime;
     int reloadTimer_ = 0;
     int shotInterval_ = kDefaultShotInterval;

@@ -27,7 +27,7 @@ public:
     // GameObject 管理
     GameObject* CreateGameObject(const std::string& name = "GameObject");
     void AddGameObject(std::unique_ptr<GameObject> gameObject) override;
-    void DestroyGameObject(GameObject* gameObject);
+    void DestroyGameObject(GameObject* gameObject) override;
     std::unique_ptr<GameObject> DetachGameObject(GameObject* gameObject) override;
     const std::vector<std::unique_ptr<GameObject>>& GetGameObjects() const { return gameObjects_; }
 

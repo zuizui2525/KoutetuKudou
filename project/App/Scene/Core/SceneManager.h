@@ -69,6 +69,12 @@ public:
         const Vector3& rotation = { 0.0f, 0.0f, 0.0f }
     );
 
+    /**
+     * @brief 指定されたGameObjectを安全に現在のシーンから破棄予約する
+     * @param obj 破棄対象のGameObject
+     */
+    void Destroy(GameObject* obj);
+
 private:
     SceneManager() = default;
     ~SceneManager() = default;

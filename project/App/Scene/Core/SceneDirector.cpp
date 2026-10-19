@@ -44,7 +44,7 @@ void SceneDirector::Initialize() {
     }
     for (auto& script : scripts_) {
         if (script) {
-            script->Start();
+            script->CallStart();
         }
     }
 }

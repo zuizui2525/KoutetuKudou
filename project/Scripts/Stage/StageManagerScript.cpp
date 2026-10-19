@@ -48,6 +48,7 @@ void StageManagerScript::BuildStageGeometry() {
         // 左側の柱
         {
             auto leftPillar = std::make_unique<GameObject>("LeftPillar_" + std::to_string(i));
+            leftPillar->SetHideInHierarchy(true);
             leftPillar->SetPosition({ -kBoundaryX, kPillarHeight * 0.5f, z });
             leftPillar->SetScale({ kPillarRadius, kPillarHeight, kPillarRadius });
             auto* mr = leftPillar->AddComponent<MeshRendererComponent>();
@@ -61,6 +62,7 @@ void StageManagerScript::BuildStageGeometry() {
         // 右側の柱
         {
             auto rightPillar = std::make_unique<GameObject>("RightPillar_" + std::to_string(i));
+            rightPillar->SetHideInHierarchy(true);
             rightPillar->SetPosition({ kBoundaryX, kPillarHeight * 0.5f, z });
             rightPillar->SetScale({ kPillarRadius, kPillarHeight, kPillarRadius });
             auto* mr = rightPillar->AddComponent<MeshRendererComponent>();

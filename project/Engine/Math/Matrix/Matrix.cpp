@@ -348,7 +348,7 @@ namespace Math {
 	}
 
 	//　アフィン変換行列(Matrix4x4)
-	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, Vector3& translate) {
+	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate) {
 		// 拡大縮小行列、回転行列、平行移動行列を作成
 		Matrix4x4 scaleMatrix = MakeScaleMatrix(scale);
 		Matrix4x4 rotateMatrix = MakeRotateMatrix(rotate.x, rotate.y, rotate.z);

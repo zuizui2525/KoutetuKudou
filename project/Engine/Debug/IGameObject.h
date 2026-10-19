@@ -16,6 +16,10 @@ public:
     bool IsVisible() const { return isVisible_; }
     void SetVisible(bool visible) { isVisible_ = visible; }
 
+    // ヒエラルキー（エディタ一覧）での非表示フラグ（ステージ装飾や内部オブジェクト用）
+    bool IsHiddenInHierarchy() const { return isHiddenInHierarchy_; }
+    void SetHideInHierarchy(bool hide) { isHiddenInHierarchy_ = hide; }
+
     // インスペクター描画用（各派生オブジェクトでデバッグUIコードを呼び出す）
     virtual void DrawInspector() = 0;
 
@@ -31,4 +35,5 @@ protected:
 
     std::string name_;
     bool isVisible_ = true;
+    bool isHiddenInHierarchy_ = false;
 };

@@ -288,3 +288,8 @@ GameObject* SceneManager::Instantiate(
 
     return rawPtr;
 }
+
+void SceneManager::Destroy(GameObject* obj) {
+    if (!obj || !currentScene_) return;
+    currentScene_->DestroyGameObject(obj);
+}

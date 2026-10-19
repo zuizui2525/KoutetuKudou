@@ -808,6 +808,8 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("── GameObjects ──");
+                ImGui::SameLine();
+                ImGui::Checkbox("内部表示##ShowInternal", &showInternalObjects_);
             }
 
             const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
@@ -816,6 +818,11 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
             for (size_t i = 0; i < objects.size(); ++i) {
                 auto* obj = objects[i];
+                if (!obj) continue;
+                if (!showInternalObjects_ && obj->IsHiddenInHierarchy()) {
+                    continue; // 柱などの内部・装飾オブジェクトは非表示
+                }
+
                 ImGui::PushID(static_cast<int>(i));
 
                 // 表示フラグ用のチェックボックス

@@ -18,8 +18,11 @@ namespace {
     constexpr float kMaxFollowSpeed = 20.0f;
     constexpr float kMinStoppingDist = 0.5f;
     constexpr float kMaxStoppingDist = 10.0f;
+    constexpr float kMinLookAtSpeed = 1.0f;
+    constexpr float kMaxLookAtSpeed = 30.0f;
     constexpr float kEpsilonDist = 0.0001f;
-    constexpr float kRadToDeg = 57.2957795f;
+    constexpr float kPi = 3.14159265f;
+    constexpr float kTwoPi = 6.2831853f;
 }
 
 SampleFollowerScript::SampleFollowerScript()
@@ -48,11 +51,27 @@ void SampleFollowerScript::OnUpdate() {
     float distSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
     float dist = std::sqrt(distSq);
 
-    // ターゲットを注視する回転（Y軸旋回）
+    // ターゲットを注視する回転（Y軸旋回: エンジン標準のラジアン単位）
     if (distSq > kEpsilonDist) {
-        float yaw = std::atan2(diff.x, diff.z) * kRadToDeg;
+        float targetYaw = std::atan2(diff.x, diff.z);
         Vector3 rot = owner_->GetRotate();
-        rot.y = yaw;
+
+        if (enableSmoothing_) {
+            // 最短経路で滑らかに旋回（-π〜πに正規化して最短方向へ補間）
+            float diffAngle = targetYaw - rot.y;
+            while (diffAngle > kPi) diffAngle -= kTwoPi;
+            while (diffAngle < -kPi) diffAngle += kTwoPi;
+
+            float maxStep = lookAtSpeed_ * kFixedDeltaTime;
+            if (std::abs(diffAngle) <= maxStep) {
+                rot.y = targetYaw;
+            } else {
+                rot.y += (diffAngle > 0.0f ? maxStep : -maxStep);
+            }
+        } else {
+            rot.y = targetYaw;
+        }
+
         owner_->SetRotate(rot);
     }
 
@@ -74,31 +93,21 @@ void SampleFollowerScript::OnUpdate() {
     }
 
     // ---------------------------------------------------------
-    // コライダーによる当たり判定と押し返し処理 (Collision Push-back)
+    // コライダーによる当たり判定と接触ハイライト (Collision Contact Check)
     // ---------------------------------------------------------
     auto* selfCol = owner_->GetComponent<BoxColliderComponent>();
     auto* targetCol = targetObject_->GetComponent<BoxColliderComponent>();
 
     if (selfCol && targetCol) {
-        AABB targetAABB = targetCol->GetWorldAABB();
-        AABB selfAABB = selfCol->GetWorldAABB();
+        OBB targetOBB = targetCol->GetWorldOBB();
+        OBB selfOBB = selfCol->GetWorldOBB();
 
         Vector3 pushVec{};
-        if (CalculateAABBPushVector(targetAABB, selfAABB, pushVec)) {
-            // 重なりが発生しているため、自身を侵入深さ分押し戻す
-            selfPos.x += pushVec.x;
-            selfPos.y += pushVec.y;
-            selfPos.z += pushVec.z;
-            owner_->SetPosition(selfPos);
+        bool isContact = CalculateOBBPushVector(targetOBB, selfOBB, pushVec);
 
-            // 衝突中フラグをON（枠線を赤色にハイライト！）
-            selfCol->SetColliding(true);
-            targetCol->SetColliding(true);
-        } else {
-            // 衝突していない場合はフラグをクリア（通常色・緑色）
-            selfCol->SetColliding(false);
-            targetCol->SetColliding(false);
-        }
+        // 敵自身はプレイヤーに押されても後退せず、その場に留まる
+        // 接触中であれば赤色にハイライト
+        selfCol->SetColliding(isContact);
     }
 }
 
@@ -114,6 +123,9 @@ void SampleFollowerScript::OnInspectorGUI() {
     ImGui::Spacing();
     ImGui::DragFloat("追従速度##FollowSpeed", &followSpeed_, 0.1f, kMinFollowSpeed, kMaxFollowSpeed, "%.1f");
     ImGui::DragFloat("目標停止距離##StopDist", &stoppingDistance_, 0.1f, kMinStoppingDist, kMaxStoppingDist, "%.1f");
-    ImGui::Checkbox("スムーズ補間##Smooth", &enableSmoothing_);
+    ImGui::Checkbox("スムーズ注視##Smooth", &enableSmoothing_);
+    if (enableSmoothing_) {
+        ImGui::DragFloat("注視旋回速度##LookSpeed", &lookAtSpeed_, 0.2f, kMinLookAtSpeed, kMaxLookAtSpeed, "%.1f");
+    }
 #endif
 }

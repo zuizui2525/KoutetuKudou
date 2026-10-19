@@ -91,29 +91,26 @@ void App::Run() {
     if (currentWidth > 0 && currentHeight > 0 && 
         (currentWidth != lastWidth || currentHeight != lastHeight)) {
         
-        // 1. スワップチェーンと深度バッファ（DSV）のリサイズ
+        // 1. スワップチェーンのみリサイズ（レンダーテクスチャおよび深度バッファは基準解像度1280x720固定）
         engine_->GetDxCommon()->ResizeSwapChain(currentWidth, currentHeight);
 
-        // 2. ポストプロセス（RTV）も同期リサイズして、D3D12の「RTVとDSVの寸法一致制約」を充足
-        postProcess_->Resize(currentWidth, currentHeight);
-
-        // 3. カメラのプロジェクションアスペクト比はゲーム基準の 16:9 に固定（歪み防止）
+        // 2. カメラのプロジェクションアスペクト比はゲーム基準の 16:9 に固定（歪み防止）
         constexpr float kGameAspectWidth = 16.0f;
         constexpr float kGameAspectHeight = 9.0f;
         constexpr float kGameAspectRatio = kGameAspectWidth / kGameAspectHeight;
         cameraMgr_->UpdateAllProjection(kGameAspectRatio);
 
-        // 4. "Zoom" カメラ（右画面70%表示）が存在する場合、分割比率（0.7）を反映したアスペクト比を再設定
+        // 3. "Zoom" カメラ（右画面70%表示）が存在する場合、分割比率（0.7）を反映したアスペクト比を再設定
         constexpr float kSplitRightRatio = 0.7f;
         if (auto* zoomCam = cameraMgr_->GetCamera(CameraManager::kZoomCameraName)) {
             zoomCam->UpdateProjection(kGameAspectRatio * kSplitRightRatio);
         }
 
-        // 5. 2Dプロジェクション行列もリサイズ後の実解像度に同期
+        // 4. 2Dプロジェクション行列も基準解像度 (1280x720) に完全固定（ゲーム制作者がUI座標を意識せず開発可能）
         cameraMgr_->SetProjectionMatrix2D(Math::MakeOrthographicMatrix(
             0.0f, 0.0f,
-            static_cast<float>(currentWidth),
-            static_cast<float>(currentHeight),
+            static_cast<float>(WindowApp::kClientWidth),
+            static_cast<float>(WindowApp::kClientHeight),
             0.0f, 100.0f
         ));
 

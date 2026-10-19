@@ -284,7 +284,7 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
 void GamePhaseControllerScript::UpdatePlayPhase() {
     if (!routeMgr_ || !playerScript_) return;
 
-    currentDistance_ += kPlayerMoveSpeed;
+    currentDistance_ += playerMoveSpeed_;
 
     // 自機位置と向きをルートから更新
     Vector3 playerPos = routeMgr_->GetPositionAtDistance(currentDistance_);
@@ -377,16 +377,28 @@ void GamePhaseControllerScript::TransitionToPlay() {
 void GamePhaseControllerScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
     constexpr ImVec4 kHeaderColor = { 1.0f, 0.8f, 0.2f, 1.0f };
+    constexpr ImVec4 kSubHeaderColor = { 0.4f, 0.8f, 1.0f, 1.0f };
+    constexpr float kResetBtnWidth = 140.0f;
+    constexpr float kResetBtnHeight = 24.0f;
+
     ImGui::TextColored(kHeaderColor, "【ゲーム進行フェーズ管理者】");
     ImGui::Separator();
 
     ImGui::Text("現在エリア: エリア %d / %d", currentArea_ + 1, kMaxAreas);
     ImGui::Text("進行フェーズ: %s", currentPhase_ == Phase::DrawRoute ? "ルート描画 (DrawRoute)" : "走行戦闘 (Play)");
     ImGui::Text("現在走行距離: %.2f m", currentDistance_);
+    ImGui::Spacing();
+
+    ImGui::TextColored(kSubHeaderColor, "【ルート走行設定】");
+    ImGui::DragFloat("ルート走行速度##PlayerMoveSpeed", &playerMoveSpeed_, 0.005f, kMinPlayerMoveSpeed, kMaxPlayerMoveSpeed, "%.3f");
+    if (ImGui::Button("速度リセット (0.15)##ResetSpeed", ImVec2(kResetBtnWidth, kResetBtnHeight))) {
+        playerMoveSpeed_ = kDefaultPlayerMoveSpeed;
+    }
+    ImGui::Separator();
 
     if (currentPhase_ == Phase::DrawRoute) {
         if (routeMgr_ && routeMgr_->HasReachedGoal()) {
-            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.3f, 1.0f), "ゴール到達！[SPACE]キーで走行開始できます。");
+            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.3f, 1.0f), "ゴール到達！GOボタンで走行開始できます。");
             if (ImGui::Button("走行開始 (Start Play)##StartPlayBtn")) {
                 TransitionToPlay();
             }

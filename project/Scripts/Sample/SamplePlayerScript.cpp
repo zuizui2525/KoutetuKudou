@@ -6,6 +6,7 @@
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Base/BaseResource.h"
+#include "Scripts/Player/BulletScript.h"
 #include <cmath>
 
 #ifdef _USEIMGUI
@@ -24,6 +25,12 @@ namespace {
     constexpr float kMinOrbitRadius = 1.0f;
     constexpr float kMaxOrbitRadius = 20.0f;
     constexpr float kTwoPi = 6.2831853f;
+    constexpr float kShootCooldownDuration = 0.18f;
+    constexpr float kMuzzleOffsetDistance = 1.2f;
+    constexpr float kShootShakeIntensity = 0.08f;
+    constexpr float kShootShakeDuration = 0.12f;
+    constexpr float kMinBulletSpeed = 0.1f;
+    constexpr float kMaxBulletSpeed = 3.0f;
 }
 
 SamplePlayerScript::SamplePlayerScript()
@@ -88,9 +95,52 @@ void SamplePlayerScript::OnUpdate() {
             currentPos.z += moveDir.z * moveSpeed_ * kFixedDeltaTime;
             owner_->SetPosition(currentPos);
         }
+
+        // 射撃クールダウン更新
+        if (shootCooldown_ > 0.0f) {
+            shootCooldown_ -= kFixedDeltaTime;
+        }
+
+        // マウス左クリックで弾丸（Bullet）発射 ＆ カメラシェイク
+        if (input->MouseTrigger(0) && shootCooldown_ <= 0.0f) {
+            shootCooldown_ = kShootCooldownDuration;
+
+            Vector3 currentPos = owner_->GetPosition();
+            Vector3 currentRot = owner_->GetRotate();
+
+            // プレイヤーの向き（Y軸回転）から発射ベクトルを計算
+            Vector3 forwardDir = {
+                std::sin(currentRot.y),
+                0.0f,
+                std::cos(currentRot.y)
+            };
+            if (forwardDir.x == 0.0f && forwardDir.z == 0.0f) {
+                forwardDir.z = 1.0f;
+            }
+
+            Vector3 muzzlePos = {
+                currentPos.x + forwardDir.x * kMuzzleOffsetDistance,
+                currentPos.y,
+                currentPos.z + forwardDir.z * kMuzzleOffsetDistance
+            };
+
+            // プレハブ動的生成API（Instantiate）
+            GameObject* bulletObj = Instantiate("Bullet", muzzlePos, currentRot);
+            if (bulletObj) {
+                auto* bulletScript = bulletObj->GetComponent<BulletScript>();
+                if (bulletScript) {
+                    bulletScript->SetDirection(forwardDir);
+                    bulletScript->SetSpeed(bulletSpeed_);
+                    bulletScript->SetIsPlayerBullet(true);
+                }
+            }
+
+            // カメラシェイク演出呼び出し
+            ShakeCamera(kShootShakeIntensity, kShootShakeDuration);
+        }
     }
 
-    // 他のBoxColliderとの押し返し判定（重なり解消）
+    // 他のBoxColliderとの押し返し判定（重なり解消および接触判定）
     if (auto* selfCol = owner_->GetComponent<BoxColliderComponent>()) {
         const auto& allObjects = SceneHierarchy::GetInstance()->GetObjects();
         bool anyColliding = false;
@@ -101,11 +151,13 @@ void SamplePlayerScript::OnUpdate() {
             if (!go || go == owner_) continue;
 
             if (auto* otherCol = go->GetComponent<BoxColliderComponent>()) {
-                AABB otherAABB = otherCol->GetWorldAABB();
-                AABB selfAABB = selfCol->GetWorldAABB();
+                OBB otherOBB = otherCol->GetWorldOBB();
+                OBB selfOBB = selfCol->GetWorldOBB();
 
                 Vector3 pushVec{};
-                if (CalculateAABBPushVector(otherAABB, selfAABB, pushVec)) {
+                Vector3 contactNormal{};
+                if (CalculateOBBPushVector(otherOBB, selfOBB, pushVec, &contactNormal)) {
+                    // めり込みが発生していれば押し戻して重なりを解消
                     currentPos.x += pushVec.x;
                     currentPos.y += pushVec.y;
                     currentPos.z += pushVec.z;
@@ -124,6 +176,7 @@ void SamplePlayerScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
     ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.5f, 1.0f), "【参考例】プレイヤー移動スクリプト");
     ImGui::TextDisabled("WASD / 矢印キーでXZ平面を移動します。");
+    ImGui::TextDisabled("マウス左クリックで弾丸を発射し、カメラが揺れます。");
     ImGui::Separator();
 
     ImGui::DragFloat("移動速度##MoveSpeed", &moveSpeed_, 0.2f, kMinMoveSpeed, kMaxMoveSpeed, "%.1f");
@@ -132,6 +185,13 @@ void SamplePlayerScript::OnInspectorGUI() {
     if (enableAutoOrbit_) {
         ImGui::DragFloat("旋回半径##OrbitRadius", &orbitRadius_, 0.2f, kMinOrbitRadius, kMaxOrbitRadius, "%.1f");
         ImGui::DragFloat("旋回速度##OrbitSpeed", &orbitSpeed_, 0.1f, kMinOrbitSpeed, kMaxOrbitSpeed, "%.1f");
+    }
+
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "【射撃・演出パラメータ】");
+    ImGui::DragFloat("弾速##BulletSpeed", &bulletSpeed_, 0.05f, kMinBulletSpeed, kMaxBulletSpeed, "%.2f");
+    if (ImGui::Button("カメラシェイクテスト##TestShake", ImVec2(180, 26))) {
+        ShakeCamera(kShootShakeIntensity * 1.5f, 0.25f);
     }
 #endif
 }

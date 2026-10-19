@@ -133,7 +133,7 @@ void GameObject::Initialize() {
     UpdateMatrix();
 }
 
-void GameObject::UpdateMatrix() {
+void GameObject::UpdateMatrix() const {
     matWorld_ = Math::MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
     isMatrixDirty_ = false;
 }
@@ -172,24 +172,21 @@ void GameObject::Ensure3DPosition(bool force) {
 void GameObject::Update() {
     if (!isVisible_) return;
 
-    if (isMatrixDirty_) {
-        UpdateMatrix();
-    }
-
-    // 全アクティブコンポーネントの更新
+    // 全アクティブコンポーネントの更新（スクリプト等が位置や回転を変更する可能性がある）
     for (auto& comp : components_) {
         if (comp && comp->IsActive()) {
             comp->Update();
         }
     }
+
+    // スクリプト等の更新直後にワールド行列を即座に再計算（1フレームのブレ・遅延を完全根絶）
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 }
 
 void GameObject::UpdateEditor() {
     if (!isVisible_) return;
-
-    if (isMatrixDirty_) {
-        UpdateMatrix();
-    }
 
     // エディタ編集時も位置やテクスチャの同期が必要なレンダラー系のみ更新（アニメーション系はスキップ）
     for (auto& comp : components_) {
@@ -205,10 +202,19 @@ void GameObject::UpdateEditor() {
             }
         }
     }
+
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 }
 
 void GameObject::Draw() {
     if (!isVisible_) return;
+
+    // 描画直前に必ず最新の行列に更新されていることを保証
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 
     // 全アクティブコンポーネントの3D描画
     for (auto& comp : components_) {
@@ -220,6 +226,10 @@ void GameObject::Draw() {
 
 void GameObject::Draw2D() {
     if (!isVisible_) return;
+
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 
     // 全アクティブコンポーネントの2D描画
     for (auto& comp : components_) {

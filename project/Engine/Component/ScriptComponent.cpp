@@ -115,6 +115,8 @@ bool ScriptComponent::DrawGameObjectSlot(const char* label, std::string& targetU
 }
 
 #include "App/Scene/Core/SceneManager.h"
+#include "Engine/Base/BaseResource.h"
+#include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 
 GameObject* ScriptComponent::Instantiate(
     const std::string& prefabName,
@@ -123,3 +125,16 @@ GameObject* ScriptComponent::Instantiate(
 ) {
     return SceneManager::GetInstance()->Instantiate(prefabName, position, rotation);
 }
+
+void ScriptComponent::Destroy(GameObject* gameObject) {
+    if (gameObject) {
+        SceneManager::GetInstance()->Destroy(gameObject);
+    }
+}
+
+void ScriptComponent::ShakeCamera(float intensity, float duration) {
+    if (auto* cameraMgr = CameraResource::GetCameraManager()) {
+        cameraMgr->TriggerShake(intensity, duration);
+    }
+}
+
