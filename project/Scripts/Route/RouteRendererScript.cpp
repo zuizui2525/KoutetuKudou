@@ -93,6 +93,14 @@ void RouteRendererScript::Draw() {
     }
 }
 
+/// <summary>
+/// 連続する頂点列（points）を結ぶ線分配列を、ラインプールから取得してDirectX 12で3D描画します。
+/// 地面メッシュとのZファイティング（チラつき）を防ぐため、Y座標にオフセットを適用します。
+/// </summary>
+/// <param name="points">描画対象の3D点列</param>
+/// <param name="color">描画色 (RGBA)</param>
+/// <param name="thickness">線幅</param>
+/// <param name="linePoolIdx">再利用可能なラインプールオブジェクトの参照インデックス</param>
 void RouteRendererScript::DrawPolyline(
     const std::vector<Vector3>& points,
     const Vector4& color,
@@ -117,6 +125,14 @@ void RouteRendererScript::DrawPolyline(
     }
 }
 
+/// <summary>
+/// 指定の中心座標と半径を持つ3D円弧（スタート・ゴール領域）を多角形近似（kCircleSegments分割）で描画します。
+/// </summary>
+/// <param name="center">円の中心座標</param>
+/// <param name="radius">円の半径</param>
+/// <param name="color">円周の描画色</param>
+/// <param name="thickness">円周の線幅</param>
+/// <param name="linePoolIdx">再利用可能なラインプールオブジェクトの参照インデックス</param>
 void RouteRendererScript::DrawCircle(
     const Vector3& center,
     float radius,
@@ -151,6 +167,12 @@ void RouteRendererScript::DrawCircle(
     }
 }
 
+/// <summary>
+/// 指定インデックスの LineObject をラインプールから取得します。
+/// プールサイズを超過している場合は動的に新規生成して追加し、再利用を可能にします。
+/// </summary>
+/// <param name="index">プールの要素番号</param>
+/// <returns>有効な LineObject ポインタ</returns>
 LineObject* RouteRendererScript::GetOrCreateLine(size_t index) {
     if (index >= linePool_.size()) {
         auto newLine = std::make_unique<LineObject>();
@@ -161,6 +183,13 @@ LineObject* RouteRendererScript::GetOrCreateLine(size_t index) {
     return linePool_[index].get();
 }
 
+/// <summary>
+/// 緻密すぎるCatmull-Rom曲線頂点列を、視覚的品質を損なわずに間引いて描画パフォーマンスを最適化します。
+/// 始点と終点は必ず保持されます。
+/// </summary>
+/// <param name="points">間引き対象の点列</param>
+/// <param name="minSpacing">頂点間の最小距離間隔（m）</param>
+/// <returns>ダウンサンプリング後の点列</returns>
 std::vector<Vector3> RouteRendererScript::DownsamplePoints(
     const std::vector<Vector3>& points,
     float minSpacing

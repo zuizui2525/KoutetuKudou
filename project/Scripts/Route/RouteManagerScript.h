@@ -16,20 +16,58 @@ public:
     void OnUpdate() override;
     void OnInspectorGUI() override;
 
-    // ルート入力処理
+    /// <summary>
+    /// マウスドラッグによる手書き入力座標を受け取り、サンプリング間隔の判定、
+    /// スタート地点付近での自動リセット、ゴール到達判定を処理します。
+    /// </summary>
+    /// <param name="worldIntersectPos">地面または2Dマップ上のレイ交差ワールド座標</param>
+    /// <param name="isTrigger">ドラッグ開始（マウスダウン）フレームか</param>
+    /// <param name="isPress">マウスボタン押下中か</param>
     void UpdateDrawing(const Vector3& worldIntersectPos, bool isTrigger, bool isPress);
+
+    /// <summary>
+    /// 手書きルート（rawPoints_）に対して移動平均フィルタによる平滑化を行い、
+    /// Catmull-Romスプライン曲線補間パス（pathPoints_）および等速走行用累積距離テーブルを構築します。
+    /// </summary>
     void FinalizeRoute();
+
+    /// <summary>
+    /// 現在のエリアの手書きルートおよび補間データをクリアし、
+    /// スタート地点座標のみが登録された初期状態へリセットします。
+    /// </summary>
     void ResetRoute();
 
-    // エリア管理
+    /// <summary>
+    /// 指定されたエリアインデックス（0〜3）に基づいてスタートZ座標およびゴールZ座標を設定し、
+    /// ルートを初期化します。
+    /// </summary>
+    /// <param name="areaIndex">エリア番号（0起点）</param>
     void SetupArea(int areaIndex);
+
     int GetCurrentAreaIndex() const { return currentAreaIndex_; }
     float GetCurrentAreaStartZ() const { return currentAreaStartZ_; }
     float GetCurrentAreaGoalZ() const { return currentAreaGoalZ_; }
 
-    // 走行距離に応じた位置・向き・回転の取得
+    /// <summary>
+    /// スタート地点からの累積走行距離（m）における、ルート曲線上の3Dワールド座標を取得します。
+    /// 距離テーブル間の線形補間により滑らかな位置を算出します。
+    /// </summary>
+    /// <param name="distance">スタートからの走行距離（m）</param>
+    /// <returns>曲線上の3Dワールド座標</returns>
     Vector3 GetPositionAtDistance(float distance) const;
+
+    /// <summary>
+    /// スタート地点からの累積走行距離（m）における、ルート曲線の接線ベクトル（正規化された進行方向）を取得します。
+    /// </summary>
+    /// <param name="distance">スタートからの走行距離（m）</param>
+    /// <returns>進行方向の正規化単位ベクトル</returns>
     Vector3 GetTangentAtDistance(float distance) const;
+
+    /// <summary>
+    /// スタート地点からの累積走行距離（m）における、自機カメラ・モデルの向き（Pitch, Yaw, Roll）オイラー角を取得します。
+    /// </summary>
+    /// <param name="distance">スタートからの走行距離（m）</param>
+    /// <returns>ラジアン単位の回転角 { pitch, yaw, 0.0f }</returns>
     Vector3 GetRotationAtDistance(float distance) const;
 
     float GetTotalDistance() const { return totalDistance_; }
@@ -40,6 +78,10 @@ public:
     float GetAreaRadius() const { return kAreaRadius; }
 
 private:
+    /// <summary>
+    /// Catmull-Rom補間された各制御点間のユークリッド距離を積算し、
+    /// 弧長パラメータ（Arc-Length Table）を構築して等速走行を可能にします。
+    /// </summary>
     void BuildEqualSpacingTable();
 
 private:

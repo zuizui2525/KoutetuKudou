@@ -12,6 +12,7 @@
 namespace {
     const std::string kTitleSkyboxTextureKey = "white";
     constexpr Vector4 kTitleSkyboxColor = { 0.02f, 0.02f, 0.03f, 1.0f }; // 重厚なダークブラック背景
+    constexpr size_t kImGuiBufferLength = 128;
 }
 
 TitleDirectorScript::TitleDirectorScript()
@@ -20,6 +21,10 @@ TitleDirectorScript::TitleDirectorScript()
 
 TitleDirectorScript::~TitleDirectorScript() = default;
 
+/// <summary>
+/// タイトルシーン開始時にポストプロセス演出（輪郭線、ビネット）を有効化し、
+/// 背景となるSkyboxを生成・初期化します。
+/// </summary>
 void TitleDirectorScript::Start() {
     // ポストプロセスの演出設定
     if (auto* postProcess = SceneManager::GetInstance()->GetPostProcess()) {
@@ -34,6 +39,9 @@ void TitleDirectorScript::Start() {
     skybox_->SetColor(kTitleSkyboxColor);
 }
 
+/// <summary>
+/// 毎フレームの入力（スペースキー押下）を監視し、押下された場合はゲーム本編シーンへ遷移します。
+/// </summary>
 void TitleDirectorScript::OnUpdate() {
     // スペースキー押下でゲームシーンへ遷移
     auto input = InputResource::GetInput();
@@ -48,6 +56,9 @@ void TitleDirectorScript::OnUpdate() {
     }
 }
 
+/// <summary>
+/// 背景Skyboxの3Dキューブメッシュを描画します。
+/// </summary>
 void TitleDirectorScript::Draw() {
     // 背景 Skybox の 3D 描画
     if (skybox_) {
@@ -57,7 +68,7 @@ void TitleDirectorScript::Draw() {
 
 void TitleDirectorScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
-    char buffer[128];
+    char buffer[kImGuiBufferLength];
     strncpy_s(buffer, nextSceneName_.c_str(), sizeof(buffer) - 1);
     if (ImGui::InputText("Next Scene", buffer, sizeof(buffer))) {
         nextSceneName_ = buffer;

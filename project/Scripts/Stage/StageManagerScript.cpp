@@ -13,6 +13,7 @@ namespace {
     const std::string kPillarTextureKey = "white";
     constexpr Vector4 kPillarColor = { 0.25f, 0.28f, 0.35f, 1.0f };       // メタリックグレー
     constexpr Vector4 kGatePillarColor = { 0.7f, 0.6f, 0.2f, 1.0f };      // エリア境界ゲートのゴールド
+    constexpr float kHalfFactor = 0.5f;
 }
 
 REGISTER_SCRIPT(StageManagerScript);
@@ -33,6 +34,10 @@ void StageManagerScript::Start() {
 void StageManagerScript::OnUpdate() {
 }
 
+/// <summary>
+/// 全4エリア（全長480m）の左右境界（X=±50m）に沿って、一定間隔（kPillarSpacingZ = 30m）ごとに柱（Cubeモデル）を配置します。
+/// 各エリアの境界（120m, 240m, 360m, 480m）に位置する柱はゴールド色（kGatePillarColor）として強調表示します。
+/// </summary>
 void StageManagerScript::BuildStageGeometry() {
     auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene());
     if (!scene) return;
@@ -49,7 +54,7 @@ void StageManagerScript::BuildStageGeometry() {
         {
             auto leftPillar = std::make_unique<GameObject>("LeftPillar_" + std::to_string(i));
             leftPillar->SetHideInHierarchy(true);
-            leftPillar->SetPosition({ -kBoundaryX, kPillarHeight * 0.5f, z });
+            leftPillar->SetPosition({ -kBoundaryX, kPillarHeight * kHalfFactor, z });
             leftPillar->SetScale({ kPillarRadius, kPillarHeight, kPillarRadius });
             auto* mr = leftPillar->AddComponent<MeshRendererComponent>();
             mr->SetModelKey(kPillarModelKey);
@@ -63,7 +68,7 @@ void StageManagerScript::BuildStageGeometry() {
         {
             auto rightPillar = std::make_unique<GameObject>("RightPillar_" + std::to_string(i));
             rightPillar->SetHideInHierarchy(true);
-            rightPillar->SetPosition({ kBoundaryX, kPillarHeight * 0.5f, z });
+            rightPillar->SetPosition({ kBoundaryX, kPillarHeight * kHalfFactor, z });
             rightPillar->SetScale({ kPillarRadius, kPillarHeight, kPillarRadius });
             auto* mr = rightPillar->AddComponent<MeshRendererComponent>();
             mr->SetModelKey(kPillarModelKey);

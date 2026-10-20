@@ -275,6 +275,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Scripts\Player\BulletScript.cpp" />
     <ClCompile Include="Scripts\Enemy\EnemyAIScript.cpp" />
     <ClCompile Include="Scripts\Enemy\EnemySpawnManagerScript.cpp" />
+    <ClCompile Include="Scripts\Enemy\EnemySpawnPointScript.cpp" />
     <ClCompile Include="Scripts\Route\RouteManagerScript.cpp" />
     <ClCompile Include="Scripts\Route\RouteRendererScript.cpp" />
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp" />
@@ -564,6 +565,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Scripts\Player\BulletScript.h" />
     <ClInclude Include="Scripts\Enemy\EnemyAIScript.h" />
     <ClInclude Include="Scripts\Enemy\EnemySpawnManagerScript.h" />
+    <ClInclude Include="Scripts\Enemy\EnemySpawnPointScript.h" />
     <ClInclude Include="Scripts\Route\RouteManagerScript.h" />
     <ClInclude Include="Scripts\Route\RouteRendererScript.h" />
     <ClInclude Include="Scripts\Stage\StageManagerScript.h" />

@@ -15,10 +15,19 @@ public:
     void OnUpdate() override;
     void OnInspectorGUI() override;
 
+    /// <summary>
+    /// レティクルの描画サイズ（正方形の一辺長）を設定し、描画オフセット用の半長を自動計算します。
+    /// </summary>
+    /// <param name="size">レティクルの幅および高さ（px）</param>
     void SetReticleSize(float size) {
         reticleSize_ = size;
         halfSize_ = size * 0.5f;
     }
+
+    /// <summary>
+    /// レティクルの描画サイズを取得します。
+    /// </summary>
+    /// <returns>レティクルサイズ（px）</returns>
     float GetReticleSize() const { return reticleSize_; }
 
 private:

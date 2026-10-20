@@ -8,12 +8,19 @@
 #include <imgui.h>
 #endif
 
+namespace {
+    constexpr size_t kImGuiBufferLength = 128;
+}
+
 GameOverDirectorScript::GameOverDirectorScript()
     : ScriptComponent("GameOverDirectorScript") {
 }
 
 GameOverDirectorScript::~GameOverDirectorScript() = default;
 
+/// <summary>
+/// ゲームオーバーシーン開始時に、赤色クリアカラー、ビネット、TVノイズのポストプロセス演出を有効化します。
+/// </summary>
 void GameOverDirectorScript::Start() {
     // ポストプロセスの演出設定
     if (auto* postProcess = SceneManager::GetInstance()->GetPostProcess()) {
@@ -24,6 +31,9 @@ void GameOverDirectorScript::Start() {
     }
 }
 
+/// <summary>
+/// スペースキー入力を監視し、押下された場合はタイトルシーンへ遷移します。
+/// </summary>
 void GameOverDirectorScript::OnUpdate() {
     // スペースキー押下でタイトルシーンへ遷移
     auto input = InputResource::GetInput();
@@ -35,7 +45,7 @@ void GameOverDirectorScript::OnUpdate() {
 
 void GameOverDirectorScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
-    char buffer[128];
+    char buffer[kImGuiBufferLength];
     strncpy_s(buffer, nextSceneName_.c_str(), sizeof(buffer) - 1);
     if (ImGui::InputText("Next Scene", buffer, sizeof(buffer))) {
         nextSceneName_ = buffer;

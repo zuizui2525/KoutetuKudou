@@ -16,10 +16,17 @@ public:
     void OnUpdate() override;
     void OnInspectorGUI() override;
 
-    // 被弾シェイク発生トリガー
+    /// <summary>
+    /// 被弾時などの画面揺れ（カメラシェイク）演出をトリガーします。
+    /// </summary>
     void TriggerShake();
 
-    // パラメータ更新
+    /// <summary>
+    /// 追従対象（自機）の現在座標およびレール進行方向接線ベクトルに基づき、
+    /// 首振り入力、視線スムージング、カメラ座標・回転を更新します。
+    /// </summary>
+    /// <param name="targetPos">自機の3Dワールド座標</param>
+    /// <param name="tangent">自機の走行進行方向ベクトル</param>
     void UpdateFollow(const Vector3& targetPos, const Vector3& tangent);
 
 private:

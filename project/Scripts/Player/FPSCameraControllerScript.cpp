@@ -56,6 +56,22 @@ void FPSCameraControllerScript::OnUpdate() {
     UpdateFollow(playerPos, tangent);
 }
 
+namespace {
+    constexpr float kEpsilon = 0.0001f;
+    constexpr float kRandCenterOffset = 0.5f; // 乱数の中心化オフセット
+}
+
+/// <summary>
+/// 自機の位置と進行ベクトルに同期してFPSカメラの位置と注視回転を更新します。
+/// 
+/// 【制御アルゴリズム】
+/// 1. 首振り制御: A/Dキーまたは左右矢印キーでカメラの水平回転オフセット（cameraYawOffset_）を増減。
+///    キー入力がない場合は正面へ復帰（kCameraYawReturnSpeed）。
+/// 2. カメラ位置: 自機座標から目の高さ（kCameraUpHeight）だけ上方にオフセット。
+/// 3. シェイク演出: shakeTimer_ 継続中はランダムな微小変位をカメラ座標に加算。
+/// 4. 視線平滑化: 急激な視線変化を抑えるため、進行方向ベクトルを線形補間（kLookSmoothFactor）で平滑化。
+/// 5. 姿勢回転: 平滑化接線と首振りオフセットから Yaw・Pitch 角を求めてカメラ回転を更新。
+/// </summary>
 void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vector3& tangent) {
     auto* input = InputResource::GetInput();
 
@@ -89,8 +105,8 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
     // 3. 被弾シェイク演出
     if (shakeTimer_ > 0) {
         shakeTimer_--;
-        float rx = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * kShakeIntensity;
-        float ry = (static_cast<float>(rand()) / RAND_MAX - 0.5f) * kShakeIntensity;
+        float rx = (static_cast<float>(rand()) / RAND_MAX - kRandCenterOffset) * kShakeIntensity;
+        float ry = (static_cast<float>(rand()) / RAND_MAX - kRandCenterOffset) * kShakeIntensity;
         camPos.x += rx;
         camPos.y += ry;
     }
@@ -104,7 +120,7 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
 
     float yaw = std::atan2(prevLookTangent_.x, prevLookTangent_.z) + cameraYawOffset_;
     float distXZ = std::sqrt(prevLookTangent_.x * prevLookTangent_.x + prevLookTangent_.z * prevLookTangent_.z);
-    float pitch = -std::atan2(prevLookTangent_.y, distXZ > 0.0001f ? distXZ : 0.0001f);
+    float pitch = -std::atan2(prevLookTangent_.y, distXZ > kEpsilon ? distXZ : kEpsilon);
 
     owner_->SetRotate({ pitch, yaw, 0.0f });
 }

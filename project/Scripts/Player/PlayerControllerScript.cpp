@@ -62,6 +62,9 @@ void PlayerControllerScript::OnUpdate() {
     }
 }
 
+/// <summary>
+/// リロードキー（Rキー）の押下を検知し、リロードタイマーを開始します。
+/// </summary>
 void PlayerControllerScript::HandleReload() {
     auto* input = InputResource::GetInput();
     if (!input) return;
@@ -73,6 +76,10 @@ void PlayerControllerScript::HandleReload() {
     }
 }
 
+/// <summary>
+/// マウスの左クリック（単発）または長押し（連射）を監視し、
+/// 連射インターバルと残弾数（または無限弾フラグ）の条件を満たしている場合に射撃を実行します。
+/// </summary>
 void PlayerControllerScript::HandleShooting() {
     auto* input = InputResource::GetInput();
     if (!input) return;
@@ -86,6 +93,17 @@ void PlayerControllerScript::HandleShooting() {
     }
 }
 
+/// <summary>
+/// 自機の銃口位置からマウス照準方向（カメラレイ交点）へ向けて弾丸を射出し、
+/// 射撃反動によるカメラシェイクを誘発します。
+/// 
+/// 【照準計算アルゴリズム】
+/// 1. ゲームビューのウィンドウサイズと解像度からマウス座標をクライアント空間へ補正。
+/// 2. アクティブカメラからマウス座標を通る3D視線レイ（rayStart, rayDir）を生成。
+/// 3. レイの前方（kRayTargetDistance）を着弾目標点（targetPos）として設定。
+/// 4. 自機前方の銃口座標（muzzlePos）から目標点へのベクトルを正規化し、弾丸の初速ベクトルを決定。
+/// 5. 弾丸プレハブ（Bullet）を実体化し、パラメータを設定。
+/// </summary>
 void PlayerControllerScript::Fire() {
     if (!infiniteAmmo_) {
         ammo_--;
@@ -154,6 +172,10 @@ void PlayerControllerScript::Fire() {
     ShakeCamera(kShootShakeIntensity, kShootShakeDuration);
 }
 
+/// <summary>
+/// 敵弾等からの被弾によるダメージをHPに減算し、HPが0に達した場合は撃墜（死亡）フラグを立てます。
+/// </summary>
+/// <param name="amount">ダメージ量</param>
 void PlayerControllerScript::TakeDamage(int amount) {
     if (isDead_) return;
 

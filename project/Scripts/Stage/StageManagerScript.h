@@ -18,6 +18,9 @@ public:
     void OnInspectorGUI() override;
 
 private:
+    /// <summary>
+    /// 全4エリア分の左右境界柱（Pillar）およびエリア境界ゲート柱をシーン上に自動インスタンス化します。
+    /// </summary>
     void BuildStageGeometry();
 
 private:

@@ -14,7 +14,11 @@
 REGISTER_SCRIPT(EnemyAIScript)
 
 namespace {
-    constexpr Vector4 kFlashColor = { 1.0f, 1.0f, 0.2f, 1.0f }; // 被弾フラッシュ（黄色）
+    constexpr Vector4 kFlashColor = { 1.0f, 1.0f, 0.2f, 1.0f }; // 通常被弾フラッシュ（黄色）
+    constexpr Vector4 kCriticalFlashColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // クリティカル被弾フラッシュ（純白）
+    constexpr float kCenterXThreshold = 0.3f; // 正面回り込み完了とみなすX距離誤差 (m)
+    constexpr int kCriticalMultiplier = 2;    // ヘッドショット時のダメージ倍率
+    constexpr float kEpsilon = 0.0001f;
 }
 
 EnemyAIScript::EnemyAIScript()
@@ -66,6 +70,19 @@ void EnemyAIScript::OnUpdate() {
     UpdateAI();
 }
 
+/// <summary>
+/// 敵キャラクターの自機追従、視線回転、および5段階のAIステートマシンを更新します。
+/// 
+/// 【ステート遷移フロー】
+/// 1. カリング判定: 自機より後方（kCullDistanceBack）に置き去りにされた場合は即座に消滅。
+/// 2. 視線追従: 自機の3Dワールド座標に向けて Yaw・Pitch 回転を同期。
+/// 3. ステートマシン:
+///    - Approach: 自機後方から等速前進。視界内（kApproachTransitionOffset）に入ると TargetLock へ遷移。
+///    - TargetLock: 自機と並走しながらロックオンゲージ（toCenterGauge_）を蓄積。満タンで MoveToCenter へ遷移。
+///    - MoveToCenter: プレイヤーのX軸正面へ回り込む。誤差が kCenterXThreshold 以内になると AttackCharge へ遷移。
+///    - AttackCharge: 攻撃チャージゲージ（attackGauge_）を蓄積。満タンで UnavoidableAttack へ遷移。
+///    - UnavoidableAttack: FireBullet() で自機へ向けて弾丸を発射後、Approach ステートへ復帰。
+/// </summary>
 void EnemyAIScript::UpdateAI() {
     if (!targetObject_) return;
 
@@ -78,7 +95,7 @@ void EnemyAIScript::UpdateAI() {
     Vector3 pos = owner_->GetPosition();
     Vector3 playerPos = targetObject_->GetPosition();
 
-    // 1. カリング判定（自機より60m後方に置き去りにされたら消滅）
+    // 1. カリング判定（自機より後方に置き去りにされたら消滅）
     if (playerPos.z - pos.z > kCullDistanceBack) {
         isDead_ = true;
         owner_->SetVisible(false);
@@ -89,7 +106,7 @@ void EnemyAIScript::UpdateAI() {
     Vector3 toPlayer = { playerPos.x - pos.x, playerPos.y - pos.y, playerPos.z - pos.z };
     float distXZ = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.z * toPlayer.z);
     float yaw = std::atan2(toPlayer.x, toPlayer.z);
-    float pitch = -std::atan2(toPlayer.y, distXZ > 0.0001f ? distXZ : 0.0001f);
+    float pitch = -std::atan2(toPlayer.y, distXZ > kEpsilon ? distXZ : kEpsilon);
     owner_->SetRotate({ pitch, yaw, 0.0f });
 
     // 3. ステートマシン
@@ -113,7 +130,7 @@ void EnemyAIScript::UpdateAI() {
     case AiState::MoveToCenter: {
         // プレイヤーのX正面へ移動
         float diffX = playerPos.x - pos.x;
-        if (std::abs(diffX) > 0.3f) {
+        if (std::abs(diffX) > kCenterXThreshold) {
             pos.x += (diffX > 0.0f ? 1.0f : -1.0f) * kMoveToCenterSpeedX;
         } else {
             aiState_ = AiState::AttackCharge;
@@ -138,6 +155,9 @@ void EnemyAIScript::UpdateAI() {
     owner_->SetPosition(pos);
 }
 
+/// <summary>
+/// 自身の前方座標から自機座標への方向ベクトルを算出し、敵弾プレハブ（Bullet）を射出します。
+/// </summary>
 void EnemyAIScript::FireBullet() {
     if (!owner_ || !targetObject_) return;
 
@@ -148,7 +168,7 @@ void EnemyAIScript::FireBullet() {
     Vector3 diff = { playerPos.x - spawnPos.x, playerPos.y - spawnPos.y, playerPos.z - spawnPos.z };
     float lenSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
     Vector3 dir = { 0.0f, 0.0f, -1.0f };
-    if (lenSq > 0.0001f) {
+    if (lenSq > kEpsilon) {
         float invLen = 1.0f / std::sqrt(lenSq);
         dir = { diff.x * invLen, diff.y * invLen, diff.z * invLen };
     }
@@ -164,15 +184,21 @@ void EnemyAIScript::FireBullet() {
     }
 }
 
+/// <summary>
+/// 自機弾からのダメージを適用し、頭部への命中の場合はダメージ倍率を反映します。
+/// 被弾フラッシュ演出（黄色）を開始し、HPが0に達した場合は撃破（非表示）状態へ移行します。
+/// </summary>
+/// <param name="amount">基礎ダメージ量</param>
+/// <param name="isCritical">弱点部位判定</param>
 void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
     if (isDead_) return;
 
-    int finalDamage = isCritical ? amount * 2 : amount;
+    int finalDamage = isCritical ? amount * kCriticalMultiplier : amount;
     hp_ -= finalDamage;
     hitFlashTimer_ = kHitFlashDuration;
 
     if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
-        mr->SetColor(kFlashColor);
+        mr->SetColor(isCritical ? kCriticalFlashColor : kFlashColor);
     }
 
     if (hp_ <= 0) {
@@ -182,6 +208,9 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
     }
 }
 
+/// <summary>
+/// 被弾時点滅タイマーをカウントダウンし、満了時にメッシュの色を元のマテリアルカラーへ戻します。
+/// </summary>
 void EnemyAIScript::HandleHitFlash() {
     if (hitFlashTimer_ > 0) {
         hitFlashTimer_--;

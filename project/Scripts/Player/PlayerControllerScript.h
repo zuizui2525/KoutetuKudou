@@ -15,29 +15,63 @@ public:
     void OnUpdate() override;
     void OnInspectorGUI() override;
 
-    // 体力・被弾処理
+    /// <summary>
+    /// 敵弾等から被弾した際のダメージ処理を実行します。
+    /// HPが0以下になった場合に死亡フラグ（isDead_）をセットします。
+    /// </summary>
+    /// <param name="amount">受けるダメージ量</param>
     void TakeDamage(int amount);
+
     int GetHp() const { return hp_; }
     int GetMaxHp() const { return maxHp_; }
+
+    /// <summary>
+    /// 自機の死亡状態（撃墜済みか）を取得します。
+    /// </summary>
+    /// <returns>撃墜済みの場合 true</returns>
     bool IsDead() const { return isDead_; }
 
     // 弾数・リロード情報
     int GetAmmo() const { return ammo_; }
     int GetMaxAmmo() const { return maxAmmo_; }
+
+    /// <summary>
+    /// 現在リロード中（弾丸装填待機中）であるかを取得します。
+    /// </summary>
+    /// <returns>リロード中の場合 true</returns>
     bool IsReloading() const { return reloadTimer_ > 0; }
     int GetReloadTimer() const { return reloadTimer_; }
 
-    // 進行方向
+    /// <summary>
+    /// レール走行上の進行方向ベクトルを設定します。射撃時の前方方向として利用されます。
+    /// </summary>
+    /// <param name="dir">進行方向（正規化ベクトル）</param>
     void SetDirection(const Vector3& dir) { direction_ = dir; }
     const Vector3& GetDirection() const { return direction_; }
 
-    // 走行中フラグ
+    /// <summary>
+    /// 走行フェーズ中かどうかの自動前進フラグを設定します。
+    /// 走行中のみ射撃やリロードの入力が受け付けられます。
+    /// </summary>
+    /// <param name="autoMove">走行中の場合 true</param>
     void SetAutoMoving(bool autoMove) { isAutoMoving_ = autoMove; }
     bool IsAutoMoving() const { return isAutoMoving_; }
 
 private:
+    /// <summary>
+    /// マウス入力（左クリックまたは長押し連射）を監視し、射撃間隔や弾数制限を満たしている場合に Fire() を呼び出します。
+    /// </summary>
     void HandleShooting();
+
+    /// <summary>
+    /// リロードキー（Rキー）の入力を監視し、リロードタイマーを開始します。
+    /// </summary>
     void HandleReload();
+
+    /// <summary>
+    /// 画面中央のレティクル（マウス照準）へ向けて銃口から弾丸（Bulletプレハブ）を射出し、
+    /// 射撃反動のカメラシェイクを誘発します。
+    /// </summary>
     void Fire();
 
 private:

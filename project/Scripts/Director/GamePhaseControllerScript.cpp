@@ -56,6 +56,14 @@ namespace {
     constexpr Vector4 kDxResetBtnNormalBg = { 40.0f / 255.0f, 50.0f / 255.0f, 65.0f / 255.0f, 200.0f / 255.0f };
     constexpr Vector4 kDxResetBtnHoverBg = { 65.0f / 255.0f, 80.0f / 255.0f, 105.0f / 255.0f, 240.0f / 255.0f };
 
+    // 走行戦闘HUD用カラー
+    constexpr Vector4 kDxHudHpBarBg = { 10.0f / 255.0f, 15.0f / 255.0f, 20.0f / 255.0f, 220.0f / 255.0f };
+    constexpr Vector4 kDxHpGreen = { 40.0f / 255.0f, 230.0f / 255.0f, 110.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kDxHpYellow = { 240.0f / 255.0f, 200.0f / 255.0f, 40.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kDxHpRed = { 240.0f / 255.0f, 50.0f / 255.0f, 50.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kDxAmmoAlert = { 255.0f / 255.0f, 140.0f / 255.0f, 30.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kDxReloadingColor = { 255.0f / 255.0f, 80.0f / 255.0f, 80.0f / 255.0f, 240.0f / 255.0f };
+
     // パルス演出定数
     constexpr float kGoalPulseSpeed = 2.5f;
     constexpr float kGoalPulseSpread = 10.0f;
@@ -157,6 +165,23 @@ void GamePhaseControllerScript::OnUpdate() {
     }
 }
 
+namespace {
+    constexpr float kEpsilon = 0.0001f;
+}
+
+/// <summary>
+/// ルート手書きフェーズ（DrawRoute）におけるプレイヤーの入力を監視・処理します。
+/// 
+/// 【座標逆変換と入力処理フロー】
+/// 1. ゲームビューのウィンドウサイズと解像度からマウスカーソル座標をクライアント空間へスケーリング。
+/// 2. マウスが画面左下の2Dミニマップ領域上にある場合:
+///    - パネル内側の余白（innerMin/Max）から正規化座標 (normX, normZ) を算出。
+///    - normXからワールドX座標（[-kMapBoundaryX, +kMapBoundaryX]）、normZからエリアZ区間（[startZ, goalZ]）へ逆変換。
+///    - routeMgr_->UpdateDrawing() へ3Dワールド座標を渡してルートを記録。
+/// 3. マウスが3D空間ビュー上にある場合:
+///    - アクティブカメラからレイを生成し、地面平面（Y=0）との幾何交点（intersectPos）を計算してルートを記録。
+/// 4. 各種UIボタン（ミニマップ内RESET、GOボタン、下部RESET、Rキー、右クリック、SPACEキー）の押下判定。
+/// </summary>
 void GamePhaseControllerScript::UpdateDrawRoutePhase() {
     auto* input = InputResource::GetInput();
     if (!input || !routeMgr_) return;
@@ -265,7 +290,7 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
                 Vector3 rayDir = { 0.0f, -1.0f, 0.0f };
                 camera->CreateRay(scaledMousePos, kRenderWidth, kRenderHeight, rayStart, rayDir);
 
-                if (std::abs(rayDir.y) > 0.0001f) {
+                if (std::abs(rayDir.y) > kEpsilon) {
                     float t = -rayStart.y / rayDir.y;
                     if (t >= 0.0f) {
                         Vector3 intersectPos = {
@@ -281,6 +306,10 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
     }
 }
 
+/// <summary>
+/// 走行・戦闘フェーズ（Play）中の自機等速前進とゴール到達判定を処理します。
+/// 走行距離 currentDistance_ を進行させ、ルートマネージャから求めた3D座標および接線方向を自機へ反映します。
+/// </summary>
 void GamePhaseControllerScript::UpdatePlayPhase() {
     if (!routeMgr_ || !playerScript_) return;
 
@@ -301,6 +330,11 @@ void GamePhaseControllerScript::UpdatePlayPhase() {
     }
 }
 
+/// <summary>
+/// 現在のエリアのゴール到達時の処理を実行します。
+/// 残留エネミー・弾丸を消去し、最終エリア（kMaxAreas走破）の場合はクリアシーンへ遷移、
+/// 未完了の場合は次エリアをセットアップしてルート手書きフェーズへ移行します。
+/// </summary>
 void GamePhaseControllerScript::HandleAreaClear() {
     // 前エリアの残敵・残留弾を一括消去
     ClearAllEnemies();
@@ -323,6 +357,11 @@ void GamePhaseControllerScript::HandleAreaClear() {
     }
 }
 
+/// <summary>
+/// ルート手書きフェーズ（DrawRoute）への遷移設定を行います。
+/// 前エリアの残存敵・弾丸を完全消去し、照準レティクルを非表示化、自機走行を停止し、
+/// カメラを斜め立体俯瞰の見下ろし画角へ切り替えます。
+/// </summary>
 void GamePhaseControllerScript::TransitionToDraw() {
     currentPhase_ = Phase::DrawRoute;
 
@@ -330,22 +369,28 @@ void GamePhaseControllerScript::TransitionToDraw() {
     ClearAllEnemies();
     SetReticleVisible(false);
 
-    // カメラを斜め立体俯瞰位置へ移動（奥行きと3D立体ラインが綺麗に見渡せる画角）
-    auto* cameraMgr = CameraResource::GetCameraManager();
-    if (cameraMgr) {
-        BaseCamera* camera = cameraMgr->GetActiveCamera();
-        if (camera && routeMgr_) {
-            float startZ = routeMgr_->GetCurrentAreaStartZ();
-            camera->SetPosition({ 0.0f, kDrawCameraHeight, startZ + kDrawCameraZOffset });
-            camera->SetRotation({ kDrawCameraPitch, 0.0f, 0.0f });
-        }
-    }
-
     if (playerScript_) {
         playerScript_->SetAutoMoving(false);
     }
+
+    // カメラを見下ろし視点へ切り替え
+    auto* cameraMgr = CameraResource::GetCameraManager();
+    if (cameraMgr && routeMgr_) {
+        BaseCamera* camera = cameraMgr->GetActiveCamera();
+        if (camera) {
+            float startZ = routeMgr_->GetCurrentAreaStartZ();
+            Vector3 camPos = { 0.0f, kDrawCameraHeight, startZ + kDrawCameraZOffset };
+            camera->SetPosition(camPos);
+            camera->SetRotation({ kDrawCameraPitch, 0.0f, 0.0f });
+        }
+    }
 }
 
+/// <summary>
+/// 走行・戦闘フェーズ（Play）への遷移設定を行います。
+/// 照準レティクルUIを表示し、敵スポーンタイマーの初期化、ルートの最終化（FinalizeRoute）、
+/// 自機の自動走行フラグ有効化、スタート位置への初期配置を実行します。
+/// </summary>
 void GamePhaseControllerScript::TransitionToPlay() {
     currentPhase_ = Phase::Play;
     currentDistance_ = 0.0f;
@@ -418,12 +463,18 @@ void GamePhaseControllerScript::Draw2D() {
         Init2DObjects();
     }
 
-    // 1. 2Dミニマップの描画 (DirectX 12)
-    Render2DMapDirectX();
+    // 1. ルート手書きフェーズ中のみ2DミニマップおよびGOサインを描画
+    if (currentPhase_ == Phase::DrawRoute) {
+        // 2Dミニマップの描画 (DirectX 12)
+        Render2DMapDirectX();
 
-    // 2. ゴール到達時のGOサイン・リセットボタンの描画 (DirectX 12)
-    if (currentPhase_ == Phase::DrawRoute && routeMgr_ && routeMgr_->HasReachedGoal()) {
-        RenderGoSignDirectX();
+        // ゴール到達時のGOサイン・リセットボタンの描画 (DirectX 12)
+        if (routeMgr_ && routeMgr_->HasReachedGoal()) {
+            RenderGoSignDirectX();
+        }
+    } else if (currentPhase_ == Phase::Play) {
+        // 2. 走行戦闘プレイフェーズ中のHUD描画 (DirectX 12)
+        RenderPlayHUDDirectX();
     }
 }
 
@@ -431,15 +482,28 @@ void GamePhaseControllerScript::OnGUI() {
     // Release構成・Debug構成共通で DirectX 12 描画パイプライン（Draw2D）に完全移行済み
 }
 
+/// <summary>
+/// 【旧HUD描画メソッド】DirectX 12描画パイプライン（Render2DMapDirectX）へ移行済みのため空実装として保持。
+/// </summary>
 void GamePhaseControllerScript::DrawHUD() {
 }
 
+/// <summary>
+/// 【旧2Dマップ描画メソッド】DirectX 12描画パイプライン（Render2DMapDirectX）へ移行済みのため空実装として保持。
+/// </summary>
 void GamePhaseControllerScript::Draw2DMap(const Vector2&, const Vector2&) {
 }
 
+/// <summary>
+/// 【旧GOサイン描画メソッド】DirectX 12描画パイプライン（RenderGoSignDirectX）へ移行済みのため空実装として保持。
+/// </summary>
 void GamePhaseControllerScript::DrawGoSign(const Vector2&, const Vector2&) {
 }
 
+/// <summary>
+/// 2Dミニマップパネル、枠線、グリッド線、スタート/ゴール円、自機アイコン、GOボタン等の
+/// DirectX 12 2Dスプライト・ライン・テキストオブジェクトを一括生成して初期化します。
+/// </summary>
 void GamePhaseControllerScript::Init2DObjects() {
     if (is2DInitialized_) return;
 
@@ -558,6 +622,79 @@ void GamePhaseControllerScript::Init2DObjects() {
     mapTitleTextObj_->Initialize();
     SceneHierarchy::GetInstance()->Unregister(mapTitleTextObj_.get());
     mapTitleTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // 9. 走行戦闘中HUDパーツの初期化
+    // (1) 自機HPパネル用パーツ
+    hudHpBgSprite_ = std::make_unique<SpriteObject>();
+    hudHpBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudHpBgSprite_.get());
+    hudHpBgSprite_->SetSize(kHudHpPanelWidth, kHudHpPanelHeight);
+    hudHpBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+
+    hudHpBarBgSprite_ = std::make_unique<SpriteObject>();
+    hudHpBarBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudHpBarBgSprite_.get());
+    hudHpBarBgSprite_->SetSize(kHudHpPanelWidth - kHudHpBarPadding * 2.0f, kHudHpBarHeight);
+    hudHpBarBgSprite_->GetMaterialData()->color = kDxHudHpBarBg;
+
+    hudHpBarFillSprite_ = std::make_unique<SpriteObject>();
+    hudHpBarFillSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudHpBarFillSprite_.get());
+    hudHpBarFillSprite_->SetSize(kHudHpPanelWidth - kHudHpBarPadding * 2.0f, kHudHpBarHeight);
+    hudHpBarFillSprite_->GetMaterialData()->color = kDxHpGreen;
+
+    for (int i = 0; i < 4; ++i) {
+        hudHpBorders_[i] = std::make_unique<Line2DObject>();
+        hudHpBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(hudHpBorders_[i].get());
+        hudHpBorders_[i]->SetThickness(1.5f);
+        hudHpBorders_[i]->GetMaterialData()->color = kDxPanelBorderColor;
+    }
+
+    hudHpTextObj_ = std::make_unique<TextObject2D>();
+    hudHpTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudHpTextObj_.get());
+    hudHpTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // (2) 残弾数パネル用パーツ
+    hudAmmoBgSprite_ = std::make_unique<SpriteObject>();
+    hudAmmoBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudAmmoBgSprite_.get());
+    hudAmmoBgSprite_->SetSize(kHudAmmoPanelWidth, kHudAmmoPanelHeight);
+    hudAmmoBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+
+    for (int i = 0; i < 4; ++i) {
+        hudAmmoBorders_[i] = std::make_unique<Line2DObject>();
+        hudAmmoBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(hudAmmoBorders_[i].get());
+        hudAmmoBorders_[i]->SetThickness(1.5f);
+        hudAmmoBorders_[i]->GetMaterialData()->color = kDxPanelBorderColor;
+    }
+
+    hudAmmoTextObj_ = std::make_unique<TextObject2D>();
+    hudAmmoTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudAmmoTextObj_.get());
+    hudAmmoTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // (3) エリア進行度パネル用パーツ
+    hudAreaBgSprite_ = std::make_unique<SpriteObject>();
+    hudAreaBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudAreaBgSprite_.get());
+    hudAreaBgSprite_->SetSize(kHudAreaPanelWidth, kHudAreaPanelHeight);
+    hudAreaBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+
+    for (int i = 0; i < 4; ++i) {
+        hudAreaBorders_[i] = std::make_unique<Line2DObject>();
+        hudAreaBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(hudAreaBorders_[i].get());
+        hudAreaBorders_[i]->SetThickness(1.5f);
+        hudAreaBorders_[i]->GetMaterialData()->color = kDxPanelBorderColor;
+    }
+
+    hudAreaTextObj_ = std::make_unique<TextObject2D>();
+    hudAreaTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(hudAreaTextObj_.get());
+    hudAreaTextGen_ = std::make_unique<TextTextureGenerator>();
 
     is2DInitialized_ = true;
 }
@@ -832,6 +969,10 @@ void GamePhaseControllerScript::RenderGoSignDirectX() {
     goBtnTextObj_->Draw(goBtnTextGen_->GetGpuHandle(), true);
 }
 
+/// <summary>
+/// シーン上に存在するすべての敵キャラクターおよび弾丸オブジェクトを探索し、
+/// 非表示化およびシーンからの安全な削除（DestroyGameObject）を実行します。
+/// </summary>
 void GamePhaseControllerScript::ClearAllEnemies() {
     auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene());
     if (!scene) return;
@@ -851,6 +992,10 @@ void GamePhaseControllerScript::ClearAllEnemies() {
     }
 }
 
+/// <summary>
+/// レティクル（照準UI）オブジェクトの表示/非表示状態を切り替えます。
+/// </summary>
+/// <param name="visible">表示する場合 true</param>
 void GamePhaseControllerScript::SetReticleVisible(bool visible) {
     auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene());
     if (!scene) return;
@@ -861,6 +1006,148 @@ void GamePhaseControllerScript::SetReticleVisible(bool visible) {
             obj->SetVisible(visible);
         }
     }
+}
+
+/// <summary>
+/// 走行・戦闘フェーズ（Play）中に画面端に自機HPバー、残弾数、リロード状態、エリア進捗をDirectX 12で描画します。
+/// </summary>
+void GamePhaseControllerScript::RenderPlayHUDDirectX() {
+    if (!playerScript_) return;
+
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+
+    // 1. 自機HPパネル描画（画面左下）
+    float hpPanelX = kHudHpMarginLeft;
+    float hpPanelY = kRenderHeight - kHudHpMarginBottom - kHudHpPanelHeight;
+
+    // パネル背景
+    hudHpBgSprite_->SetPosition({ hpPanelX, hpPanelY, 0.0f });
+    hudHpBgSprite_->SetSize(kHudHpPanelWidth, kHudHpPanelHeight);
+    hudHpBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+    hudHpBgSprite_->Update();
+    hudHpBgSprite_->Draw("white", true);
+
+    // パネル外枠4辺
+    hudHpBorders_[0]->SetPoints({ hpPanelX, hpPanelY }, { hpPanelX + kHudHpPanelWidth, hpPanelY });
+    hudHpBorders_[1]->SetPoints({ hpPanelX, hpPanelY + kHudHpPanelHeight }, { hpPanelX + kHudHpPanelWidth, hpPanelY + kHudHpPanelHeight });
+    hudHpBorders_[2]->SetPoints({ hpPanelX, hpPanelY }, { hpPanelX, hpPanelY + kHudHpPanelHeight });
+    hudHpBorders_[3]->SetPoints({ hpPanelX + kHudHpPanelWidth, hpPanelY }, { hpPanelX + kHudHpPanelWidth, hpPanelY + kHudHpPanelHeight });
+    for (int i = 0; i < 4; ++i) {
+        hudHpBorders_[i]->Update();
+        hudHpBorders_[i]->Draw("white", true);
+    }
+
+    // HPゲージ背景
+    float barX = hpPanelX + kHudHpBarPadding;
+    float barY = hpPanelY + kHudHpPanelHeight - kHudHpBarPadding - kHudHpBarHeight;
+    float barFullWidth = kHudHpPanelWidth - kHudHpBarPadding * 2.0f;
+    hudHpBarBgSprite_->SetPosition({ barX, barY, 0.0f });
+    hudHpBarBgSprite_->SetSize(barFullWidth, kHudHpBarHeight);
+    hudHpBarBgSprite_->Update();
+    hudHpBarBgSprite_->Draw("white", true);
+
+    // HPゲージ本体
+    int hp = playerScript_->GetHp();
+    int maxHp = playerScript_->GetMaxHp();
+    float hpRatio = (maxHp > 0) ? std::clamp(static_cast<float>(hp) / static_cast<float>(maxHp), 0.0f, 1.0f) : 0.0f;
+    float barCurrentWidth = barFullWidth * hpRatio;
+    if (barCurrentWidth > 0.0f) {
+        hudHpBarFillSprite_->SetPosition({ barX, barY, 0.0f });
+        hudHpBarFillSprite_->SetSize(barCurrentWidth, kHudHpBarHeight);
+        Vector4 hpColor = (hpRatio > 0.5f) ? kDxHpGreen : ((hpRatio > 0.25f) ? kDxHpYellow : kDxHpRed);
+        hudHpBarFillSprite_->GetMaterialData()->color = hpColor;
+        hudHpBarFillSprite_->Update();
+        hudHpBarFillSprite_->Draw("white", true);
+    }
+
+    // HPテキスト
+    char hpBuf[32];
+    snprintf(hpBuf, sizeof(hpBuf), "HP %d / %d", hp, maxHp);
+    if (hudHpTextGen_->Generate(hpBuf, "Yu Gothic UI", 12.0f, 0, true, false, false)) {
+        hudHpTextObj_->SetSize(static_cast<float>(hudHpTextGen_->GetWidth()), static_cast<float>(hudHpTextGen_->GetHeight()));
+    }
+    hudHpTextObj_->SetPosition({ barX, hpPanelY + 5.0f, 0.0f });
+    hudHpTextObj_->SetColor(kDxTextColor);
+    hudHpTextObj_->Update();
+    hudHpTextObj_->Draw(hudHpTextGen_->GetGpuHandle(), true);
+
+    // 2. 残弾数パネル描画（画面右下）
+    float ammoPanelX = kRenderWidth - kHudAmmoMarginRight - kHudAmmoPanelWidth;
+    float ammoPanelY = kRenderHeight - kHudAmmoMarginBottom - kHudAmmoPanelHeight;
+
+    hudAmmoBgSprite_->SetPosition({ ammoPanelX, ammoPanelY, 0.0f });
+    hudAmmoBgSprite_->SetSize(kHudAmmoPanelWidth, kHudAmmoPanelHeight);
+    hudAmmoBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+    hudAmmoBgSprite_->Update();
+    hudAmmoBgSprite_->Draw("white", true);
+
+    hudAmmoBorders_[0]->SetPoints({ ammoPanelX, ammoPanelY }, { ammoPanelX + kHudAmmoPanelWidth, ammoPanelY });
+    hudAmmoBorders_[1]->SetPoints({ ammoPanelX, ammoPanelY + kHudAmmoPanelHeight }, { ammoPanelX + kHudAmmoPanelWidth, ammoPanelY + kHudAmmoPanelHeight });
+    hudAmmoBorders_[2]->SetPoints({ ammoPanelX, ammoPanelY }, { ammoPanelX, ammoPanelY + kHudAmmoPanelHeight });
+    hudAmmoBorders_[3]->SetPoints({ ammoPanelX + kHudAmmoPanelWidth, ammoPanelY }, { ammoPanelX + kHudAmmoPanelWidth, ammoPanelY + kHudAmmoPanelHeight });
+    for (int i = 0; i < 4; ++i) {
+        hudAmmoBorders_[i]->Update();
+        hudAmmoBorders_[i]->Draw("white", true);
+    }
+
+    // 残弾テキスト
+    bool isReloading = playerScript_->IsReloading();
+    int ammo = playerScript_->GetAmmo();
+    int maxAmmo = playerScript_->GetMaxAmmo();
+    char ammoBuf[64];
+    Vector4 ammoColor = kDxTextColor;
+
+    if (isReloading) {
+        snprintf(ammoBuf, sizeof(ammoBuf), "RELOADING...");
+        ammoColor = kDxReloadingColor;
+    } else {
+        snprintf(ammoBuf, sizeof(ammoBuf), "AMMO: %d / %d", ammo, maxAmmo);
+        ammoColor = (ammo <= 5) ? kDxAmmoAlert : kDxTextColor;
+    }
+
+    if (hudAmmoTextGen_->Generate(ammoBuf, "Yu Gothic UI", 13.0f, 1, true, false, false)) {
+        hudAmmoTextObj_->SetSize(static_cast<float>(hudAmmoTextGen_->GetWidth()), static_cast<float>(hudAmmoTextGen_->GetHeight()));
+    }
+    float ammoTextX = ammoPanelX + (kHudAmmoPanelWidth - hudAmmoTextGen_->GetWidth()) * 0.5f;
+    float ammoTextY = ammoPanelY + (kHudAmmoPanelHeight - hudAmmoTextGen_->GetHeight()) * 0.5f;
+    hudAmmoTextObj_->SetPosition({ ammoTextX, ammoTextY, 0.0f });
+    hudAmmoTextObj_->SetColor(ammoColor);
+    hudAmmoTextObj_->Update();
+    hudAmmoTextObj_->Draw(hudAmmoTextGen_->GetGpuHandle(), true);
+
+    // 3. エリア進行度パネル描画（画面上部中央）
+    float areaPanelX = (kRenderWidth - kHudAreaPanelWidth) * 0.5f;
+    float areaPanelY = kHudAreaMarginTop;
+
+    hudAreaBgSprite_->SetPosition({ areaPanelX, areaPanelY, 0.0f });
+    hudAreaBgSprite_->SetSize(kHudAreaPanelWidth, kHudAreaPanelHeight);
+    hudAreaBgSprite_->GetMaterialData()->color = kDxPanelBgColor;
+    hudAreaBgSprite_->Update();
+    hudAreaBgSprite_->Draw("white", true);
+
+    hudAreaBorders_[0]->SetPoints({ areaPanelX, areaPanelY }, { areaPanelX + kHudAreaPanelWidth, areaPanelY });
+    hudAreaBorders_[1]->SetPoints({ areaPanelX, areaPanelY + kHudAreaPanelHeight }, { areaPanelX + kHudAreaPanelWidth, areaPanelY + kHudAreaPanelHeight });
+    hudAreaBorders_[2]->SetPoints({ areaPanelX, areaPanelY }, { areaPanelX, areaPanelY + kHudAreaPanelHeight });
+    hudAreaBorders_[3]->SetPoints({ areaPanelX + kHudAreaPanelWidth, areaPanelY }, { areaPanelX + kHudAreaPanelWidth, areaPanelY + kHudAreaPanelHeight });
+    for (int i = 0; i < 4; ++i) {
+        hudAreaBorders_[i]->Update();
+        hudAreaBorders_[i]->Draw("white", true);
+    }
+
+    float totalLen = (routeMgr_) ? routeMgr_->GetTotalDistance() : 0.0f;
+    float progress = (totalLen > 0.001f) ? std::clamp((currentDistance_ / totalLen) * 100.0f, 0.0f, 100.0f) : 0.0f;
+    char areaBuf[64];
+    snprintf(areaBuf, sizeof(areaBuf), "AREA %d/%d  [ %3.0f%% ]", currentArea_ + 1, kMaxAreas, progress);
+    if (hudAreaTextGen_->Generate(areaBuf, "Yu Gothic UI", 13.0f, 1, true, false, false)) {
+        hudAreaTextObj_->SetSize(static_cast<float>(hudAreaTextGen_->GetWidth()), static_cast<float>(hudAreaTextGen_->GetHeight()));
+    }
+    float areaTextX = areaPanelX + (kHudAreaPanelWidth - hudAreaTextGen_->GetWidth()) * 0.5f;
+    float areaTextY = areaPanelY + (kHudAreaPanelHeight - hudAreaTextGen_->GetHeight()) * 0.5f;
+    hudAreaTextObj_->SetPosition({ areaTextX, areaTextY, 0.0f });
+    hudAreaTextObj_->SetColor(kDxTextColor);
+    hudAreaTextObj_->Update();
+    hudAreaTextObj_->Draw(hudAreaTextGen_->GetGpuHandle(), true);
 }
 
 

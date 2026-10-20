@@ -13,6 +13,10 @@ ReticleControllerScript::ReticleControllerScript()
     : ScriptComponent("ReticleControllerScript") {
 }
 
+/// <summary>
+/// マウスカーソルのスクリーン座標をゲームビュー解像度へスケーリングし、
+/// レティクルの中央がカーソル先端と一致するようにオブジェクト座標（左上オフセット）を更新します。
+/// </summary>
 void ReticleControllerScript::OnUpdate() {
     if (!owner_) return;
 

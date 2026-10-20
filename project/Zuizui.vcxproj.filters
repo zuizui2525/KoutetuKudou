@@ -184,6 +184,9 @@
     <ClCompile Include="Scripts\Enemy\EnemySpawnManagerScript.cpp">
       <Filter>Scripts\Enemy</Filter>
     </ClCompile>
+    <ClCompile Include="Scripts\Enemy\EnemySpawnPointScript.cpp">
+      <Filter>Scripts\Enemy</Filter>
+    </ClCompile>
     <ClCompile Include="Scripts\Route\RouteManagerScript.cpp">
       <Filter>Scripts\Route</Filter>
     </ClCompile>
@@ -427,6 +430,9 @@
       <Filter>Scripts\Enemy</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Enemy\EnemySpawnManagerScript.h">
+      <Filter>Scripts\Enemy</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripts\Enemy\EnemySpawnPointScript.h">
       <Filter>Scripts\Enemy</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Route\RouteManagerScript.h">

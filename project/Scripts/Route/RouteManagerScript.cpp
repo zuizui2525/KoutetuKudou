@@ -44,6 +44,23 @@ void RouteManagerScript::ResetRoute() {
     rawPoints_.push_back(startPos);
 }
 
+namespace {
+    constexpr float kEpsilon = 0.0001f;
+    constexpr int kFilterIterations = 5;          // 移動平均フィルタの反復回数
+    constexpr float kSmoothingWeights = 3.0f;     // 3点移動平均の除数
+    constexpr float kBoundaryMarginStartZ = 5.0f;  // スタート地点手前のドラッグ許容マージン (m)
+    constexpr float kBoundaryMarginGoalZ = 20.0f; // ゴール地点奥のドラッグ許容マージン (m)
+}
+
+/// <summary>
+/// マウスドラッグ入力に基づき、手書きルートのサンプリングとゴール判定を処理します。
+/// 
+/// 【アルゴリズム】
+/// 1. 入力座標がマップ境界（X幅、Z区間）内にあるかを検証。
+/// 2. ドラッグ開始時にスタートサークル内であればルートを自動クリア（描き直し対応）。
+/// 3. 前回の記録点から一定距離（kMinPointDistance）以上離れた場合のみ新しい制御点を追加。
+/// 4. ゴールサークル（半径 kAreaRadius）内に到達した場合、終点をゴール中心にスナップして FinalizeRoute() を呼出。
+/// </summary>
 void RouteManagerScript::UpdateDrawing(const Vector3& worldIntersectPos, bool isTrigger, bool isPress) {
     if (!isPress) {
         isDrawing_ = false;
@@ -51,8 +68,8 @@ void RouteManagerScript::UpdateDrawing(const Vector3& worldIntersectPos, bool is
     }
 
     if (std::abs(worldIntersectPos.x) > kMapBoundaryX ||
-        worldIntersectPos.z < currentAreaStartZ_ - 5.0f ||
-        worldIntersectPos.z > currentAreaGoalZ_ + 20.0f) {
+        worldIntersectPos.z < currentAreaStartZ_ - kBoundaryMarginStartZ ||
+        worldIntersectPos.z > currentAreaGoalZ_ + kBoundaryMarginGoalZ) {
         return;
     }
 
@@ -95,18 +112,22 @@ void RouteManagerScript::UpdateDrawing(const Vector3& worldIntersectPos, bool is
     }
 }
 
+/// <summary>
+/// 手書きされた生ポイント列（rawPoints_）に対して、手ブレ軽減のための多パス移動平均フィルタを適用し、
+/// Catmull-Rom スプライン曲線補間パス（pathPoints_）および等速走行用距離テーブルを構築します。
+/// </summary>
 void RouteManagerScript::FinalizeRoute() {
     if (rawPoints_.size() < 2) return;
 
-    // 移動平均フィルタで平滑化
+    // 移動平均フィルタで平滑化（両端点は固定）
     std::vector<Vector3> smoothedPoints = rawPoints_;
     if (smoothedPoints.size() >= 3) {
-        for (int iter = 0; iter < 5; ++iter) {
+        for (int iter = 0; iter < kFilterIterations; ++iter) {
             std::vector<Vector3> temp = smoothedPoints;
             for (size_t i = 1; i < smoothedPoints.size() - 1; ++i) {
-                temp[i].x = (smoothedPoints[i - 1].x + smoothedPoints[i].x + smoothedPoints[i + 1].x) / 3.0f;
-                temp[i].y = (smoothedPoints[i - 1].y + smoothedPoints[i].y + smoothedPoints[i + 1].y) / 3.0f;
-                temp[i].z = (smoothedPoints[i - 1].z + smoothedPoints[i].z + smoothedPoints[i + 1].z) / 3.0f;
+                temp[i].x = (smoothedPoints[i - 1].x + smoothedPoints[i].x + smoothedPoints[i + 1].x) / kSmoothingWeights;
+                temp[i].y = (smoothedPoints[i - 1].y + smoothedPoints[i].y + smoothedPoints[i + 1].y) / kSmoothingWeights;
+                temp[i].z = (smoothedPoints[i - 1].z + smoothedPoints[i].z + smoothedPoints[i + 1].z) / kSmoothingWeights;
             }
             smoothedPoints = temp;
         }
@@ -116,6 +137,10 @@ void RouteManagerScript::FinalizeRoute() {
     BuildEqualSpacingTable();
 }
 
+/// <summary>
+/// Catmull-Rom補間された折れ線パスの各セグメント長（ユークリッド距離）を積算し、
+/// 弧長（Arc-Length）による距離テーブル（accumDistances_）を生成します。
+/// </summary>
 void RouteManagerScript::BuildEqualSpacingTable() {
     accumDistances_.clear();
     accumDistances_.push_back(0.0f);
@@ -130,6 +155,12 @@ void RouteManagerScript::BuildEqualSpacingTable() {
     totalDistance_ = accum;
 }
 
+/// <summary>
+/// スタートからの累積走行距離 distance に対応する曲線上の3D座標を線形補間で算出します。
+/// 距離テーブルを二分探索/走査し、対応するセグメント区間の局所パラメータ t を求めて位置を補間します。
+/// </summary>
+/// <param name="distance">走行距離（m）</param>
+/// <returns>曲線上のワールド座標</returns>
 Vector3 RouteManagerScript::GetPositionAtDistance(float distance) const {
     if (pathPoints_.empty()) return { 0.0f, 0.0f, currentAreaStartZ_ };
     if (distance <= 0.0f) return pathPoints_.front();
@@ -145,7 +176,7 @@ Vector3 RouteManagerScript::GetPositionAtDistance(float distance) const {
 
     float tLocal = 0.0f;
     float distDiff = accumDistances_[idx + 1] - accumDistances_[idx];
-    if (distDiff > 0.0001f) {
+    if (distDiff > kEpsilon) {
         tLocal = (distance - accumDistances_[idx]) / distDiff;
     }
 
@@ -156,6 +187,11 @@ Vector3 RouteManagerScript::GetPositionAtDistance(float distance) const {
     };
 }
 
+/// <summary>
+/// スタートからの累積走行距離 distance における曲線の接線ベクトル（進行方向の正規化単位ベクトル）を算出します。
+/// </summary>
+/// <param name="distance">走行距離（m）</param>
+/// <returns>進行方向の単位ベクトル</returns>
 Vector3 RouteManagerScript::GetTangentAtDistance(float distance) const {
     if (pathPoints_.size() < 2) return { 0.0f, 0.0f, 1.0f };
 
@@ -173,12 +209,17 @@ Vector3 RouteManagerScript::GetTangentAtDistance(float distance) const {
     float dy = pathPoints_[idx + 1].y - pathPoints_[idx].y;
     float dz = pathPoints_[idx + 1].z - pathPoints_[idx].z;
     float len = std::sqrt(dx * dx + dy * dy + dz * dz);
-    if (len > 0.0001f) {
+    if (len > kEpsilon) {
         return { dx / len, dy / len, dz / len };
     }
     return { 0.0f, 0.0f, 1.0f };
 }
 
+/// <summary>
+/// 接線ベクトルからカメラおよび自機モデル用のオイラー角回転（Pitch, Yaw, 0.0f）を算出します。
+/// </summary>
+/// <param name="distance">走行距離（m）</param>
+/// <returns>ラジアン単位の回転角</returns>
 Vector3 RouteManagerScript::GetRotationAtDistance(float distance) const {
     Vector3 tangent = GetTangentAtDistance(distance);
     float yaw = std::atan2(tangent.x, tangent.z);

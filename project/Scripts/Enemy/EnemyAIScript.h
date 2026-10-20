@@ -23,12 +23,27 @@ public:
     void OnUpdate() override;
     void OnInspectorGUI() override;
 
-    // ダメージ処理（部位倍率対応）
+    /// <summary>
+    /// 自機弾命中時の被弾ダメージ処理を実行します。
+    /// ヘッドショット（isCritical == true）の場合はダメージが2倍となり、被弾フラッシュ色（黄色）を一時的に適用します。
+    /// </summary>
+    /// <param name="amount">基礎ダメージ量</param>
+    /// <param name="isCritical">頭部コライダーへの命中判定</param>
     void TakeDamage(int amount, bool isCritical = false);
+
     int GetHp() const { return hp_; }
     int GetMaxHp() const { return maxHp_; }
+
+    /// <summary>
+    /// 敵が撃破されたか（HPが0以下か）を取得します。
+    /// </summary>
+    /// <returns>撃破済みの場合 true</returns>
     bool IsDead() const { return isDead_; }
 
+    /// <summary>
+    /// ボス属性を設定し、最大HPを高耐久値（kDefaultBossHp）に更新します。
+    /// </summary>
+    /// <param name="isBoss">ボスの場合 true</param>
     void SetBoss(bool isBoss);
     bool IsBoss() const { return isBoss_; }
 
@@ -36,8 +51,20 @@ public:
     void SetAiState(AiState state) { aiState_ = state; }
 
 private:
+    /// <summary>
+    /// プレイヤー追従、カリング（60m後方置き去り判定）、ヨー・ピッチ旋回、
+    /// および5段階のAIステートマシンを更新します。
+    /// </summary>
     void UpdateAI();
+
+    /// <summary>
+    /// 自機座標へ向けて敵弾（Bulletプレハブ）を射出します。
+    /// </summary>
     void FireBullet();
+
+    /// <summary>
+    /// 被弾時の点滅タイマーを更新し、タイマー終了時に元のメッシュマテリアル色へ復帰します。
+    /// </summary>
     void HandleHitFlash();
 
 private:
