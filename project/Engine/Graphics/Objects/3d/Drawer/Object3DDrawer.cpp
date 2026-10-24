@@ -33,6 +33,11 @@ namespace {
 
     // PSOキー関連の定数
     const std::string kPsoKeyLine = "Object3D_Line";
+    const std::string kPsoKeySkinning = "Object3D_Skinning";
+
+    // スキニング関連の定数 (マジックナンバー排除)
+    constexpr UINT kRootParamIndexMatrixPalette = 8;
+    constexpr UINT kNumSkinningVbViews = 2;
 }
 
 Object3DDrawer* Object3DDrawer::GetInstance() {
@@ -291,4 +296,33 @@ bool Object3DDrawer::PrepareDrawHandle(
     }
 
     return true;
+}
+
+void Object3DDrawer::DrawSkinning(
+    Object3D* object,
+    const D3D12_VERTEX_BUFFER_VIEW& vbView,
+    const D3D12_VERTEX_BUFFER_VIEW& influenceVbView,
+    const D3D12_INDEX_BUFFER_VIEW& ibView,
+    uint32_t indexCount,
+    D3D12_GPU_DESCRIPTOR_HANDLE paletteSrvHandleGPU,
+    const std::string& textureKey,
+    const std::string& envMapKey
+) {
+    ID3D12GraphicsCommandList* commandList = nullptr;
+    if (!PrepareDraw(object, vbView, textureKey, envMapKey, kPsoKeySkinning, commandList)) {
+        return;
+    }
+
+    // Slot 0 (頂点データ) と Slot 1 (インフルエンスデータ) の2本のVBVを設定
+    D3D12_VERTEX_BUFFER_VIEW vbViews[kNumSkinningVbViews] = { vbView, influenceVbView };
+    commandList->IASetVertexBuffers(kVertexBufferSlot, kNumSkinningVbViews, vbViews);
+
+    // MatrixPalette の SRV (VS用 StructuredBuffer) を設定
+    if (paletteSrvHandleGPU.ptr != 0) {
+        commandList->SetGraphicsRootDescriptorTable(kRootParamIndexMatrixPalette, paletteSrvHandleGPU);
+    }
+
+    // インデックスバッファを設定してドローコール発行
+    commandList->IASetIndexBuffer(&ibView);
+    commandList->DrawIndexedInstanced(indexCount, kDefaultInstanceCount, kStartIndexLocation, kBaseVertexLocation, kStartInstanceLocation);
 }

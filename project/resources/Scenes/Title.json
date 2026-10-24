@@ -305,7 +305,7 @@
       "components": [
         {
           "type": "AudioSource",
-          "file_path": "resources/bgm.mp3",
+          "file_path": "resources/Sounds/bgm.mp3",
           "volume": 0.5,
           "loop": true,
           "auto_play": true

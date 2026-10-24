@@ -112,39 +112,37 @@ void LightComponent::DrawInspector() {
 #ifdef _USEIMGUI
     std::string tag = "##Light_" + (owner_ ? owner_->GetName() : "Unnamed");
 
-    if (ImGui::CollapsingHeader(("Light" + tag).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        // タイプ選択
-        const char* lightTypeNames[] = { "Directional (平行光)", "Point (点光源)", "Spot (スポットライト)" };
-        int currentType = static_cast<int>(lightType_);
-        if (ImGui::Combo(("Type" + tag).c_str(), &currentType, lightTypeNames, IM_ARRAYSIZE(lightTypeNames))) {
-            lightType_ = static_cast<LightType>(currentType);
-        }
+    // タイプ選択
+    const char* lightTypeNames[] = { "Directional (平行光)", "Point (点光源)", "Spot (スポットライト)" };
+    int currentType = static_cast<int>(lightType_);
+    if (ImGui::Combo(("Type" + tag).c_str(), &currentType, lightTypeNames, IM_ARRAYSIZE(lightTypeNames))) {
+        lightType_ = static_cast<LightType>(currentType);
+    }
 
-        // カラーピッカー
-        ImGui::ColorEdit4(("Color" + tag).c_str(), &color_.x);
+    // カラーピッカー
+    ImGui::ColorEdit4(("Color" + tag).c_str(), &color_.x);
 
-        // 輝度
-        ImGui::DragFloat(("Intensity" + tag).c_str(), &intensity_, kDragSpeedIntensity, kMinIntensity, kMaxIntensity, "%.2f");
+    // 輝度
+    ImGui::DragFloat(("Intensity" + tag).c_str(), &intensity_, kDragSpeedIntensity, kMinIntensity, kMaxIntensity, "%.2f");
 
-        // タイプ別パラメータ
-        if (lightType_ == LightType::Point || lightType_ == LightType::Spot) {
-            const char* rangeLabel = (lightType_ == LightType::Point) ? "Radius" : "Distance";
-            std::string rangeStr = std::string(rangeLabel) + tag;
-            ImGui::DragFloat(rangeStr.c_str(), &range_, kDragSpeedRange, kMinRange, kMaxRange, "%.1f");
+    // タイプ別パラメータ
+    if (lightType_ == LightType::Point || lightType_ == LightType::Spot) {
+        const char* rangeLabel = (lightType_ == LightType::Point) ? "Radius" : "Distance";
+        std::string rangeStr = std::string(rangeLabel) + tag;
+        ImGui::DragFloat(rangeStr.c_str(), &range_, kDragSpeedRange, kMinRange, kMaxRange, "%.1f");
 
-            ImGui::DragFloat(("Decay" + tag).c_str(), &decay_, kDragSpeedDecay, kMinDecay, kMaxDecay, "%.2f");
-        }
+        ImGui::DragFloat(("Decay" + tag).c_str(), &decay_, kDragSpeedDecay, kMinDecay, kMaxDecay, "%.2f");
+    }
 
-        if (lightType_ == LightType::Spot) {
-            if (ImGui::SliderFloat(("Spot Angle" + tag).c_str(), &spotAngle_, kMinSpotAngle, kMaxSpotAngle, "%.1f deg")) {
-                if (spotAngle_ < spotFalloffStart_) {
-                    spotFalloffStart_ = spotAngle_;
-                }
+    if (lightType_ == LightType::Spot) {
+        if (ImGui::SliderFloat(("Spot Angle" + tag).c_str(), &spotAngle_, kMinSpotAngle, kMaxSpotAngle, "%.1f deg")) {
+            if (spotAngle_ < spotFalloffStart_) {
+                spotFalloffStart_ = spotAngle_;
             }
-            if (ImGui::SliderFloat(("Falloff Start" + tag).c_str(), &spotFalloffStart_, kMinSpotAngle, spotAngle_, "%.1f deg")) {
-                if (spotFalloffStart_ > spotAngle_) {
-                    spotAngle_ = spotFalloffStart_;
-                }
+        }
+        if (ImGui::SliderFloat(("Falloff Start" + tag).c_str(), &spotFalloffStart_, kMinSpotAngle, spotAngle_, "%.1f deg")) {
+            if (spotFalloffStart_ > spotAngle_) {
+                spotAngle_ = spotFalloffStart_;
             }
         }
     }

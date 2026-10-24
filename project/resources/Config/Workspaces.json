@@ -1,0 +1,41 @@
+{
+  "activeWorkspaceIndex": 0,
+  "workspaces": [
+    {
+      "id": "layout",
+      "name": "メイン",
+      "isParticleStudio": false,
+      "isCustom": false,
+      "windowState": {
+        "showSceneView": true,
+        "showGameView": true,
+        "showHierarchy": true,
+        "showInspector": true,
+        "showConsole": true,
+        "showParticleStudio": false,
+        "showPostProcess": false,
+        "showEffectList": false,
+        "showPerfMonitor": true,
+        "showContentBrowser": true
+      }
+    },
+    {
+      "id": "particle_studio",
+      "name": "パーティクルスタジオ",
+      "isParticleStudio": true,
+      "isCustom": false,
+      "windowState": {
+        "showSceneView": false,
+        "showGameView": false,
+        "showHierarchy": false,
+        "showInspector": false,
+        "showConsole": true,
+        "showParticleStudio": true,
+        "showPostProcess": false,
+        "showEffectList": false,
+        "showPerfMonitor": false,
+        "showContentBrowser": false
+      }
+    }
+  ]
+}

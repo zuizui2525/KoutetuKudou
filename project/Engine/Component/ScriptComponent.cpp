@@ -25,11 +25,7 @@ void ScriptComponent::ResolveReferences(const std::unordered_map<std::string, Ga
 
 void ScriptComponent::DrawInspector() {
 #ifdef _USEIMGUI
-    constexpr ImVec4 kHeaderColor = { 0.4f, 0.7f, 1.0f, 1.0f };
-    ImGui::TextColored(kHeaderColor, "Script: %s", scriptName_.c_str());
-    ImGui::Separator();
-
-    // デフォルトで汎用ターゲットスロットを表示
+    // デフォルトで汎用ターゲットスロットを表示（ヒエラルキーからDNDで他オブジェクトを登録可能）
     DrawGameObjectSlot("Target Object", targetUUID_, targetObject_);
     ImGui::Spacing();
 

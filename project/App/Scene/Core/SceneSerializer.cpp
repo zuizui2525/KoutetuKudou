@@ -16,6 +16,7 @@
 #include "Engine/Component/Components/CameraOrbitComponent.h"
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Component/ScriptRegistry.h"
+#include "Scripts/Player/PlayerControllerScript.h"
 
 #include <fstream>
 #include <sstream>
@@ -25,125 +26,6 @@
 #include <unordered_map>
 
 namespace {
-    // JSON構文・キー定数 (マジックナンバー・マジックストリング排除)
-    constexpr const char* kKeyUUID = "uuid";
-    constexpr const char* kTypeScriptComponent = "ScriptComponent";
-    constexpr const char* kKeyScriptName = "script_name";
-    constexpr const char* kKeyTargetUUID = "target_uuid";
-    constexpr const char* kKeySceneName = "scene_name";
-    constexpr const char* kKeyGameObjects = "game_objects";
-    constexpr const char* kKeyName = "name";
-    constexpr const char* kKeyVisible = "visible";
-    constexpr const char* kKeyTransform = "transform";
-    constexpr const char* kKeyPosition = "position";
-    constexpr const char* kKeyRotation = "rotation";
-    constexpr const char* kKeyScale = "scale";
-    constexpr const char* kKeyComponents = "components";
-    constexpr const char* kKeyType = "type";
-
-    // MeshRenderer キー
-    constexpr const char* kTypeMeshRenderer = "MeshRenderer";
-    constexpr const char* kKeyMeshType = "mesh_type";
-    constexpr const char* kKeyTextureKey = "texture_key";
-    constexpr const char* kKeyModelKey = "model_key";
-    constexpr const char* kKeyEnvMapKey = "env_map_key";
-    constexpr const char* kKeyColor = "color";
-    constexpr const char* kKeyLightingMode = "lighting_mode";
-    constexpr const char* kKeyShininess = "shininess";
-    constexpr const char* kKeyEnvironmentCoefficient = "environment_coefficient";
-
-    // SpriteRenderer キー
-    constexpr const char* kTypeSpriteRenderer = "SpriteRenderer";
-    constexpr const char* kKeyShapeType = "shape_type";
-    constexpr const char* kKeySize = "size";
-    constexpr const char* kKeyInnerRadius = "inner_radius";
-    constexpr const char* kKeyLineStart = "line_start";
-    constexpr const char* kKeyLineEnd = "line_end";
-    constexpr const char* kKeyThickness = "thickness";
-
-    // BoxCollider / SphereCollider キー
-    constexpr const char* kTypeBoxCollider = "BoxCollider";
-    constexpr const char* kTypeSphereCollider = "SphereCollider";
-    constexpr const char* kKeyCenter = "center";
-    constexpr const char* kKeyCenterOffset = "center_offset";
-    constexpr const char* kKeyRadius = "radius";
-    constexpr const char* kKeyIsTrigger = "is_trigger";
-    constexpr const char* kKeyShowGizmo = "show_gizmo";
-    constexpr const char* kKeyWireThickness = "wire_thickness";
-
-    // AudioSource キー
-    constexpr const char* kTypeAudioSource = "AudioSource";
-    constexpr const char* kKeyFilePath = "file_path";
-    constexpr const char* kKeyVolume = "volume";
-    constexpr const char* kKeyLoop = "loop";
-    constexpr const char* kKeyAutoPlay = "auto_play";
-
-    // ParticleEffect キー
-    constexpr const char* kTypeParticleEffect = "ParticleEffect";
-    constexpr const char* kKeyEffectName = "effect_name";
-    constexpr const char* kKeyOffset = "offset";
-
-    // Camera キー
-    constexpr const char* kTypeCamera = "Camera";
-    constexpr const char* kKeyFov = "fov";
-    constexpr const char* kKeyNearZ = "near_z";
-    constexpr const char* kKeyFarZ = "far_z";
-    constexpr const char* kKeyIsMainCamera = "is_main_camera";
-    constexpr const char* kKeyUseTarget = "use_target";
-    constexpr const char* kKeyTarget = "target";
-
-    // Light キー
-    constexpr const char* kTypeLight = "Light";
-    constexpr const char* kKeyLightType = "light_type";
-    constexpr const char* kKeyIntensity = "intensity";
-    constexpr const char* kKeyRange = "range";
-    constexpr const char* kKeyDecay = "decay";
-    constexpr const char* kKeySpotAngle = "spot_angle";
-    constexpr const char* kKeySpotFalloffStart = "spot_falloff_start";
-
-    // TextRenderer キー
-    constexpr const char* kTypeTextRenderer2D = "TextRenderer2D";
-    constexpr const char* kTypeTextRenderer3D = "TextRenderer3D";
-    constexpr const char* kKeyText = "text";
-    constexpr const char* kKeyFontName = "font_name";
-    constexpr const char* kKeyFontSize = "font_size";
-    constexpr const char* kKeyAlignment = "alignment";
-    constexpr const char* kKeyIsBold = "is_bold";
-    constexpr const char* kKeyIsItalic = "is_italic";
-    constexpr const char* kKeyBillboardMode = "billboard_mode";
-    constexpr const char* kKeyWorldScale = "world_scale";
-    constexpr const char* kKeyEnableOutline = "enable_outline";
-    constexpr const char* kKeyOutlineColor = "outline_color";
-    constexpr const char* kKeyOutlineWidth = "outline_width";
-
-    // Rotator キー
-    constexpr const char* kTypeRotator = "Rotator";
-    constexpr const char* kKeyRotationSpeed = "rotation_speed";
-
-    // SinOscillator キー
-    constexpr const char* kTypeSinOscillator = "SinOscillator";
-    constexpr const char* kKeyTargetProperty = "target_property";
-    constexpr const char* kKeyAmplitude = "amplitude";
-    constexpr const char* kKeyFrequency = "frequency";
-    constexpr const char* kKeyPhase = "phase";
-
-    // Blink キー
-    constexpr const char* kTypeBlink = "Blink";
-    constexpr const char* kKeyBlinkSpeed = "blink_speed";
-    constexpr const char* kKeyMinAlpha = "min_alpha";
-    constexpr const char* kKeyMaxAlpha = "max_alpha";
-
-    // CameraOrbit キー
-    constexpr const char* kTypeCameraOrbit = "CameraOrbit";
-    constexpr const char* kKeyTargetCenter = "target_center";
-    constexpr const char* kKeyHeight = "height";
-    constexpr const char* kKeyOrbitSpeed = "orbit_speed";
-
-    // コンポーネント共通 Offset キー
-    constexpr const char* kKeyOffsetPosition = "offset_position";
-    constexpr const char* kKeyOffsetRotation = "offset_rotation";
-    constexpr const char* kKeyOffsetScale = "offset_scale";
-
     // 文字列トリム補助関数
     std::string Trim(const std::string& str) {
         size_t first = str.find_first_not_of(" \t\r\n");
@@ -331,8 +213,8 @@ std::string SceneSerializer::SerializeToString(
     std::ostringstream ofs;
 
     ofs << "{\n";
-    ofs << "  \"" << kKeySceneName << "\": \"" << sceneName << "\",\n";
-    ofs << "  \"" << kKeyGameObjects << "\": [\n";
+    ofs << "  \"scene_name\": \"" << sceneName << "\",\n";
+    ofs << "  \"game_objects\": [\n";
 
     for (size_t i = 0; i < gameObjects.size(); ++i) {
         GameObject* go = gameObjects[i];
@@ -340,17 +222,17 @@ std::string SceneSerializer::SerializeToString(
 
         const auto& t = go->GetTransform();
         ofs << "    {\n";
-        ofs << "      \"" << kKeyUUID << "\": \"" << go->GetUUID() << "\",\n";
-        ofs << "      \"" << kKeyName << "\": \"" << go->GetName() << "\",\n";
-        ofs << "      \"" << kKeyVisible << "\": " << (go->IsVisible() ? "true" : "false") << ",\n";
-        ofs << "      \"" << kKeyTransform << "\": {\n";
-        ofs << "        \"" << kKeyPosition << "\": [" << t.translate.x << ", " << t.translate.y << ", " << t.translate.z << "],\n";
-        ofs << "        \"" << kKeyRotation << "\": [" << t.rotate.x << ", " << t.rotate.y << ", " << t.rotate.z << "],\n";
-        ofs << "        \"" << kKeyScale << "\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "]\n";
+        ofs << "      \"uuid\": \"" << go->GetUUID() << "\",\n";
+        ofs << "      \"name\": \"" << go->GetName() << "\",\n";
+        ofs << "      \"visible\": " << (go->IsVisible() ? "true" : "false") << ",\n";
+        ofs << "      \"transform\": {\n";
+        ofs << "        \"position\": [" << t.translate.x << ", " << t.translate.y << ", " << t.translate.z << "],\n";
+        ofs << "        \"rotation\": [" << t.rotate.x << ", " << t.rotate.y << ", " << t.rotate.z << "],\n";
+        ofs << "        \"scale\": [" << t.scale.x << ", " << t.scale.y << ", " << t.scale.z << "]\n";
         ofs << "      },\n";
 
         // コンポーネント群のシリアライズ
-        ofs << "      \"" << kKeyComponents << "\": [\n";
+        ofs << "      \"components\": [\n";
         const auto& components = go->GetComponents();
         for (size_t c = 0; c < components.size(); ++c) {
             auto& comp = components[c];
@@ -358,209 +240,195 @@ std::string SceneSerializer::SerializeToString(
 
             std::string typeName = comp->GetComponentTypeName();
             ofs << "        {\n";
-            ofs << "          \"" << kKeyType << "\": \"" << typeName << "\"";
+            ofs << "          \"type\": \"" << typeName << "\"";
 
-            if (typeName == kTypeMeshRenderer) {
+            if (typeName == "MeshRenderer") {
                 if (auto* mr = dynamic_cast<MeshRendererComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyMeshType << "\": " << static_cast<int>(mr->GetMeshType()) << ",\n";
-                    ofs << "          \"" << kKeyTextureKey << "\": \"" << mr->GetTextureKey() << "\",\n";
-                    ofs << "          \"" << kKeyModelKey << "\": \"" << mr->GetModelKey() << "\",\n";
-                    ofs << "          \"" << kKeyEnvMapKey << "\": \"" << mr->GetEnvMapKey() << "\",\n";
+                    ofs << "          \"mesh_type\": " << static_cast<int>(mr->GetMeshType()) << ",\n";
+                    ofs << "          \"texture_key\": \"" << mr->GetTextureKey() << "\",\n";
+                    ofs << "          \"model_key\": \"" << mr->GetModelKey() << "\",\n";
+                    ofs << "          \"animation_key\": \"" << mr->GetAnimationKey() << "\",\n";
+                    ofs << "          \"is_animation_playing\": " << (mr->IsAnimationPlaying() ? "true" : "false") << ",\n";
+                    ofs << "          \"show_skeleton\": " << (mr->IsShowSkeleton() ? "true" : "false") << ",\n";
+                    ofs << "          \"env_map_key\": \"" << mr->GetEnvMapKey() << "\",\n";
                     const auto& col = mr->GetColor();
-                    ofs << "          \"" << kKeyColor << "\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
-                    ofs << "          \"" << kKeyLightingMode << "\": " << mr->GetLightingMode() << ",\n";
-                    ofs << "          \"" << kKeyShininess << "\": " << mr->GetShininess() << ",\n";
-                    ofs << "          \"" << kKeyEnvironmentCoefficient << "\": " << mr->GetEnvironmentCoefficient() << ",\n";
+                    ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                    ofs << "          \"lighting_mode\": " << mr->GetLightingMode() << ",\n";
+                    ofs << "          \"shininess\": " << mr->GetShininess() << ",\n";
+                    ofs << "          \"environment_coefficient\": " << mr->GetEnvironmentCoefficient() << ",\n";
                     const auto& off = mr->GetOffset();
-                    ofs << "          \"" << kKeyOffsetPosition << "\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetRotation << "\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetScale << "\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
+                    ofs << "          \"offset_position\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
+                    ofs << "          \"offset_rotation\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
+                    ofs << "          \"offset_scale\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
                 }
-            } else if (typeName == kTypeSpriteRenderer) {
+            } else if (typeName == "SpriteRenderer") {
                 if (auto* sr = dynamic_cast<SpriteRendererComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyShapeType << "\": " << static_cast<int>(sr->GetShapeType()) << ",\n";
-                    ofs << "          \"" << kKeyTextureKey << "\": \"" << sr->GetTextureKey() << "\",\n";
+                    ofs << "          \"shape_type\": " << static_cast<int>(sr->GetShapeType()) << ",\n";
+                    ofs << "          \"texture_key\": \"" << sr->GetTextureKey() << "\",\n";
                     const auto& sz = sr->GetSize();
-                    ofs << "          \"" << kKeySize << "\": [" << sz.x << ", " << sz.y << "],\n";
-                    ofs << "          \"" << kKeyRadius << "\": " << sr->GetRadius() << ",\n";
-                    ofs << "          \"" << kKeyInnerRadius << "\": " << sr->GetInnerRadius() << ",\n";
+                    ofs << "          \"size\": [" << sz.x << ", " << sz.y << "],\n";
+                    ofs << "          \"radius\": " << sr->GetRadius() << ",\n";
+                    ofs << "          \"inner_radius\": " << sr->GetInnerRadius() << ",\n";
                     const auto& ls = sr->GetLineStart();
-                    ofs << "          \"" << kKeyLineStart << "\": [" << ls.x << ", " << ls.y << "],\n";
+                    ofs << "          \"line_start\": [" << ls.x << ", " << ls.y << "],\n";
                     const auto& le = sr->GetLineEnd();
-                    ofs << "          \"" << kKeyLineEnd << "\": [" << le.x << ", " << le.y << "],\n";
-                    ofs << "          \"" << kKeyThickness << "\": " << sr->GetLineThickness() << ",\n";
+                    ofs << "          \"line_end\": [" << le.x << ", " << le.y << "],\n";
+                    ofs << "          \"thickness\": " << sr->GetLineThickness() << ",\n";
                     const auto& col = sr->GetColor();
-                    ofs << "          \"" << kKeyColor << "\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                    ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
                     const auto& off = sr->GetOffset();
-                    ofs << "          \"" << kKeyOffsetPosition << "\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetRotation << "\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetScale << "\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
+                    ofs << "          \"offset_position\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
+                    ofs << "          \"offset_rotation\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
+                    ofs << "          \"offset_scale\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
                 }
-            } else if (typeName == kTypeBoxCollider) {
+            } else if (typeName == "BoxCollider") {
                 if (auto* bc = dynamic_cast<BoxColliderComponent*>(comp.get())) {
                     ofs << ",\n";
                     const auto& center = bc->GetCenterOffset();
                     const auto& size = bc->GetSize();
-                    ofs << "          \"" << kKeyCenter << "\": [" << center.x << ", " << center.y << ", " << center.z << "],\n";
-                    ofs << "          \"" << kKeySize << "\": [" << size.x << ", " << size.y << ", " << size.z << "],\n";
-                    ofs << "          \"" << kKeyIsTrigger << "\": " << (bc->IsTrigger() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyShowGizmo << "\": " << (bc->IsShowDebugGizmo() ? "true" : "false");
+                    ofs << "          \"center\": [" << center.x << ", " << center.y << ", " << center.z << "],\n";
+                    ofs << "          \"size\": [" << size.x << ", " << size.y << ", " << size.z << "],\n";
+                    ofs << "          \"is_trigger\": " << (bc->IsTrigger() ? "true" : "false") << ",\n";
+                    ofs << "          \"show_gizmo\": " << (bc->IsShowDebugGizmo() ? "true" : "false");
                 }
-            } else if (typeName == kTypeSphereCollider) {
+            } else if (typeName == "SphereCollider") {
                 if (auto* sc = dynamic_cast<SphereColliderComponent*>(comp.get())) {
                     ofs << ",\n";
                     const auto& center = sc->GetCenterOffset();
-                    ofs << "          \"" << kKeyCenter << "\": [" << center.x << ", " << center.y << ", " << center.z << "],\n";
-                    ofs << "          \"" << kKeyRadius << "\": " << sc->GetRadius() << ",\n";
-                    ofs << "          \"" << kKeyIsTrigger << "\": " << (sc->IsTrigger() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyShowGizmo << "\": " << (sc->IsShowDebugGizmo() ? "true" : "false");
+                    ofs << "          \"center\": [" << center.x << ", " << center.y << ", " << center.z << "],\n";
+                    ofs << "          \"radius\": " << sc->GetRadius() << ",\n";
+                    ofs << "          \"is_trigger\": " << (sc->IsTrigger() ? "true" : "false") << ",\n";
+                    ofs << "          \"show_gizmo\": " << (sc->IsShowDebugGizmo() ? "true" : "false");
                 }
-            } else if (typeName == kTypeAudioSource) {
+            } else if (typeName == "AudioSource") {
                 if (auto* as = dynamic_cast<AudioSourceComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyFilePath << "\": \"" << as->GetFilePath() << "\",\n";
-                    ofs << "          \"" << kKeyVolume << "\": " << as->GetVolume() << ",\n";
-                    ofs << "          \"" << kKeyLoop << "\": " << (as->IsLoop() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyAutoPlay << "\": " << (as->IsAutoPlay() ? "true" : "false");
+                    ofs << "          \"file_path\": \"" << as->GetFilePath() << "\",\n";
+                    ofs << "          \"volume\": " << as->GetVolume() << ",\n";
+                    ofs << "          \"loop\": " << (as->IsLoop() ? "true" : "false") << ",\n";
+                    ofs << "          \"auto_play\": " << (as->IsAutoPlay() ? "true" : "false");
                 }
-            } else if (typeName == kTypeParticleEffect) {
+            } else if (typeName == "ParticleEffect") {
                 if (auto* pe = dynamic_cast<ParticleEffectComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyEffectName << "\": \"" << pe->GetEffectName() << "\",\n";
+                    ofs << "          \"effect_name\": \"" << pe->GetEffectName() << "\",\n";
                     const auto& off = pe->GetOffset();
-                    ofs << "          \"" << kKeyOffset << "\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
-                    ofs << "          \"" << kKeyLoop << "\": " << (pe->IsLoop() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyAutoPlay << "\": " << (pe->IsAutoPlay() ? "true" : "false");
+                    ofs << "          \"offset\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
+                    ofs << "          \"loop\": " << (pe->IsLoop() ? "true" : "false") << ",\n";
+                    ofs << "          \"auto_play\": " << (pe->IsAutoPlay() ? "true" : "false");
                 }
-            } else if (typeName == kTypeCamera) {
+            } else if (typeName == "Camera") {
                 if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyFov << "\": " << cam->GetFov() << ",\n";
-                    ofs << "          \"" << kKeyNearZ << "\": " << cam->GetNearZ() << ",\n";
-                    ofs << "          \"" << kKeyFarZ << "\": " << cam->GetFarZ() << ",\n";
-                    ofs << "          \"" << kKeyIsMainCamera << "\": " << (cam->IsMainCamera() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyUseTarget << "\": " << (cam->IsUseTarget() ? "true" : "false") << ",\n";
+                    ofs << "          \"fov\": " << cam->GetFov() << ",\n";
+                    ofs << "          \"near_z\": " << cam->GetNearZ() << ",\n";
+                    ofs << "          \"far_z\": " << cam->GetFarZ() << ",\n";
+                    ofs << "          \"is_main_camera\": " << (cam->IsMainCamera() ? "true" : "false") << ",\n";
+                    ofs << "          \"use_target\": " << (cam->IsUseTarget() ? "true" : "false") << ",\n";
                     const auto& tgt = cam->GetTarget();
-                    ofs << "          \"" << kKeyTarget << "\": [" << tgt.x << ", " << tgt.y << ", " << tgt.z << "]";
+                    ofs << "          \"target\": [" << tgt.x << ", " << tgt.y << ", " << tgt.z << "]";
                 }
-            } else if (typeName == kTypeLight) {
+            } else if (typeName == "Light") {
                 if (auto* light = dynamic_cast<LightComponent*>(comp.get())) {
                     ofs << ",\n";
                     std::string lightTypeStr = "Directional";
                     if (light->GetLightType() == LightComponent::LightType::Point) lightTypeStr = "Point";
                     else if (light->GetLightType() == LightComponent::LightType::Spot) lightTypeStr = "Spot";
 
-                    ofs << "          \"" << kKeyLightType << "\": \"" << lightTypeStr << "\",\n";
+                    ofs << "          \"light_type\": \"" << lightTypeStr << "\",\n";
                     const auto& col = light->GetColor();
-                    ofs << "          \"" << kKeyColor << "\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
-                    ofs << "          \"" << kKeyIntensity << "\": " << light->GetIntensity() << ",\n";
-                    ofs << "          \"" << kKeyRange << "\": " << light->GetRange() << ",\n";
-                    ofs << "          \"" << kKeyDecay << "\": " << light->GetDecay() << ",\n";
-                    ofs << "          \"" << kKeySpotAngle << "\": " << light->GetSpotAngle() << ",\n";
-                    ofs << "          \"" << kKeySpotFalloffStart << "\": " << light->GetSpotFalloffStart();
+                    ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                    ofs << "          \"intensity\": " << light->GetIntensity() << ",\n";
+                    ofs << "          \"range\": " << light->GetRange() << ",\n";
+                    ofs << "          \"decay\": " << light->GetDecay() << ",\n";
+                    ofs << "          \"spot_angle\": " << light->GetSpotAngle() << ",\n";
+                    ofs << "          \"spot_falloff_start\": " << light->GetSpotFalloffStart();
                 }
-            } else if (typeName == kTypeTextRenderer2D) {
+            } else if (typeName == "TextRenderer2D") {
                 if (auto* tr = dynamic_cast<TextRenderer2DComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyText << "\": \"" << tr->GetText() << "\",\n";
-                    ofs << "          \"" << kKeyFontName << "\": \"" << tr->GetFontName() << "\",\n";
-                    ofs << "          \"" << kKeyFontSize << "\": " << tr->GetFontSize() << ",\n";
+                    ofs << "          \"text\": \"" << tr->GetText() << "\",\n";
+                    ofs << "          \"font_name\": \"" << tr->GetFontName() << "\",\n";
+                    ofs << "          \"font_size\": " << tr->GetFontSize() << ",\n";
                     const auto& col = tr->GetColor();
-                    ofs << "          \"" << kKeyColor << "\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
-                    ofs << "          \"" << kKeyAlignment << "\": " << tr->GetAlignment() << ",\n";
-                    ofs << "          \"" << kKeyIsBold << "\": " << (tr->IsBold() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyIsItalic << "\": " << (tr->IsItalic() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyEnableOutline << "\": " << (tr->IsOutlineEnabled() ? "true" : "false") << ",\n";
+                    ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                    ofs << "          \"alignment\": " << tr->GetAlignment() << ",\n";
+                    ofs << "          \"is_bold\": " << (tr->IsBold() ? "true" : "false") << ",\n";
+                    ofs << "          \"is_italic\": " << (tr->IsItalic() ? "true" : "false") << ",\n";
+                    ofs << "          \"enable_outline\": " << (tr->IsOutlineEnabled() ? "true" : "false") << ",\n";
                     const auto& outCol = tr->GetOutlineColor();
-                    ofs << "          \"" << kKeyOutlineColor << "\": [" << outCol.x << ", " << outCol.y << ", " << outCol.z << ", " << outCol.w << "],\n";
-                    ofs << "          \"" << kKeyOutlineWidth << "\": " << tr->GetOutlineWidth() << ",\n";
+                    ofs << "          \"outline_color\": [" << outCol.x << ", " << outCol.y << ", " << outCol.z << ", " << outCol.w << "],\n";
+                    ofs << "          \"outline_width\": " << tr->GetOutlineWidth() << ",\n";
                     const auto& off = tr->GetOffset();
-                    ofs << "          \"" << kKeyOffsetPosition << "\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetRotation << "\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetScale << "\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
+                    ofs << "          \"offset_position\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
+                    ofs << "          \"offset_rotation\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
+                    ofs << "          \"offset_scale\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
                 }
-            } else if (typeName == kTypeTextRenderer3D) {
+            } else if (typeName == "TextRenderer3D") {
                 if (auto* tr = dynamic_cast<TextRenderer3DComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyText << "\": \"" << tr->GetText() << "\",\n";
-                    ofs << "          \"" << kKeyFontName << "\": \"" << tr->GetFontName() << "\",\n";
-                    ofs << "          \"" << kKeyFontSize << "\": " << tr->GetFontSize() << ",\n";
+                    ofs << "          \"text\": \"" << tr->GetText() << "\",\n";
+                    ofs << "          \"font_name\": \"" << tr->GetFontName() << "\",\n";
+                    ofs << "          \"font_size\": " << tr->GetFontSize() << ",\n";
                     const auto& col = tr->GetColor();
-                    ofs << "          \"" << kKeyColor << "\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
-                    ofs << "          \"" << kKeyAlignment << "\": " << tr->GetAlignment() << ",\n";
-                    ofs << "          \"" << kKeyBillboardMode << "\": " << static_cast<int>(tr->GetBillboardMode()) << ",\n";
-                    ofs << "          \"" << kKeyWorldScale << "\": " << tr->GetWorldScale() << ",\n";
-                    ofs << "          \"" << kKeyLightingMode << "\": " << tr->GetLightingMode() << ",\n";
-                    ofs << "          \"" << kKeyIsBold << "\": " << (tr->IsBold() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyIsItalic << "\": " << (tr->IsItalic() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyEnableOutline << "\": " << (tr->IsOutlineEnabled() ? "true" : "false") << ",\n";
+                    ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                    ofs << "          \"alignment\": " << tr->GetAlignment() << ",\n";
+                    ofs << "          \"billboard_mode\": " << static_cast<int>(tr->GetBillboardMode()) << ",\n";
+                    ofs << "          \"world_scale\": " << tr->GetWorldScale() << ",\n";
+                    ofs << "          \"lighting_mode\": " << tr->GetLightingMode() << ",\n";
+                    ofs << "          \"is_bold\": " << (tr->IsBold() ? "true" : "false") << ",\n";
+                    ofs << "          \"is_italic\": " << (tr->IsItalic() ? "true" : "false") << ",\n";
+                    ofs << "          \"enable_outline\": " << (tr->IsOutlineEnabled() ? "true" : "false") << ",\n";
                     const auto& outCol = tr->GetOutlineColor();
-                    ofs << "          \"" << kKeyOutlineColor << "\": [" << outCol.x << ", " << outCol.y << ", " << outCol.z << ", " << outCol.w << "],\n";
-                    ofs << "          \"" << kKeyOutlineWidth << "\": " << tr->GetOutlineWidth() << ",\n";
+                    ofs << "          \"outline_color\": [" << outCol.x << ", " << outCol.y << ", " << outCol.z << ", " << outCol.w << "],\n";
+                    ofs << "          \"outline_width\": " << tr->GetOutlineWidth() << ",\n";
                     const auto& off = tr->GetOffset();
-                    ofs << "          \"" << kKeyOffsetPosition << "\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetRotation << "\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
-                    ofs << "          \"" << kKeyOffsetScale << "\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
+                    ofs << "          \"offset_position\": [" << off.translate.x << ", " << off.translate.y << ", " << off.translate.z << "],\n";
+                    ofs << "          \"offset_rotation\": [" << off.rotate.x << ", " << off.rotate.y << ", " << off.rotate.z << "],\n";
+                    ofs << "          \"offset_scale\": [" << off.scale.x << ", " << off.scale.y << ", " << off.scale.z << "]";
                 }
-            } else if (typeName == kTypeRotator) {
+            } else if (typeName == "Rotator") {
                 if (auto* rot = dynamic_cast<RotatorComponent*>(comp.get())) {
                     ofs << ",\n";
                     const auto& spd = rot->GetRotationSpeed();
-                    ofs << "          \"" << kKeyRotationSpeed << "\": [" << spd.x << ", " << spd.y << ", " << spd.z << "]";
+                    ofs << "          \"rotation_speed\": [" << spd.x << ", " << spd.y << ", " << spd.z << "]";
                 }
-            } else if (typeName == kTypeSinOscillator) {
+            } else if (typeName == "SinOscillator") {
                 if (auto* osc = dynamic_cast<SinOscillatorComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyTargetProperty << "\": " << static_cast<int>(osc->GetTargetType()) << ",\n";
+                    ofs << "          \"target_property\": " << static_cast<int>(osc->GetTargetType()) << ",\n";
                     const auto& amp = osc->GetAmplitude();
-                    ofs << "          \"" << kKeyAmplitude << "\": [" << amp.x << ", " << amp.y << ", " << amp.z << "],\n";
-                    ofs << "          \"" << kKeyFrequency << "\": " << osc->GetFrequency() << ",\n";
-                    ofs << "          \"" << kKeyPhase << "\": " << osc->GetPhase();
+                    ofs << "          \"amplitude\": [" << amp.x << ", " << amp.y << ", " << amp.z << "],\n";
+                    ofs << "          \"frequency\": " << osc->GetFrequency() << ",\n";
+                    ofs << "          \"phase\": " << osc->GetPhase();
                 }
-            } else if (typeName == kTypeBlink) {
+            } else if (typeName == "Blink") {
                 if (auto* blk = dynamic_cast<BlinkComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyBlinkSpeed << "\": " << blk->GetBlinkSpeed() << ",\n";
-                    ofs << "          \"" << kKeyMinAlpha << "\": " << blk->GetMinAlpha() << ",\n";
-                    ofs << "          \"" << kKeyMaxAlpha << "\": " << blk->GetMaxAlpha();
+                    ofs << "          \"blink_speed\": " << blk->GetBlinkSpeed() << ",\n";
+                    ofs << "          \"min_alpha\": " << blk->GetMinAlpha() << ",\n";
+                    ofs << "          \"max_alpha\": " << blk->GetMaxAlpha();
                 }
-            } else if (typeName == kTypeCameraOrbit) {
+            } else if (typeName == "CameraOrbit") {
                 if (auto* co = dynamic_cast<CameraOrbitComponent*>(comp.get())) {
                     ofs << ",\n";
                     const auto& tgt = co->GetTargetCenter();
-                    ofs << "          \"" << kKeyTargetCenter << "\": [" << tgt.x << ", " << tgt.y << ", " << tgt.z << "],\n";
-                    ofs << "          \"" << kKeyRadius << "\": " << co->GetRadius() << ",\n";
-                    ofs << "          \"" << kKeyHeight << "\": " << co->GetHeight() << ",\n";
-                    ofs << "          \"" << kKeyOrbitSpeed << "\": " << co->GetOrbitSpeed();
+                    ofs << "          \"target_center\": [" << tgt.x << ", " << tgt.y << ", " << tgt.z << "],\n";
+                    ofs << "          \"radius\": " << co->GetRadius() << ",\n";
+                    ofs << "          \"height\": " << co->GetHeight() << ",\n";
+                    ofs << "          \"orbit_speed\": " << co->GetOrbitSpeed();
                 }
-            } else if (typeName == kTypeScriptComponent) {
+            } else if (typeName == "ScriptComponent") {
                 if (auto* sc = dynamic_cast<ScriptComponent*>(comp.get())) {
                     ofs << ",\n";
-                    ofs << "          \"" << kKeyScriptName << "\": \"" << sc->GetScriptName() << "\",\n";
-                    ofs << "          \"" << kKeyTargetUUID << "\": \"" << sc->GetTargetUUID() << "\"";
-                }
-            } else if (typeName == kTypeBoxCollider) {
-                if (auto* bc = dynamic_cast<BoxColliderComponent*>(comp.get())) {
-                    ofs << ",\n";
-                    const auto& off = bc->GetCenterOffset();
-                    const auto& sz = bc->GetSize();
-                    ofs << "          \"" << kKeyCenterOffset << "\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
-                    ofs << "          \"" << kKeySize << "\": [" << sz.x << ", " << sz.y << ", " << sz.z << "],\n";
-                    ofs << "          \"" << kKeyIsTrigger << "\": " << (bc->IsTrigger() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyShowGizmo << "\": " << (bc->IsShowDebugGizmo() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyWireThickness << "\": " << bc->GetGizmoWireThickness();
-                }
-            } else if (typeName == kTypeSphereCollider) {
-                if (auto* sc = dynamic_cast<SphereColliderComponent*>(comp.get())) {
-                    ofs << ",\n";
-                    const auto& off = sc->GetCenterOffset();
-                    ofs << "          \"" << kKeyCenterOffset << "\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
-                    ofs << "          \"" << kKeyRadius << "\": " << sc->GetRadius() << ",\n";
-                    ofs << "          \"" << kKeyIsTrigger << "\": " << (sc->IsTrigger() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyShowGizmo << "\": " << (sc->IsShowDebugGizmo() ? "true" : "false") << ",\n";
-                    ofs << "          \"" << kKeyWireThickness << "\": " << sc->GetGizmoWireThickness();
+                    ofs << "          \"script_name\": \"" << sc->GetScriptName() << "\",\n";
+                    ofs << "          \"target_uuid\": \"" << sc->GetTargetUUID() << "\"";
+                    if (auto* pc = dynamic_cast<PlayerControllerScript*>(sc)) {
+                        ofs << ",\n";
+                        ofs << "          \"move_speed\": " << pc->GetMoveSpeed();
+                    }
                 }
             }
 
@@ -632,17 +500,17 @@ bool SceneSerializer::DeserializeFromString(
     std::vector<std::unique_ptr<GameObject>>& outGameObjects) {
 
     // 1. シーン名の抽出
-    outSceneName = ExtractString(json, kKeySceneName, "Untitled");
+    outSceneName = ExtractString(json, "scene_name", "Untitled");
 
     // 2. GameObjectブロックの抽出
-    auto goBlocks = ExtractObjectsFromArray(json, kKeyGameObjects);
+    auto goBlocks = ExtractObjectsFromArray(json, "game_objects");
     outGameObjects.clear();
     outGameObjects.reserve(goBlocks.size());
 
     for (const auto& goBlock : goBlocks) {
-        std::string name = ExtractString(goBlock, kKeyName, "GameObject");
-        std::string uuid = ExtractString(goBlock, kKeyUUID, "");
-        bool visible = ExtractBool(goBlock, kKeyVisible, true);
+        std::string name = ExtractString(goBlock, "name", "GameObject");
+        std::string uuid = ExtractString(goBlock, "uuid", "");
+        bool visible = ExtractBool(goBlock, "visible", true);
 
         auto go = std::make_unique<GameObject>(name);
         if (!uuid.empty()) {
@@ -651,9 +519,9 @@ bool SceneSerializer::DeserializeFromString(
         go->SetVisible(visible);
 
         // Transform の復元
-        Vector3 pos = ExtractVector3(goBlock, kKeyPosition, { 0.0f, 0.0f, 0.0f });
-        Vector3 rot = ExtractVector3(goBlock, kKeyRotation, { 0.0f, 0.0f, 0.0f });
-        Vector3 scale = ExtractVector3(goBlock, kKeyScale, { 1.0f, 1.0f, 1.0f });
+        Vector3 pos = ExtractVector3(goBlock, "position", { 0.0f, 0.0f, 0.0f });
+        Vector3 rot = ExtractVector3(goBlock, "rotation", { 0.0f, 0.0f, 0.0f });
+        Vector3 scale = ExtractVector3(goBlock, "scale", { 1.0f, 1.0f, 1.0f });
 
         go->SetPosition(pos);
         go->SetRotate(rot);
@@ -661,179 +529,179 @@ bool SceneSerializer::DeserializeFromString(
         go->UpdateMatrix();
 
         // 3. コンポーネント群の抽出と復元
-        auto compBlocks = ExtractObjectsFromArray(goBlock, kKeyComponents);
+        auto compBlocks = ExtractObjectsFromArray(goBlock, "components");
         for (const auto& compBlock : compBlocks) {
-            std::string type = ExtractString(compBlock, kKeyType);
+            std::string type = ExtractString(compBlock, "type");
 
-            if (type == kTypeMeshRenderer) {
+            if (type == "MeshRenderer") {
                 auto* mr = go->AddComponent<MeshRendererComponent>();
-                int meshType = ExtractInt(compBlock, kKeyMeshType, 0);
+                int meshType = ExtractInt(compBlock, "mesh_type", 0);
                 mr->SetMeshType(static_cast<MeshRendererComponent::MeshType>(meshType));
-                mr->SetTextureKey(ExtractString(compBlock, kKeyTextureKey, "white"));
-                mr->SetModelKey(ExtractString(compBlock, kKeyModelKey, "cube"));
-                mr->SetEnvMapKey(ExtractString(compBlock, kKeyEnvMapKey, ""));
-                mr->SetColor(ExtractVector4(compBlock, kKeyColor, { 1.0f, 1.0f, 1.0f, 1.0f }));
-                mr->SetLightingMode(ExtractInt(compBlock, kKeyLightingMode, 1));
-                mr->SetShininess(ExtractFloat(compBlock, kKeyShininess, 30.0f));
-                mr->SetEnvironmentCoefficient(ExtractFloat(compBlock, kKeyEnvironmentCoefficient, 1.0f));
+                mr->SetTextureKey(ExtractString(compBlock, "texture_key", "white"));
+                mr->SetModelKey(ExtractString(compBlock, "model_key", "cube"));
+                mr->SetAnimationKey(ExtractString(compBlock, "animation_key", ""));
+                mr->SetAnimationPlaying(ExtractBool(compBlock, "is_animation_playing", false));
+                mr->SetShowSkeleton(ExtractBool(compBlock, "show_skeleton", true));
+                mr->SetEnvMapKey(ExtractString(compBlock, "env_map_key", ""));
+                mr->SetColor(ExtractVector4(compBlock, "color", { 1.0f, 1.0f, 1.0f, 1.0f }));
+                mr->SetLightingMode(ExtractInt(compBlock, "lighting_mode", 1));
+                mr->SetShininess(ExtractFloat(compBlock, "shininess", 30.0f));
+                mr->SetEnvironmentCoefficient(ExtractFloat(compBlock, "environment_coefficient", 1.0f));
 
                 Transform off{};
-                off.translate = ExtractVector3(compBlock, kKeyOffsetPosition, { 0.0f, 0.0f, 0.0f });
-                off.rotate = ExtractVector3(compBlock, kKeyOffsetRotation, { 0.0f, 0.0f, 0.0f });
-                off.scale = ExtractVector3(compBlock, kKeyOffsetScale, { 1.0f, 1.0f, 1.0f });
+                off.translate = ExtractVector3(compBlock, "offset_position", { 0.0f, 0.0f, 0.0f });
+                off.rotate = ExtractVector3(compBlock, "offset_rotation", { 0.0f, 0.0f, 0.0f });
+                off.scale = ExtractVector3(compBlock, "offset_scale", { 1.0f, 1.0f, 1.0f });
                 mr->SetOffset(off);
-            } else if (type == kTypeSpriteRenderer) {
+            } else if (type == "SpriteRenderer") {
                 auto* sr = go->AddComponent<SpriteRendererComponent>();
-                int shapeType = ExtractInt(compBlock, kKeyShapeType, 0);
+                int shapeType = ExtractInt(compBlock, "shape_type", 0);
                 sr->SetShapeType(static_cast<SpriteRendererComponent::ShapeType>(shapeType));
-                sr->SetTextureKey(ExtractString(compBlock, kKeyTextureKey, "white"));
-                sr->SetSize(ExtractVector2(compBlock, kKeySize, { 100.0f, 100.0f }));
-                sr->SetRadius(ExtractFloat(compBlock, kKeyRadius, 50.0f));
-                sr->SetInnerRadius(ExtractFloat(compBlock, kKeyInnerRadius, 35.0f));
-                sr->SetLineStart(ExtractVector2(compBlock, kKeyLineStart, { 0.0f, 0.0f }));
-                sr->SetLineEnd(ExtractVector2(compBlock, kKeyLineEnd, { 150.0f, 0.0f }));
-                sr->SetLineThickness(ExtractFloat(compBlock, kKeyThickness, 4.0f));
-                sr->SetColor(ExtractVector4(compBlock, kKeyColor, { 1.0f, 1.0f, 1.0f, 1.0f }));
+                sr->SetTextureKey(ExtractString(compBlock, "texture_key", "white"));
+                sr->SetSize(ExtractVector2(compBlock, "size", { 100.0f, 100.0f }));
+                sr->SetRadius(ExtractFloat(compBlock, "radius", 50.0f));
+                sr->SetInnerRadius(ExtractFloat(compBlock, "inner_radius", 35.0f));
+                sr->SetLineStart(ExtractVector2(compBlock, "line_start", { 0.0f, 0.0f }));
+                sr->SetLineEnd(ExtractVector2(compBlock, "line_end", { 150.0f, 0.0f }));
+                sr->SetLineThickness(ExtractFloat(compBlock, "thickness", 4.0f));
+                sr->SetColor(ExtractVector4(compBlock, "color", { 1.0f, 1.0f, 1.0f, 1.0f }));
 
                 Transform off{};
-                off.translate = ExtractVector3(compBlock, kKeyOffsetPosition, { 0.0f, 0.0f, 0.0f });
-                off.rotate = ExtractVector3(compBlock, kKeyOffsetRotation, { 0.0f, 0.0f, 0.0f });
-                off.scale = ExtractVector3(compBlock, kKeyOffsetScale, { 1.0f, 1.0f, 1.0f });
+                off.translate = ExtractVector3(compBlock, "offset_position", { 0.0f, 0.0f, 0.0f });
+                off.rotate = ExtractVector3(compBlock, "offset_rotation", { 0.0f, 0.0f, 0.0f });
+                off.scale = ExtractVector3(compBlock, "offset_scale", { 1.0f, 1.0f, 1.0f });
                 sr->SetOffset(off);
-            } else if (type == kTypeBoxCollider) {
+            } else if (type == "BoxCollider") {
                 auto* bc = go->AddComponent<BoxColliderComponent>();
-                bc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenter, { 0.0f, 0.0f, 0.0f }));
-                bc->SetSize(ExtractVector3(compBlock, kKeySize, { 1.0f, 1.0f, 1.0f }));
-                bc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
-                bc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
-            } else if (type == kTypeSphereCollider) {
+                Vector3 center = ExtractVector3(compBlock, "center_offset", ExtractVector3(compBlock, "center", { 0.0f, 0.0f, 0.0f }));
+                bc->SetCenterOffset(center);
+                bc->SetSize(ExtractVector3(compBlock, "size", { 1.0f, 1.0f, 1.0f }));
+                bc->SetTrigger(ExtractBool(compBlock, "is_trigger", false));
+                bc->SetShowDebugGizmo(ExtractBool(compBlock, "show_gizmo", true));
+                constexpr float kDefaultWireThickness = 0.03f;
+                bc->SetGizmoWireThickness(ExtractFloat(compBlock, "wire_thickness", kDefaultWireThickness));
+            } else if (type == "SphereCollider") {
                 auto* sc = go->AddComponent<SphereColliderComponent>();
-                sc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenter, { 0.0f, 0.0f, 0.0f }));
-                sc->SetRadius(ExtractFloat(compBlock, kKeyRadius, 0.5f));
-                sc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
-                sc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
-            } else if (type == kTypeAudioSource) {
+                Vector3 center = ExtractVector3(compBlock, "center_offset", ExtractVector3(compBlock, "center", { 0.0f, 0.0f, 0.0f }));
+                sc->SetCenterOffset(center);
+                sc->SetRadius(ExtractFloat(compBlock, "radius", 0.5f));
+                sc->SetTrigger(ExtractBool(compBlock, "is_trigger", false));
+                sc->SetShowDebugGizmo(ExtractBool(compBlock, "show_gizmo", true));
+                constexpr float kDefaultWireThickness = 0.03f;
+                sc->SetGizmoWireThickness(ExtractFloat(compBlock, "wire_thickness", kDefaultWireThickness));
+            } else if (type == "AudioSource") {
                 auto* as = go->AddComponent<AudioSourceComponent>();
-                std::string soundPath = ExtractString(compBlock, kKeyFilePath, "");
+                std::string soundPath = ExtractString(compBlock, "file_path", "");
                 as->SetFilePath(soundPath);
-                as->SetVolume(ExtractFloat(compBlock, kKeyVolume, 1.0f));
-                as->SetLoop(ExtractBool(compBlock, kKeyLoop, false));
-                as->SetAutoPlay(ExtractBool(compBlock, kKeyAutoPlay, false));
+                as->SetVolume(ExtractFloat(compBlock, "volume", 1.0f));
+                as->SetLoop(ExtractBool(compBlock, "loop", false));
+                as->SetAutoPlay(ExtractBool(compBlock, "auto_play", false));
                 if (!soundPath.empty()) {
                     as->Load(soundPath);
                 }
-            } else if (type == kTypeParticleEffect) {
+            } else if (type == "ParticleEffect") {
                 auto* pe = go->AddComponent<ParticleEffectComponent>();
-                pe->SetEffectName(ExtractString(compBlock, kKeyEffectName, "Hit"));
-                pe->SetOffset(ExtractVector3(compBlock, kKeyOffset, { 0.0f, 0.0f, 0.0f }));
-                pe->SetLoop(ExtractBool(compBlock, kKeyLoop, false));
-                pe->SetAutoPlay(ExtractBool(compBlock, kKeyAutoPlay, false));
-            } else if (type == kTypeCamera) {
+                pe->SetEffectName(ExtractString(compBlock, "effect_name", "Hit"));
+                pe->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
+                pe->SetLoop(ExtractBool(compBlock, "loop", false));
+                pe->SetAutoPlay(ExtractBool(compBlock, "auto_play", false));
+            } else if (type == "Camera") {
                 auto* cam = go->AddComponent<CameraComponent>();
-                cam->SetFov(ExtractFloat(compBlock, kKeyFov, 0.45f));
-                cam->SetNearZ(ExtractFloat(compBlock, kKeyNearZ, 0.1f));
-                cam->SetFarZ(ExtractFloat(compBlock, kKeyFarZ, 1000.0f));
-                cam->SetMainCamera(ExtractBool(compBlock, kKeyIsMainCamera, true));
-                cam->SetUseTarget(ExtractBool(compBlock, kKeyUseTarget, false));
-                cam->SetTarget(ExtractVector3(compBlock, kKeyTarget, { 0.0f, 0.0f, 0.0f }));
-            } else if (type == kTypeLight) {
+                cam->SetFov(ExtractFloat(compBlock, "fov", 0.45f));
+                cam->SetNearZ(ExtractFloat(compBlock, "near_z", 0.1f));
+                cam->SetFarZ(ExtractFloat(compBlock, "far_z", 1000.0f));
+                cam->SetMainCamera(ExtractBool(compBlock, "is_main_camera", true));
+                cam->SetUseTarget(ExtractBool(compBlock, "use_target", false));
+                cam->SetTarget(ExtractVector3(compBlock, "target", { 0.0f, 0.0f, 0.0f }));
+            } else if (type == "Light") {
                 auto* light = go->AddComponent<LightComponent>();
-                std::string ltStr = ExtractString(compBlock, kKeyLightType, "Directional");
+                std::string ltStr = ExtractString(compBlock, "light_type", "Directional");
                 if (ltStr == "Point") light->SetLightType(LightComponent::LightType::Point);
                 else if (ltStr == "Spot") light->SetLightType(LightComponent::LightType::Spot);
                 else light->SetLightType(LightComponent::LightType::Directional);
 
-                light->SetColor(ExtractVector4(compBlock, kKeyColor, { 1.0f, 1.0f, 1.0f, 1.0f }));
-                light->SetIntensity(ExtractFloat(compBlock, kKeyIntensity, 1.0f));
-                light->SetRange(ExtractFloat(compBlock, kKeyRange, 10.0f));
-                light->SetDecay(ExtractFloat(compBlock, kKeyDecay, 1.0f));
-                light->SetSpotAngle(ExtractFloat(compBlock, kKeySpotAngle, 45.0f));
-                light->SetSpotFalloffStart(ExtractFloat(compBlock, kKeySpotFalloffStart, 30.0f));
-            } else if (type == kTypeTextRenderer2D) {
+                light->SetColor(ExtractVector4(compBlock, "color", { 1.0f, 1.0f, 1.0f, 1.0f }));
+                light->SetIntensity(ExtractFloat(compBlock, "intensity", 1.0f));
+                light->SetRange(ExtractFloat(compBlock, "range", 10.0f));
+                light->SetDecay(ExtractFloat(compBlock, "decay", 1.0f));
+                light->SetSpotAngle(ExtractFloat(compBlock, "spot_angle", 45.0f));
+                light->SetSpotFalloffStart(ExtractFloat(compBlock, "spot_falloff_start", 30.0f));
+            } else if (type == "TextRenderer2D") {
                 auto* tr = go->AddComponent<TextRenderer2DComponent>();
-                tr->SetText(ExtractString(compBlock, kKeyText, "Text"));
-                tr->SetFontName(ExtractString(compBlock, kKeyFontName, "Yu Gothic UI"));
-                tr->SetFontSize(ExtractFloat(compBlock, kKeyFontSize, 32.0f));
-                tr->SetColor(ExtractVector4(compBlock, kKeyColor, { 1.0f, 1.0f, 1.0f, 1.0f }));
-                tr->SetAlignment(ExtractInt(compBlock, kKeyAlignment, 0));
-                tr->SetBold(ExtractBool(compBlock, kKeyIsBold, false));
-                tr->SetItalic(ExtractBool(compBlock, kKeyIsItalic, false));
-                tr->SetOutlineEnabled(ExtractBool(compBlock, kKeyEnableOutline, false));
-                tr->SetOutlineColor(ExtractVector4(compBlock, kKeyOutlineColor, { 0.0f, 0.0f, 0.0f, 1.0f }));
+                tr->SetText(ExtractString(compBlock, "text", "Text"));
+                tr->SetFontName(ExtractString(compBlock, "font_name", "Yu Gothic UI"));
+                tr->SetFontSize(ExtractFloat(compBlock, "font_size", 32.0f));
+                tr->SetColor(ExtractVector4(compBlock, "color", { 1.0f, 1.0f, 1.0f, 1.0f }));
+                tr->SetAlignment(ExtractInt(compBlock, "alignment", 0));
+                tr->SetBold(ExtractBool(compBlock, "is_bold", false));
+                tr->SetItalic(ExtractBool(compBlock, "is_italic", false));
+                tr->SetOutlineEnabled(ExtractBool(compBlock, "enable_outline", false));
+                tr->SetOutlineColor(ExtractVector4(compBlock, "outline_color", { 0.0f, 0.0f, 0.0f, 1.0f }));
                 constexpr float kDefaultOutlineWidth = 2.0f;
-                tr->SetOutlineWidth(ExtractFloat(compBlock, kKeyOutlineWidth, kDefaultOutlineWidth));
+                tr->SetOutlineWidth(ExtractFloat(compBlock, "outline_width", kDefaultOutlineWidth));
 
                 Transform off{};
-                off.translate = ExtractVector3(compBlock, kKeyOffsetPosition, { 0.0f, 0.0f, 0.0f });
-                off.rotate = ExtractVector3(compBlock, kKeyOffsetRotation, { 0.0f, 0.0f, 0.0f });
-                off.scale = ExtractVector3(compBlock, kKeyOffsetScale, { 1.0f, 1.0f, 1.0f });
+                off.translate = ExtractVector3(compBlock, "offset_position", { 0.0f, 0.0f, 0.0f });
+                off.rotate = ExtractVector3(compBlock, "offset_rotation", { 0.0f, 0.0f, 0.0f });
+                off.scale = ExtractVector3(compBlock, "offset_scale", { 1.0f, 1.0f, 1.0f });
                 tr->SetOffset(off);
-            } else if (type == kTypeTextRenderer3D) {
+            } else if (type == "TextRenderer3D") {
                 auto* tr = go->AddComponent<TextRenderer3DComponent>();
-                tr->SetText(ExtractString(compBlock, kKeyText, "3D Text"));
-                tr->SetFontName(ExtractString(compBlock, kKeyFontName, "Yu Gothic UI"));
-                tr->SetFontSize(ExtractFloat(compBlock, kKeyFontSize, 48.0f));
-                tr->SetColor(ExtractVector4(compBlock, kKeyColor, { 1.0f, 1.0f, 1.0f, 1.0f }));
-                tr->SetAlignment(ExtractInt(compBlock, kKeyAlignment, 1));
-                int bmVal = ExtractInt(compBlock, kKeyBillboardMode, static_cast<int>(TextObject3D::BillboardMode::AllAxis));
+                tr->SetText(ExtractString(compBlock, "text", "3D Text"));
+                tr->SetFontName(ExtractString(compBlock, "font_name", "Yu Gothic UI"));
+                tr->SetFontSize(ExtractFloat(compBlock, "font_size", 48.0f));
+                tr->SetColor(ExtractVector4(compBlock, "color", { 1.0f, 1.0f, 1.0f, 1.0f }));
+                tr->SetAlignment(ExtractInt(compBlock, "alignment", 1));
+                int bmVal = ExtractInt(compBlock, "billboard_mode", static_cast<int>(TextObject3D::BillboardMode::AllAxis));
                 tr->SetBillboardMode(static_cast<TextObject3D::BillboardMode>(bmVal));
-                tr->SetWorldScale(ExtractFloat(compBlock, kKeyWorldScale, 0.02f));
-                tr->SetLightingMode(ExtractInt(compBlock, kKeyLightingMode, 0));
-                tr->SetBold(ExtractBool(compBlock, kKeyIsBold, false));
-                tr->SetItalic(ExtractBool(compBlock, kKeyIsItalic, false));
-                tr->SetOutlineEnabled(ExtractBool(compBlock, kKeyEnableOutline, false));
-                tr->SetOutlineColor(ExtractVector4(compBlock, kKeyOutlineColor, { 0.0f, 0.0f, 0.0f, 1.0f }));
+                tr->SetWorldScale(ExtractFloat(compBlock, "world_scale", 0.02f));
+                tr->SetLightingMode(ExtractInt(compBlock, "lighting_mode", 0));
+                tr->SetBold(ExtractBool(compBlock, "is_bold", false));
+                tr->SetItalic(ExtractBool(compBlock, "is_italic", false));
+                tr->SetOutlineEnabled(ExtractBool(compBlock, "enable_outline", false));
+                tr->SetOutlineColor(ExtractVector4(compBlock, "outline_color", { 0.0f, 0.0f, 0.0f, 1.0f }));
                 constexpr float kDefaultOutlineWidth = 2.0f;
-                tr->SetOutlineWidth(ExtractFloat(compBlock, kKeyOutlineWidth, kDefaultOutlineWidth));
+                tr->SetOutlineWidth(ExtractFloat(compBlock, "outline_width", kDefaultOutlineWidth));
 
                 Transform off{};
-                off.translate = ExtractVector3(compBlock, kKeyOffsetPosition, { 0.0f, 0.0f, 0.0f });
-                off.rotate = ExtractVector3(compBlock, kKeyOffsetRotation, { 0.0f, 0.0f, 0.0f });
-                off.scale = ExtractVector3(compBlock, kKeyOffsetScale, { 1.0f, 1.0f, 1.0f });
+                off.translate = ExtractVector3(compBlock, "offset_position", { 0.0f, 0.0f, 0.0f });
+                off.rotate = ExtractVector3(compBlock, "offset_rotation", { 0.0f, 0.0f, 0.0f });
+                off.scale = ExtractVector3(compBlock, "offset_scale", { 1.0f, 1.0f, 1.0f });
                 tr->SetOffset(off);
-            } else if (type == kTypeRotator) {
+            } else if (type == "Rotator") {
                 auto* rot = go->AddComponent<RotatorComponent>();
-                rot->SetRotationSpeed(ExtractVector3(compBlock, kKeyRotationSpeed, { 0.0f, 0.5f, 0.0f }));
-            } else if (type == kTypeSinOscillator) {
+                rot->SetRotationSpeed(ExtractVector3(compBlock, "rotation_speed", { 0.0f, 0.5f, 0.0f }));
+            } else if (type == "SinOscillator") {
                 auto* osc = go->AddComponent<SinOscillatorComponent>();
-                int propVal = ExtractInt(compBlock, kKeyTargetProperty, 0);
+                int propVal = ExtractInt(compBlock, "target_property", 0);
                 osc->SetTargetType(static_cast<SinOscillatorComponent::TargetType>(propVal));
-                osc->SetAmplitude(ExtractVector3(compBlock, kKeyAmplitude, { 0.0f, 10.0f, 0.0f }));
-                osc->SetFrequency(ExtractFloat(compBlock, kKeyFrequency, 2.0f));
-                osc->SetPhase(ExtractFloat(compBlock, kKeyPhase, 0.0f));
-            } else if (type == kTypeBlink) {
+                osc->SetAmplitude(ExtractVector3(compBlock, "amplitude", { 0.0f, 10.0f, 0.0f }));
+                osc->SetFrequency(ExtractFloat(compBlock, "frequency", 2.0f));
+                osc->SetPhase(ExtractFloat(compBlock, "phase", 0.0f));
+            } else if (type == "Blink") {
                 auto* blk = go->AddComponent<BlinkComponent>();
-                blk->SetBlinkSpeed(ExtractFloat(compBlock, kKeyBlinkSpeed, 3.0f));
-                blk->SetMinAlpha(ExtractFloat(compBlock, kKeyMinAlpha, 0.15f));
-                blk->SetMaxAlpha(ExtractFloat(compBlock, kKeyMaxAlpha, 1.0f));
-            } else if (type == kTypeCameraOrbit) {
+                blk->SetBlinkSpeed(ExtractFloat(compBlock, "blink_speed", 3.0f));
+                blk->SetMinAlpha(ExtractFloat(compBlock, "min_alpha", 0.15f));
+                blk->SetMaxAlpha(ExtractFloat(compBlock, "max_alpha", 1.0f));
+            } else if (type == "CameraOrbit") {
                 auto* co = go->AddComponent<CameraOrbitComponent>();
-                co->SetTargetCenter(ExtractVector3(compBlock, kKeyTargetCenter, { 0.0f, 0.0f, 0.0f }));
-                co->SetRadius(ExtractFloat(compBlock, kKeyRadius, 25.0f));
-                co->SetHeight(ExtractFloat(compBlock, kKeyHeight, 4.0f));
-                co->SetOrbitSpeed(ExtractFloat(compBlock, kKeyOrbitSpeed, 0.15f));
-            } else if (type == kTypeScriptComponent) {
-                std::string scriptName = ExtractString(compBlock, kKeyScriptName, "ScriptComponent");
-                std::string targetUUID = ExtractString(compBlock, kKeyTargetUUID, "");
+                co->SetTargetCenter(ExtractVector3(compBlock, "target_center", { 0.0f, 0.0f, 0.0f }));
+                co->SetRadius(ExtractFloat(compBlock, "radius", 25.0f));
+                co->SetHeight(ExtractFloat(compBlock, "height", 4.0f));
+                co->SetOrbitSpeed(ExtractFloat(compBlock, "orbit_speed", 0.15f));
+            } else if (type == "ScriptComponent") {
+                std::string scriptName = ExtractString(compBlock, "script_name", "ScriptComponent");
+                std::string targetUUID = ExtractString(compBlock, "target_uuid", "");
                 auto script = ScriptRegistry::GetInstance().CreateScript(scriptName);
                 if (script) {
                     script->SetTargetUUID(targetUUID);
+                    if (auto* pc = dynamic_cast<PlayerControllerScript*>(script.get())) {
+                        constexpr float kDefaultMoveSpeedFallback = 0.15f;
+                        float spd = ExtractFloat(compBlock, "move_speed", kDefaultMoveSpeedFallback);
+                        pc->SetMoveSpeed(spd);
+                    }
                     go->AddComponentInstance(std::move(script));
                 }
-            } else if (type == kTypeBoxCollider) {
-                auto* bc = go->AddComponent<BoxColliderComponent>();
-                bc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenterOffset, { 0.0f, 0.0f, 0.0f }));
-                bc->SetSize(ExtractVector3(compBlock, kKeySize, { 1.0f, 1.0f, 1.0f }));
-                bc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
-                bc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
-                bc->SetGizmoWireThickness(ExtractFloat(compBlock, kKeyWireThickness, 0.03f));
-            } else if (type == kTypeSphereCollider) {
-                auto* sc = go->AddComponent<SphereColliderComponent>();
-                sc->SetCenterOffset(ExtractVector3(compBlock, kKeyCenterOffset, { 0.0f, 0.0f, 0.0f }));
-                sc->SetRadius(ExtractFloat(compBlock, kKeyRadius, 0.5f));
-                sc->SetTrigger(ExtractBool(compBlock, kKeyIsTrigger, false));
-                sc->SetShowDebugGizmo(ExtractBool(compBlock, kKeyShowGizmo, true));
-                sc->SetGizmoWireThickness(ExtractFloat(compBlock, kKeyWireThickness, 0.03f));
             }
         }
 

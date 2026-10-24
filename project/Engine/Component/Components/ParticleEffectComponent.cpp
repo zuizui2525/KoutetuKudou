@@ -1,6 +1,7 @@
 #include "Engine/Component/Components/ParticleEffectComponent.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
+#include "Engine/Graphics/Objects/Effect/GPU/GPUParticleSetting.h"
 
 #ifdef _USEIMGUI
 #include <imgui.h>
@@ -58,6 +59,21 @@ void ParticleEffectComponent::DrawInspector() {
     strncpy_s(nameBuf, effectName_.c_str(), sizeof(nameBuf) - 1);
     if (ImGui::InputText("Effect Name##ParticleEffect", nameBuf, sizeof(nameBuf))) {
         effectName_ = nameBuf;
+    }
+
+    // プリセット選択
+    if (ImGui::BeginCombo("Preset##ParticleEffect", effectName_.c_str())) {
+        auto presets = GPUParticlePresets::GetPresetNames();
+        for (const auto& preset : presets) {
+            bool isSelected = (effectName_ == preset);
+            if (ImGui::Selectable(preset.c_str(), isSelected)) {
+                effectName_ = preset;
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
     }
 
     // 2. オフセット座標

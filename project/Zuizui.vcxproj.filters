@@ -34,6 +34,8 @@
     <ClCompile Include="Engine\Base\BaseResource.cpp" />
     <ClCompile Include="Engine\Base\DeferredRelease\DeferredReleaseManager.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Model\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Graphics\Animation\Animation.cpp" />
+    <ClCompile Include="Engine\Graphics\Animation\Skeleton.cpp" />
     <ClCompile Include="Engine\Graphics\PSO\Shader\ShaderCompiler.cpp" />
     <ClCompile Include="Engine\Math\Collision\Collision.cpp" />
     <ClCompile Include="main.cpp" />
@@ -154,6 +156,9 @@
     <ClCompile Include="Engine\Debug\ContentBrowserWindow.cpp">
       <Filter>Engine</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Debug\ParticleStudioWindow.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
     <ClCompile Include="Scripts\Director\TitleDirectorScript.cpp">
       <Filter>Scripts\Director</Filter>
     </ClCompile>
@@ -247,10 +252,18 @@
     <ClInclude Include="Engine\Base\BaseResource.h" />
     <ClInclude Include="Engine\Base\DeferredRelease\DeferredReleaseManager.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Model\ModelLoader.h" />
+    <ClInclude Include="Engine\Graphics\Animation\Animation.h" />
+    <ClInclude Include="Engine\Graphics\Animation\Skeleton.h" />
     <ClInclude Include="Engine\Graphics\PSO\Shader\ShaderCompiler.h" />
     <ClInclude Include="Engine\Math\Collision\Collision.h" />
     <ClInclude Include="Engine\Graphics\Objects\Effect\Manager\EffectManager.h" />
     <ClInclude Include="Engine\Graphics\Objects\Effect\Settings\EffectSetting.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Effect\GPU\GPUParticleSetting.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Debug\ParticleStudioWindow.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
     <ClInclude Include="Engine\\Graphics\\PSO\\Manager\PSOManager.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\Preset\PSOPreset.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\DepthStencilState\DepthStencilStateBuilder.h" />

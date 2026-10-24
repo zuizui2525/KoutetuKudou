@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 
+class GPUParticleObject;
+
 class EffectManager {
 public:
     static EffectManager* GetInstance();
@@ -39,7 +41,9 @@ public:
     // エミッターの停止
     void StopEffect(const std::string& name);
 
-
+    // --- GPUパーティクル専用API ---
+    void PlayGPUEffect(const Vector3& position, uint32_t count = 1000);
+    GPUParticleObject* GetGPUParticle() { return gpuParticle_.get(); }
 
 private:
     EffectManager() = default;
@@ -48,6 +52,7 @@ private:
     EffectManager& operator=(const EffectManager&) = delete;
 
     std::unordered_map<std::string, std::unique_ptr<BaseParticleObject>> effectMap_;
+    std::unique_ptr<GPUParticleObject> gpuParticle_;
     bool isWindowOpen_ = false;
     static inline bool showListWindow_ = true;
 };

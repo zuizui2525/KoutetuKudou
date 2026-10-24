@@ -9,6 +9,9 @@
 #include "App/Scene/Generic/GenericScene.h"
 #include "App/Scene/Core/SceneDirector.h"
 #include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
+#include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
+#include "Engine/Base/BaseResource.h"
 #include <cstdlib>
 #include <algorithm>
 #include <format>
@@ -227,35 +230,82 @@ void EnemySpawnManagerScript::OnInspectorGUI() {
     ImGui::Text("現在エリア: Area %d (0~3) | 配置済みスポーン地点: %zu 箇所",
         currentArea_ + 1, cachedSpawnPoints_.size());
 
-    // 1. スポーン地点の新規作成（ワンクリック追加）
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.6f, 1.0f), "◆ スポーン地点の追加 (シーン上にGameObject生成)");
 
+    // 独立ウィンドウの開閉・フォーカスボタン
+    if (!isEditorWindowOpen_) {
+        constexpr ImVec4 kReopenBtnColor = { 0.2f, 0.7f, 0.3f, 1.0f }; // 緑色で強調
+        ImGui::PushStyleColor(ImGuiCol_Button, kReopenBtnColor);
+        if (ImGui::Button("★ 敵配置パレットを再表示する (Show Palette)##ReopenPaletteBtn", ImVec2(-1.0f, kReopenButtonHeight))) {
+            isEditorWindowOpen_ = true;
+        }
+        ImGui::PopStyleColor();
+        ImGui::TextDisabled("※右上の[×]で閉じた後も、このボタンでいつでも復活できます。");
+    } else {
+        if (ImGui::Button("パレットを前面にフォーカス (Focus Palette)##FocusPaletteBtn")) {
+            ImGui::SetWindowFocus("【敵エディター】配置パレット###EnemySpawnerPalette");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("パレットを閉じる##ClosePaletteBtn")) {
+            isEditorWindowOpen_ = false;
+        }
+        ImGui::TextDisabled("※敵の追加・配置は左側の「【敵エディター】配置パレット」で行えます。");
+    }
+#endif
+}
+
+void EnemySpawnManagerScript::OnGUI() {
+#ifdef _USEIMGUI
+    if (!isEditorWindowOpen_) return;
+
+    // 誰が選択されていても、エディタ実行中に常駐する独立ウィンドウ！
+    ImGui::SetNextWindowSize(ImVec2(kDefaultPaletteWidth, kDefaultPaletteHeight), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("【敵エディター】配置パレット###EnemySpawnerPalette", &isEditorWindowOpen_)) {
+        DrawPaletteUI();
+    }
+    ImGui::End();
+#endif
+}
+
+void EnemySpawnManagerScript::DrawPaletteUI() {
+#ifdef _USEIMGUI
+    constexpr ImVec4 kHeaderColor = { 0.8f, 0.4f, 1.0f, 1.0f };
+    ImGui::TextColored(kHeaderColor, "◆ 敵配置パレット (SceneViewと連携)");
+    ImGui::TextDisabled("※リストの[Focus]を押すとSceneViewカメラが敵へ移動します");
+    ImGui::Separator();
+
+    // 1. スポーン地点の新規作成（ワンクリック追加）
     float defaultZ = (selectedEditorAreaTab_ < 4) ? (selectedEditorAreaTab_ * 120.0f + 40.0f) : 40.0f;
 
-    if (ImGui::Button("＋ 通常敵スポーン地点を追加##AddEnemySpawnBtn")) {
+    if (ImGui::Button("＋ 通常敵を追加##AddEnemySpawnBtn")) {
         Vector3 spawnPos = { 0.0f, 0.0f, defaultZ };
-        CreateSpawnPoint(spawnPos, selectedEditorAreaTab_, false);
+        GameObject* go = CreateSpawnPoint(spawnPos, selectedEditorAreaTab_, false);
+        if (go) {
+            FocusCameraOnObject(go);
+        }
     }
     ImGui::SameLine();
-    if (ImGui::Button("＋ ボス出現地点を追加##AddBossSpawnBtn")) {
+    if (ImGui::Button("＋ ボスを追加##AddBossSpawnBtn")) {
         Vector3 spawnPos = { 0.0f, kBossHeightOffset, 360.0f };
-        CreateSpawnPoint(spawnPos, 3, true);
+        GameObject* go = CreateSpawnPoint(spawnPos, 3, true);
+        if (go) {
+            FocusCameraOnObject(go);
+        }
     }
 
     // 2. プレビュー＆クリアボタン
     ImGui::SameLine();
-    if (ImGui::Button("▶ 全敵プレビュー##PreviewBtn")) {
+    if (ImGui::Button("▶ プレビュー##PreviewBtn")) {
         PreviewAllSpawns();
     }
     ImGui::SameLine();
-    if (ImGui::Button("■ プレビュー消去##ClearPreviewBtn")) {
+    if (ImGui::Button("■ 消去##ClearPreviewBtn")) {
         ClearPreviewEnemies();
     }
 
     // 3. エリア別タブ表示
     ImGui::Spacing();
-    const char* areaTabs[] = { "Area 1 (0~120m)", "Area 2 (120~240m)", "Area 3 (240~360m)", "Area 4 [Boss] (360m~)" };
+    const char* areaTabs[] = { "Area 1", "Area 2", "Area 3", "Area 4 [Boss]" };
     if (ImGui::BeginTabBar("EnemyEditorAreaTabs")) {
         for (int i = 0; i < 4; ++i) {
             if (ImGui::BeginTabItem(areaTabs[i])) {
@@ -264,7 +314,7 @@ void EnemySpawnManagerScript::OnInspectorGUI() {
                 // 該当エリアのスポーンポイント一覧テーブル
                 RefreshSpawnPoints();
 
-                ImGui::BeginChild("SpawnPointsList", ImVec2(0, 200), true);
+                ImGui::BeginChild("SpawnPointsList", ImVec2(0, kSpawnListChildHeight), true);
                 int indexInArea = 0;
                 for (auto* sp : cachedSpawnPoints_) {
                     if (!sp || sp->GetTargetArea() != i) continue;
@@ -279,17 +329,16 @@ void EnemySpawnManagerScript::OnInspectorGUI() {
                     ImGui::SameLine();
                     ImGui::TextDisabled("(X:%.1f, Y:%.1f, Z:%.1f)", pos.x, pos.y, pos.z);
 
+                    // フォーカス＆選択ボタン（SceneViewカメラがその敵へジャンプし、ギズモを表示）
+                    if (ImGui::SmallButton("Focus##FocusSp")) {
+                        FocusCameraOnObject(go);
+                    }
+
                     ImGui::SameLine();
-                    ImGui::Text("| トリガー: Z=%.1f", sp->GetTriggerZ());
+                    ImGui::Text("| トリガーZ: %.1f", sp->GetTriggerZ());
 
                     ImGui::SameLine();
                     ImGui::Text("| %s x%d", sp->GetPrefabName().c_str(), sp->GetCount());
-
-                    // 選択ボタン（押すとSceneViewでトランスフォームギズモが表示される）
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("選択##SelectSp")) {
-                        SceneHierarchy::GetInstance()->SetSelected(go);
-                    }
 
                     // 削除ボタン
                     ImGui::SameLine();
@@ -305,7 +354,7 @@ void EnemySpawnManagerScript::OnInspectorGUI() {
                 }
 
                 if (indexInArea == 0) {
-                    ImGui::TextDisabled("このエリアにはまだスポーン地点が配置されていません。上のボタンから追加してください。");
+                    ImGui::TextDisabled("このエリアにはスポーン地点がありません。\n上の「＋ 通常敵を追加」から配置してください。");
                 }
 
                 ImGui::EndChild();
@@ -315,11 +364,35 @@ void EnemySpawnManagerScript::OnInspectorGUI() {
         }
         ImGui::EndTabBar();
     }
+#endif
+}
 
-    // 4. 全トリガーリセットボタン
-    if (ImGui::Button("↺ 出現トリガーを全リセット (走行テスト用)##ResetAllTriggers")) {
-        ResetSpawns();
+void EnemySpawnManagerScript::FocusCameraOnObject(GameObject* targetObj) {
+    if (!targetObj) return;
+
+    Vector3 targetPos = targetObj->GetPosition();
+
+    // 1. エディタ用カメラ（SceneViewカメラ）の注視点と位置を調整
+    auto* camMgr = CameraResource::GetCameraManager();
+    if (camMgr) {
+        BaseCamera* editorCam = camMgr->GetCamera(CameraManager::kEditorCameraName);
+        if (!editorCam) {
+            editorCam = camMgr->GetActiveCamera();
+        }
+        if (editorCam) {
+            editorCam->SetTarget(targetPos);
+            Vector3 newCamPos = {
+                targetPos.x,
+                targetPos.y + kCameraFocusElevation,
+                targetPos.z - kCameraFocusDistance
+            };
+            editorCam->SetPosition(newCamPos);
+        }
     }
+
+#ifdef _USEIMGUI
+    // 2. オブジェクトを選択状態にしてトランスフォームギズモを表示
+    SceneHierarchy::GetInstance()->SetSelected(targetObj);
 #endif
 }
 

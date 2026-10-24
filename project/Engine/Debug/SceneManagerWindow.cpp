@@ -1,6 +1,7 @@
 #ifdef _USEIMGUI
 #include "Engine/Debug/SceneManagerWindow.h"
 #include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Core/SceneMemoryCache.h"
 #include "externals/imgui/imgui.h"
 #include <string>
 
@@ -17,18 +18,23 @@ void SceneManagerWindow::Draw(bool* show) {
         static const std::string kGameOverSceneName = "GameOver";
 
         if (ImGui::Button("デバッグシーンにリセット")) {
+            SceneMemoryCache::GetInstance()->ClearCache(kDebugSceneName);
             SceneManager::GetInstance()->ChangeScene(kDebugSceneName, false);
         }
         if (ImGui::Button("タイトルシーンにリセット")) {
+            SceneMemoryCache::GetInstance()->ClearCache(kTitleSceneName);
             SceneManager::GetInstance()->ChangeScene(kTitleSceneName, false);
         }
         if (ImGui::Button("ゲームシーンにリセット")) {
+            SceneMemoryCache::GetInstance()->ClearCache(kGameSceneName);
             SceneManager::GetInstance()->ChangeScene(kGameSceneName, false);
         }
         if (ImGui::Button("クリアシーンにリセット")) {
+            SceneMemoryCache::GetInstance()->ClearCache(kClearSceneName);
             SceneManager::GetInstance()->ChangeScene(kClearSceneName, false);
         }
         if (ImGui::Button("ゲームオーバーシーンにリセット")) {
+            SceneMemoryCache::GetInstance()->ClearCache(kGameOverSceneName);
             SceneManager::GetInstance()->ChangeScene(kGameOverSceneName, false);
         }
     }

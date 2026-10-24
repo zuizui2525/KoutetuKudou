@@ -8,6 +8,7 @@
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
 #include "Engine/Debug/GameViewWindow.h"
+#include "Engine/Audio/Audio.h"
 #include <cmath>
 #ifdef _USEIMGUI
 #include <imgui.h>
@@ -35,6 +36,12 @@ void PlayerControllerScript::Awake() {
 }
 
 void PlayerControllerScript::Start() {
+    if (!isSeShootLoaded_) {
+        if (auto* audio = Audio::GetInstance()) {
+            seShoot_ = audio->LoadSound(kSeShootPath);
+            isSeShootLoaded_ = true;
+        }
+    }
 }
 
 void PlayerControllerScript::OnUpdate() {
@@ -170,6 +177,11 @@ void PlayerControllerScript::Fire() {
 
     // 射撃反動のカメラシェイク演出
     ShakeCamera(kShootShakeIntensity, kShootShakeDuration);
+
+    // 射撃効果音 (SE) の再生
+    if (auto* audio = Audio::GetInstance()) {
+        audio->PlaySoundW(seShoot_, kShootVolume, false);
+    }
 }
 
 /// <summary>
@@ -207,6 +219,7 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::DragInt("リロード時間(F)##ReloadTime", &reloadDuration_, 1, 1, 120);
     ImGui::DragInt("連射間隔(F)##ShotInterval", &shotInterval_, 1, 1, 60);
     ImGui::DragFloat("弾速##BulletSpeed", &bulletSpeed_, 0.05f, 0.1f, 5.0f, "%.2f");
+    ImGui::DragFloat("ルート走行速度##MoveSpeed", &moveSpeed_, 0.005f, kMinMoveSpeed, kMaxMoveSpeed, "%.3f");
 
     ImGui::Separator();
     ImGui::Checkbox("自動走行中##IsAutoMoving", &isAutoMoving_);

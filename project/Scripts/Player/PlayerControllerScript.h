@@ -1,6 +1,8 @@
 #pragma once
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Math/MathStructs.h"
+#include "Engine/Audio/AudioStructs.h"
+#include <string>
 
 /// <summary>
 /// 自機キャラクターのHP、弾数管理、射撃、リロードを制御するスクリプトコンポーネント
@@ -57,6 +59,16 @@ public:
     void SetAutoMoving(bool autoMove) { isAutoMoving_ = autoMove; }
     bool IsAutoMoving() const { return isAutoMoving_; }
 
+    /// <summary>
+    /// 自機のルート走行速度を取得します。
+    /// </summary>
+    float GetMoveSpeed() const { return moveSpeed_; }
+
+    /// <summary>
+    /// 自機のルート走行速度を設定します。
+    /// </summary>
+    void SetMoveSpeed(float speed) { moveSpeed_ = speed; }
+
 private:
     /// <summary>
     /// マウス入力（左クリックまたは長押し連射）を監視し、射撃間隔や弾数制限を満たしている場合に Fire() を呼び出します。
@@ -82,6 +94,9 @@ private:
     static constexpr int kDefaultShotInterval = 3;    // 連射間隔（フレーム数）
     static constexpr float kDefaultBulletSpeed = 0.5f;
     static constexpr float kBulletSpawnDistance = 1.0f; // 銃口の前方オフセット距離
+    static constexpr float kDefaultMoveSpeed = 0.15f;   // 標準ルート走行速度
+    static constexpr float kMinMoveSpeed = 0.01f;       // 最小走行速度
+    static constexpr float kMaxMoveSpeed = 2.0f;        // 最大走行速度
     static constexpr int kShotMouseKey = 0;           // 左クリック
     static constexpr float kShootShakeIntensity = 0.06f; // 射撃時の反動カメラシェイク振幅
     static constexpr float kShootShakeDuration = 0.10f;  // 射撃時の反動カメラシェイク持続時間
@@ -89,6 +104,8 @@ private:
     static constexpr int kMaxHpLimit = 100;
     static constexpr int kMinAmmoLimit = 1;
     static constexpr int kMaxAmmoLimit = 100;
+    static inline const std::string kSeShootPath = "resources/Sounds/shoot.wav";
+    static constexpr float kShootVolume = 0.75f;
 
     // メンバ変数
     int maxHp_ = kDefaultMaxHp;
@@ -101,8 +118,13 @@ private:
     int shotInterval_ = kDefaultShotInterval;
     int shotIntervalTimer_ = 0;
     float bulletSpeed_ = kDefaultBulletSpeed;
+    float moveSpeed_ = kDefaultMoveSpeed;
 
     bool isAutoMoving_ = false;
     Vector3 direction_ = { 0.0f, 0.0f, 1.0f };
     bool isDead_ = false;
+
+    // 射撃効果音 (SE)
+    SoundData seShoot_{};
+    bool isSeShootLoaded_ = false;
 };

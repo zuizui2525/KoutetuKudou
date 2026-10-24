@@ -14,9 +14,9 @@
 namespace {
     const std::string kFireworkEffectName = "FireworksSet";
     constexpr float kRandCenterOffset = 0.5f;
-    constexpr float kFireworkZBaseOffset = 2.0f;
-    constexpr float kFireworkYBaseOffset = 3.0f;
     constexpr size_t kImGuiBufferLength = 128;
+    constexpr uint32_t kGpuFireworkParticleCount = 3000; // 1発あたりのGPU光粒子数
+    const Vector3 kManualFireworkPos = { 0.0f, 15.0f, 20.0f }; // 手動発射位置 (上空)
 }
 
 ClearDirectorScript::ClearDirectorScript()
@@ -53,27 +53,21 @@ void ClearDirectorScript::OnUpdate() {
         return;
     }
 
-    // 祝砲花火エフェクトのランダム打ち上げ
+    // 祝砲花火エフェクトのランダム打ち上げ (GPUパーティクルによる超大量祝砲花火)
     if (--fireworkTimer_ <= 0) {
         fireworkTimer_ = minInterval_ + rand() % maxIntervalRange_;
-        EffectPlayParam param;
         float rx = (static_cast<float>(rand()) / RAND_MAX - kRandCenterOffset) * rangeX_;
-        float rz = (static_cast<float>(rand()) / RAND_MAX + kFireworkZBaseOffset) * rangeZ_;
-        float ry = (static_cast<float>(rand()) / RAND_MAX + kFireworkYBaseOffset) * minY_;
-        param.position = { rx, ry, rz };
-        param.scale = { 1.0f, 1.0f, 1.0f };
-        param.isLoop = false;
-        EffectManager::GetInstance()->PlayEffect3D(kFireworkEffectName, param);
+        float ry = baseY_ + (static_cast<float>(rand()) / RAND_MAX) * rangeY_;
+        float rz = baseZ_ + (static_cast<float>(rand()) / RAND_MAX) * rangeZ_;
+        Vector3 fireworkPos = { rx, ry, rz };
+        EffectManager::GetInstance()->PlayGPUEffect(fireworkPos, kGpuFireworkParticleCount);
     }
-    EffectManager::GetInstance()->Update();
 }
 
 /// <summary>
-/// 祝砲花火エフェクトの3D描画を実行します。
+/// 祝砲花火エフェクトの3D描画を実行します（Scene::Draw()にて一括描画されるため空実装）。
 /// </summary>
 void ClearDirectorScript::Draw() {
-    // 花火エフェクトの 3D 描画
-    EffectManager::GetInstance()->Draw();
 }
 
 void ClearDirectorScript::OnInspectorGUI() {
@@ -85,9 +79,17 @@ void ClearDirectorScript::OnInspectorGUI() {
     }
     ImGui::DragInt("Min Interval", &minInterval_, 1.0f, 1, 300);
     ImGui::DragInt("Interval Range", &maxIntervalRange_, 1.0f, 1, 300);
-    ImGui::DragFloat("Range X", &rangeX_, 1.0f, 0.0f, 200.0f);
-    ImGui::DragFloat("Range Z", &rangeZ_, 1.0f, 0.0f, 200.0f);
-    ImGui::DragFloat("Min Y", &minY_, 0.5f, -50.0f, 50.0f);
+    ImGui::DragFloat("Range X (横幅)", &rangeX_, 1.0f, 0.0f, 200.0f);
+    ImGui::DragFloat("Base Y (高さ基準)", &baseY_, 0.5f, -20.0f, 50.0f);
+    ImGui::DragFloat("Range Y (高さ幅)", &rangeY_, 0.5f, 0.0f, 50.0f);
+    ImGui::DragFloat("Base Z (奥行き基準)", &baseZ_, 0.5f, 0.0f, 100.0f);
+    ImGui::DragFloat("Range Z (奥行き幅)", &rangeZ_, 0.5f, 0.0f, 100.0f);
+
+    ImGui::Separator();
+    if (ImGui::Button("🎆 GPU祝砲花火を手動発射 (3,000粒子)")) {
+        EffectManager::GetInstance()->PlayGPUEffect(kManualFireworkPos, kGpuFireworkParticleCount);
+    }
+    ImGui::Checkbox("「エフェクト一覧」ウィンドウを表示", EffectManager::GetShowListWindowPtr());
 #endif
 }
 

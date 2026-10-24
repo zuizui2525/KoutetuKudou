@@ -4,6 +4,7 @@
 #include <wrl.h>
 #include <vector>
 #include <string>
+#include <map>
 
 // --- 定数バッファ用構造体 (16バイトアライメントに注意) ---
 
@@ -46,9 +47,33 @@ struct MaterialData {
     std::string textureFilePath;
 };
 
+struct Node {
+    QuaternionTransform transform;
+    Matrix4x4 localMatrix;
+    std::string name;
+    std::vector<Node> children;
+};
+
+// スキニング用の頂点ウェイト情報 (ModelLoader抽出用)
+struct VertexWeightData {
+    float weight = 0.0f;
+    uint32_t vertexIndex = 0;
+};
+
+// ボーンごとの逆バインドポーズ行列と頂点インフルエンスリスト
+struct JointWeightData {
+    Matrix4x4 inverseBindPoseMatrix;
+    std::vector<VertexWeightData> vertexWeights;
+};
+
 struct ModelData {
     std::vector<VertexData> vertices;
+    std::vector<uint32_t> indices;
     MaterialData material;
+    Node rootNode;
+    std::map<std::string, JointWeightData> skinClusterData; // ボーン名 -> ウェイト情報
     Microsoft::WRL::ComPtr<ID3D12Resource> vertexResource;
-    D3D12_VERTEX_BUFFER_VIEW vbv;
+    D3D12_VERTEX_BUFFER_VIEW vbv{};
+    Microsoft::WRL::ComPtr<ID3D12Resource> indexResource;
+    D3D12_INDEX_BUFFER_VIEW ibv{};
 };

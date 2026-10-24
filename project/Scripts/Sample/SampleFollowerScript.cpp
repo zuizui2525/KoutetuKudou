@@ -3,6 +3,9 @@
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/Components/BoxColliderComponent.h"
 #include "Engine/Math/Collision/Collision.h"
+#include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Core/Scene.h"
+#include "Scripts/Player/PlayerControllerScript.h"
 #include <cmath>
 
 #ifdef _USEIMGUI
@@ -36,6 +39,22 @@ void SampleFollowerScript::Start() {
 }
 
 void SampleFollowerScript::OnUpdate() {
+    // ターゲットが未設定ならシーン内からプレイヤー（SamplePlayer または Player）を自動検索
+    if (!targetObject_) {
+        if (auto* scene = dynamic_cast<Scene*>(SceneManager::GetInstance()->GetCurrentScene())) {
+            for (const auto& obj : scene->GetGameObjects()) {
+                if (obj) {
+                    if (obj->GetName() == "SamplePlayer" || obj->GetName() == "Player" ||
+                        obj->GetComponent<PlayerControllerScript>()) {
+                        targetObject_ = obj.get();
+                        targetUUID_ = obj->GetUUID();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     if (!owner_ || !targetObject_) return;
 
     Vector3 selfPos = owner_->GetPosition();

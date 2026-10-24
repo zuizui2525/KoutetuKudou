@@ -6,7 +6,7 @@
     "transform": {
       "position": [0, 0, 0],
       "rotation": [0, 0, 0],
-      "scale": [0.2, 0.2, 0.2]
+      "scale": [1, 1, 1]
     },
     "components": [
       {
@@ -15,13 +15,13 @@
         "texture_key": "white",
         "model_key": "cube",
         "env_map_key": "",
-        "color": [1, 0.9, 0.2, 1],
+        "color": [1.0, 0.95, 0.4, 1.0],
         "lighting_mode": 0,
         "shininess": 30,
         "environment_coefficient": 0,
         "offset_position": [0, 0, 0],
         "offset_rotation": [0, 0, 0],
-        "offset_scale": [1, 1, 1]
+        "offset_scale": [0.2, 0.2, 1.2]
       },
       {
         "type": "SphereCollider",
@@ -29,13 +29,6 @@
         "radius": 0.4,
         "is_trigger": true,
         "show_gizmo": false
-      },
-      {
-        "type": "ParticleEffect",
-        "effect_name": "YellowFire",
-        "offset": [0, 0, 0],
-        "loop": true,
-        "auto_play": true
       },
       {
         "type": "ScriptComponent",

@@ -1,4 +1,4 @@
-﻿#include "Engine/Graphics/PSO/RootSignature/RootSignatureBuilder.h"
+#include "Engine/Graphics/PSO/RootSignature/RootSignatureBuilder.h"
 
 RootSignatureBuilder::RootSignatureBuilder() {
     rootParams_.clear();
@@ -46,6 +46,28 @@ void RootSignatureBuilder::AddSRV(UINT shaderRegister, D3D12_SHADER_VISIBILITY v
     rootParams_.push_back(param);
 }
 
+void RootSignatureBuilder::AddUAV(UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility) {
+    // 1. レンジ（範囲）を作成
+    D3D12_DESCRIPTOR_RANGE range{};
+    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV; // UAVを使う
+    range.NumDescriptors = 1;
+    range.BaseShaderRegister = shaderRegister; // u0, u1...
+    range.RegisterSpace = 0;
+    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // ベクターに保存 (Build時にポインタを使用するため)
+    ranges_.push_back(range);
+
+    // 2. ルートパラメータをテーブルとして設定
+    D3D12_ROOT_PARAMETER param{};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    param.ShaderVisibility = visibility;
+    param.DescriptorTable.NumDescriptorRanges = 1;
+    param.DescriptorTable.pDescriptorRanges = nullptr;
+
+    rootParams_.push_back(param);
+}
+
 void RootSignatureBuilder::AddSampler(const D3D12_SAMPLER_DESC& samplerDesc, UINT shaderRegister) {
     D3D12_STATIC_SAMPLER_DESC s{};
     s.Filter = samplerDesc.Filter;
@@ -65,7 +87,9 @@ void RootSignatureBuilder::AddSampler(const D3D12_SAMPLER_DESC& samplerDesc, UIN
     samplers_.push_back(s);
 }
 
-Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignatureBuilder::Build(ID3D12Device* device) {
+Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignatureBuilder::Build(
+    ID3D12Device* device,
+    D3D12_ROOT_SIGNATURE_FLAGS flags) {
     // ★重要: Descriptor Table のポインタ設定
     // ranges_ vector にデータが溜まった状態で、各パラメータに正しいアドレスをセットする
     int rangeIndex = 0;
@@ -81,7 +105,7 @@ Microsoft::WRL::ComPtr<ID3D12RootSignature> RootSignatureBuilder::Build(ID3D12De
     desc.pParameters = rootParams_.data();
     desc.NumStaticSamplers = static_cast<UINT>(samplers_.size());
     desc.pStaticSamplers = samplers_.data();
-    desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    desc.Flags = flags;
 
     Microsoft::WRL::ComPtr<ID3DBlob> signature;
     Microsoft::WRL::ComPtr<ID3DBlob> error;

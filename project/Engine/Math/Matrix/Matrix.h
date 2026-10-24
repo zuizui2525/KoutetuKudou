@@ -47,6 +47,17 @@ namespace Math {
 	Matrix4x4 MakeRotateMatrix(float roll, float pitch, float yaw);
 	// アフィン変換行列(Matrix4x4)
 	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Vector3& rotate, const Vector3& translate);
+	// クォータニオン回転行列(Matrix4x4)
+	Matrix4x4 MakeRotateMatrix(const Quaternion& q);
+	// クォータニオン版アフィン変換行列(Matrix4x4)
+	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate);
+
+	// 線形補間 (Lerp)
+	Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t);
+	// 球面線形補間 (Slerp)
+	Quaternion Slerp(const Quaternion& q0, const Quaternion& q1, float t);
+	// 単位クォータニオン
+	Quaternion IdentityQuaternion();
 	// 投視投影行列
 	Matrix4x4 MakePerspectiveFovMatrix(float fovY, float aspectRatio, float nearClip, float farClip);
 	// 正射影行列

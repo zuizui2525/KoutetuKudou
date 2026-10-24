@@ -136,6 +136,13 @@ void MeshRendererComponent::RecreateMeshObject() {
 
         // コンポーネント内部の描画メッシュなのでヒエラルキーからは即座に登録解除（余計なCubeが階層に出るのを防止）
         SceneHierarchy::GetInstance()->Unregister(meshObject_.get());
+
+        if (auto* model = dynamic_cast<ModelObject*>(meshObject_.get())) {
+            model->SetShowSkeleton(showSkeleton_);
+            if (isAnimationPlaying_ && !animationKey_.empty()) {
+                model->PlayAnimation(animationKey_);
+            }
+        }
     }
 }
 
@@ -343,5 +350,58 @@ void MeshRendererComponent::DrawInspector() {
     if (ImGui::SliderFloat("Env Reflection##MeshRenderer", &envCoef, 0.0f, 2.0f, "%.2f")) {
         SetEnvironmentCoefficient(envCoef);
     }
+
+    // 9. アニメーション設定 (Step 1: 資料 01.Animation)
+    if (meshType_ == MeshType::Model) {
+        ImGui::Separator();
+        ImGui::Text("Animation Control");
+        char animBuf[kTextBufferSize]{};
+        strncpy_s(animBuf, animationKey_.c_str(), sizeof(animBuf) - 1);
+        if (ImGui::InputText("Animation File Path##MeshRenderer", animBuf, sizeof(animBuf))) {
+            SetAnimationKey(animBuf);
+        }
+
+        bool playing = isAnimationPlaying_;
+        if (ImGui::Checkbox("Play Animation##MeshRenderer", &playing)) {
+            SetAnimationPlaying(playing);
+        }
+
+        bool showSkeleton = showSkeleton_;
+        if (ImGui::Checkbox("Show Skeleton (Bones)##MeshRenderer", &showSkeleton)) {
+            SetShowSkeleton(showSkeleton);
+        }
+    }
 #endif
+}
+
+void MeshRendererComponent::SetAnimationKey(const std::string& key) {
+    animationKey_ = key;
+    if (meshType_ == MeshType::Model && meshObject_ && isAnimationPlaying_ && !animationKey_.empty()) {
+        if (auto* model = dynamic_cast<ModelObject*>(meshObject_.get())) {
+            model->PlayAnimation(animationKey_);
+        }
+    }
+}
+
+void MeshRendererComponent::SetAnimationPlaying(bool play) {
+    isAnimationPlaying_ = play;
+    if (meshType_ == MeshType::Model && meshObject_) {
+        if (auto* model = dynamic_cast<ModelObject*>(meshObject_.get())) {
+            if (isAnimationPlaying_) {
+                std::string animPath = animationKey_.empty() ? modelKey_ : animationKey_;
+                model->PlayAnimation(animPath);
+            } else {
+                model->StopAnimation();
+            }
+        }
+    }
+}
+
+void MeshRendererComponent::SetShowSkeleton(bool show) {
+    showSkeleton_ = show;
+    if (meshType_ == MeshType::Model && meshObject_) {
+        if (auto* model = dynamic_cast<ModelObject*>(meshObject_.get())) {
+            model->SetShowSkeleton(showSkeleton_);
+        }
+    }
 }

@@ -8,6 +8,7 @@
 #include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
 #include "Engine/Graphics/Objects/Camera/Debug/DebugCamera.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectFactory.h"
 #include "Engine/Base/Log/Log.h"
 #include "App/Scene/Core/SceneSerializer.h"
 #include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
@@ -54,11 +55,15 @@ void App::Initialize() {
     // リソースの一括ロード
     ResourceLoader::LoadAll();
 
+    // エフェクトマネージャの初期化と全エフェクト登録
+    EffectManager::GetInstance()->Initialize();
+    EffectFactory::GetInstance()->RegisterAllEffects();
+
     sceneFactory_ = std::make_unique<SceneFactory>();
     SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
     SceneManager::GetInstance()->Initialize();
 
-    static const std::string kDefaultInitialSceneName = "Title";
+    static const std::string kDefaultInitialSceneName = "Debug";
     SceneManager::GetInstance()->ChangeSceneImmediate(kDefaultInitialSceneName);
 
     // --- PostProcess の初期化 ---
@@ -295,6 +300,7 @@ void App::Run() {
     if (!isPaused) {
         lightMgr_->Update();
         Log::Update(deltaTime);
+        EffectManager::GetInstance()->Update();
         SceneManager::GetInstance()->Update();
 
         // ゲーム実行中であっても、アクティブカメラが DebugCamera であればマウス・キー操作で飛び回れるように更新！
@@ -335,7 +341,8 @@ void App::Run() {
                 }
             }
 
-            // エフェクトの行列（WVP）もポーズ中に再計算して、デバッグカメラの移動を反映させる
+            // エフェクトの更新と行列再計算を行い、エディタ停止中もエフェクトのリアルタイムプレビューを可能にする
+            EffectManager::GetInstance()->Update();
             EffectManager::GetInstance()->UpdateMatrices();
         }
     }

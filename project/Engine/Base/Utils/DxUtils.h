@@ -30,4 +30,19 @@ namespace DxUtils {
 
     // ディスクリプタヒープの先頭から指定したインデックスのGPUディスクリプタハンドルを取得する
     D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(ID3D12DescriptorHeap* descriptorHeap, uint32_t descriptorSize, uint32_t index);
+
+    // Compute Shader等で使用するUAV（Unordered Access View）対応のDefaultバッファリソースを生成
+    [[nodiscard]]
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateUAVBufferResource(
+        ID3D12Device* device,
+        size_t sizeInBytes,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+
+    // 構造化バッファ（StructuredBuffer）に対するUAV（Unordered Access View）を作成
+    void CreateBufferUAV(
+        ID3D12Device* device,
+        ID3D12Resource* resource,
+        uint32_t numElements,
+        uint32_t structureByteStride,
+        D3D12_CPU_DESCRIPTOR_HANDLE destHandle);
 }

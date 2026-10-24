@@ -6,8 +6,8 @@
       "name": "MainCamera",
       "visible": true,
       "transform": {
-        "position": [0, 120, 60],
-        "rotation": [1.57079, 0, 0],
+        "position": [0, 1.8, 0],
+        "rotation": [-0, 0, 0],
         "scale": [1, 1, 1]
       },
       "components": [
@@ -83,7 +83,8 @@
         {
           "type": "ScriptComponent",
           "script_name": "PlayerControllerScript",
-          "target_uuid": ""
+          "target_uuid": "",
+          "move_speed": 0.05
         }
       ]
     },
@@ -116,9 +117,9 @@
     {
       "uuid": "11111111-2222-3333-4444-555555550006",
       "name": "ReticleUI",
-      "visible": true,
+      "visible": false,
       "transform": {
-        "position": [640, 360, 0],
+        "position": [1216, -64, 0],
         "rotation": [0, 0, 0],
         "scale": [1, 1, 1]
       },
@@ -142,6 +143,3542 @@
           "type": "ScriptComponent",
           "script_name": "ReticleControllerScript",
           "target_uuid": ""
+        }
+      ]
+    },
+    {
+      "uuid": "27d32158-d6c2-4415-a445-93cb472e4fad",
+      "name": "LeftPillar_0",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "55a9b0ad-e2e0-4667-a326-192766fb80a7",
+      "name": "RightPillar_0",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "0a1f2cd8-2b93-454f-a3aa-61a65c2d707d",
+      "name": "LeftPillar_1",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "22d93104-4b40-41db-a78b-29d8e8f22f7f",
+      "name": "RightPillar_1",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "60a156b2-1969-4a5a-9f99-54ac50a259dd",
+      "name": "LeftPillar_2",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "78436956-eaae-4518-9d8c-d199c313b35d",
+      "name": "RightPillar_2",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "037a5a3f-aa92-4cb1-8ecc-26c09c2dcd56",
+      "name": "LeftPillar_3",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "49430f8b-84ad-4767-bf40-36b3d22afba6",
+      "name": "RightPillar_3",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "9ec39d5e-7a94-49f6-86ed-19a77f14c8f6",
+      "name": "LeftPillar_4",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "84f3cf47-720a-44c0-9a5c-de9ab8a3af41",
+      "name": "RightPillar_4",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "40c04a06-c11f-4d3b-bafd-dcc570a54273",
+      "name": "LeftPillar_5",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "81db538d-7cab-4252-8c09-0c43848e2d48",
+      "name": "RightPillar_5",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8fecdb98-40e4-4707-969d-87564021c6cf",
+      "name": "LeftPillar_6",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8d57336f-48a3-46e6-9e6d-f8dd67893596",
+      "name": "RightPillar_6",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8fa224fe-d6e8-4c06-8964-f0329f8d62c6",
+      "name": "LeftPillar_7",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8dff380d-e9ee-45ba-9c10-a1a27dd0bc8e",
+      "name": "RightPillar_7",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "864b17fe-9a45-4aae-bc1c-a5b2fa5aebd0",
+      "name": "LeftPillar_8",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "fc532313-c8f8-4ad5-922b-501e9a713f3a",
+      "name": "RightPillar_8",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "1099000e-266e-40f2-ab5e-61aa282ded05",
+      "name": "LeftPillar_9",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "93519d72-3db9-45cd-b7b0-8401a953af9b",
+      "name": "RightPillar_9",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f570d7b3-9ac4-453b-b9a1-449b7d0457b6",
+      "name": "LeftPillar_10",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c6242863-0539-48ba-bfaf-e64ac38711fa",
+      "name": "RightPillar_10",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6aa5f288-ff10-4ba8-a5ea-b9188c998bec",
+      "name": "LeftPillar_11",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "64b5e023-a015-4784-80a5-112c9a01e3ac",
+      "name": "RightPillar_11",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "7426725e-733b-4d6d-a09b-505b02b40808",
+      "name": "LeftPillar_12",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "49887e35-b4b3-4681-8ca6-f66871f7578b",
+      "name": "RightPillar_12",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "95b0b455-44b8-4f65-bdff-de41ebc2aecc",
+      "name": "LeftPillar_13",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a850bacd-41bb-42af-b049-40191d1b8adb",
+      "name": "RightPillar_13",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "2c4ba692-7f1e-433a-b4fc-026f4b5e273a",
+      "name": "LeftPillar_14",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "271e962a-82a0-49de-a75a-68a972022760",
+      "name": "RightPillar_14",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5ddaa9bd-2bbb-4d1c-8cf9-a730739a2e07",
+      "name": "LeftPillar_15",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6289c789-0a6b-43f0-af41-764abbafd03c",
+      "name": "RightPillar_15",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "909393a8-5b2c-4467-8c8e-b794e46f955a",
+      "name": "LeftPillar_16",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "7cd62a5c-29cb-448e-9233-e668a39b41c4",
+      "name": "RightPillar_16",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e26018dc-fbfc-4248-8b86-022a13ddb89d",
+      "name": "LeftPillar_01",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8b5774a1-3451-409c-ab02-bd2150880801",
+      "name": "RightPillar_01",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "083e27f7-5b4b-40a4-8e41-b83a06257b2f",
+      "name": "LeftPillar_17",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f1e885a9-fa18-42ff-a213-7162c7ef6a4a",
+      "name": "RightPillar_17",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "ab7dc931-7ca6-45af-ba78-76658aee9e7e",
+      "name": "LeftPillar_21",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "2a198b33-33c6-4aa9-bb71-68ebede3b752",
+      "name": "RightPillar_21",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "99d8cb36-6574-4938-a828-dbc883949ea0",
+      "name": "LeftPillar_31",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e007fefe-695e-460f-9a90-8f60f0f85ac6",
+      "name": "RightPillar_31",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f9205bd2-8327-46b8-b21d-16fb064b8d13",
+      "name": "LeftPillar_41",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e9107bc6-db6c-4393-8ec1-11e036f02f45",
+      "name": "RightPillar_41",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "27d91d0c-df86-4964-a3b5-bec593d89cc6",
+      "name": "LeftPillar_51",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c9b27d37-4787-4f32-b3e7-7a02d2368c36",
+      "name": "RightPillar_51",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "70e35fd3-7644-4e5d-8e61-b198a9ba77c0",
+      "name": "LeftPillar_61",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "bad1ccdf-a862-463f-a98e-90149f0433cf",
+      "name": "RightPillar_61",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "573d4f73-e44d-4e1b-bb27-221da8f5f532",
+      "name": "LeftPillar_71",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "9af87a56-f427-4f8e-a7b8-6a147b721cdd",
+      "name": "RightPillar_71",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "58233143-497e-4e42-a857-3b60e8c32655",
+      "name": "LeftPillar_81",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "47d47021-ff34-4628-aa80-365d9c6e82f8",
+      "name": "RightPillar_81",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6a0569e2-85d2-4eeb-b403-e057d5deeb00",
+      "name": "LeftPillar_91",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "fdc2b2a5-1fec-4a02-bb9a-1194ebedaea2",
+      "name": "RightPillar_91",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "b3079674-bfb4-4c2e-b463-6b4c274de7fb",
+      "name": "LeftPillar_101",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5c9488f9-057b-4783-a8d5-d48bf25d7c51",
+      "name": "RightPillar_101",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5f45496a-45a9-452d-981b-afc49291dbb1",
+      "name": "LeftPillar_111",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5c588cdd-9673-4f26-a44f-ce975f0aa79f",
+      "name": "RightPillar_111",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "2ffe0364-50bd-4f4d-88f5-1ed9a5174afe",
+      "name": "LeftPillar_121",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "99d93bf5-4a12-4c32-a4e8-d1b98cf04b09",
+      "name": "RightPillar_121",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "dd4ee49c-85e9-4f01-bfc7-f2dd13c1769d",
+      "name": "LeftPillar_131",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "89880cf7-e493-404c-9e95-18a7ea619377",
+      "name": "RightPillar_131",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "06b202e6-c4f7-48f6-b06f-9e04d34b0463",
+      "name": "LeftPillar_141",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "64b3c9da-6327-4500-9a89-5b347abedf4f",
+      "name": "RightPillar_141",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e6c305e9-84f8-48b2-a1f2-83cadb0fb49b",
+      "name": "LeftPillar_151",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "dd86d073-67a1-46c1-b320-ce96f738ddc6",
+      "name": "RightPillar_151",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "cc9d8f6c-20d0-4893-8f2f-3a30b87fb9bd",
+      "name": "LeftPillar_161",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "0aaf97d9-3818-430d-ac4a-84e1d0c555ce",
+      "name": "RightPillar_161",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e41cdd34-c29a-4fd9-9d9c-29fcb3359de0",
+      "name": "LeftPillar_02",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "2993cc8f-ed47-4c59-8872-2c72d892583b",
+      "name": "RightPillar_02",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "936c38f1-3850-4ffd-9a15-2612633c7fcf",
+      "name": "LeftPillar_18",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "3bf418ea-9eeb-4acb-b446-26480b4ec9fe",
+      "name": "RightPillar_18",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a80dd39c-115b-4fbd-851d-13e031fe19ff",
+      "name": "LeftPillar_22",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "1cf9558f-7d6f-4f7c-adb1-6187f6fe9e72",
+      "name": "RightPillar_22",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "7a1ec60b-7da6-484d-9a93-a7e996c32f47",
+      "name": "LeftPillar_32",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "4d4018b5-a465-4df6-9ecc-ec362e8350ba",
+      "name": "RightPillar_32",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "80f93c6a-4a5b-4cbb-a9ec-921363ee42ed",
+      "name": "LeftPillar_42",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a86677fd-40a9-4fdd-b4c0-5056a921d9a8",
+      "name": "RightPillar_42",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a4d74673-28c2-480c-96dc-746a8fc59f0a",
+      "name": "LeftPillar_52",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "d189ccf9-5774-4c40-a77d-de725d190a7c",
+      "name": "RightPillar_52",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "d0535955-246e-4802-85de-1b8ed78cd1d2",
+      "name": "LeftPillar_62",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e5ea7497-e311-4d8a-9dd1-9de1fc466611",
+      "name": "RightPillar_62",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5f8c158b-567e-43b8-95fb-d76a3118306f",
+      "name": "LeftPillar_72",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "4a096852-dd07-43a5-a960-54a5eff842b1",
+      "name": "RightPillar_72",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "701ed160-2f18-4796-898f-c75b00431d4e",
+      "name": "LeftPillar_82",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "b765216c-4ccd-41ba-b940-bfdefb75cb2a",
+      "name": "RightPillar_82",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "faef1a8a-0847-4963-aef1-66a3634581c4",
+      "name": "LeftPillar_92",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f1393b30-db15-456c-aa01-eed21955feac",
+      "name": "RightPillar_92",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "18240e71-b73f-4f72-ad76-c21598a53906",
+      "name": "LeftPillar_102",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6fe7e4e8-31f9-4e1f-8527-41aa5a4e9f05",
+      "name": "RightPillar_102",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "94f3e424-6723-4742-a80b-8e2ffb0e8c90",
+      "name": "LeftPillar_112",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "e9487e9b-129a-4bf2-b505-bfa5fef2ca57",
+      "name": "RightPillar_112",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c5ccb28e-8500-44ce-8ac7-d91c19b4e6cb",
+      "name": "LeftPillar_122",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "506ca5b8-606d-476c-b974-263dbeb29869",
+      "name": "RightPillar_122",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f0bbce5a-d43d-474f-98e0-12fa2892fcd9",
+      "name": "LeftPillar_132",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "248bcd89-403f-4992-a0ee-641b9a545d20",
+      "name": "RightPillar_132",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "cc781d5a-26f2-4f31-91c8-8050b4dbc70e",
+      "name": "LeftPillar_142",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c80f63f6-86ec-4ab6-8993-bcf624f98717",
+      "name": "RightPillar_142",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "8fa31d40-d694-4638-b2b2-4d9fbe68df54",
+      "name": "LeftPillar_152",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "eec1e685-4c61-4eb0-8eda-0013b39f0fe9",
+      "name": "RightPillar_152",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a7d15481-5485-45d7-9581-d4fad98e1526",
+      "name": "LeftPillar_162",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "149003e1-30c3-4ef0-8293-11547f47ebb6",
+      "name": "RightPillar_162",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "83eb079c-a274-4be2-a6a7-cae5626539f6",
+      "name": "LeftPillar_03",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "f6a5836a-b81d-4999-944c-ac3640b03828",
+      "name": "RightPillar_03",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "68636e8c-6ecb-4fb5-a963-ef3850cb2e28",
+      "name": "LeftPillar_19",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "182ea0aa-9122-484a-bfba-d71686824919",
+      "name": "RightPillar_19",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 30],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6f00d7d5-9cc2-421d-8d08-83ceed05dc7e",
+      "name": "LeftPillar_23",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "20f5733b-7e6e-4203-b1f5-27362721f55b",
+      "name": "RightPillar_23",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 60],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "94476bf8-3eb5-4e24-a64b-addb14fa0384",
+      "name": "LeftPillar_33",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "9a1a72c3-1086-4210-8b99-fa7710f2aa8c",
+      "name": "RightPillar_33",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 90],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "752c6822-c7b8-4e55-8961-a9fd82a5036d",
+      "name": "LeftPillar_43",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "0a2551c8-7ec5-46bd-bd76-f2e0c3e81aa3",
+      "name": "RightPillar_43",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 120],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "652d1cc2-fb51-41f5-8f8e-8021fa741fb7",
+      "name": "LeftPillar_53",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "eb014cdf-2036-47bd-a43f-611b6fe17b64",
+      "name": "RightPillar_53",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 150],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "5da34027-277d-488a-9a13-1181611d2289",
+      "name": "LeftPillar_63",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6317e425-2d3f-4b1f-abd1-320534fc0347",
+      "name": "RightPillar_63",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 180],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "a8eeedca-985a-4c97-84c0-b012a591eb5d",
+      "name": "LeftPillar_73",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "54351cc1-0cef-4c9c-9226-76c9f1fe88c1",
+      "name": "RightPillar_73",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 210],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "871b8adf-dc00-4a10-be6c-2892a60baed7",
+      "name": "LeftPillar_83",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "4c094f82-ad8a-4e8c-8ef6-ce17efccd06d",
+      "name": "RightPillar_83",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 240],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "660966dc-ab12-49b1-a7e7-14eceba1b679",
+      "name": "LeftPillar_93",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "72a0f9ae-6424-4e6a-9ea5-42fa84233de0",
+      "name": "RightPillar_93",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 270],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "aa2fa6be-1230-4132-8cb0-829d968bc29b",
+      "name": "LeftPillar_103",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c63d4b1b-1da8-4bef-9495-8483e32eda98",
+      "name": "RightPillar_103",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 300],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "85a9f39a-0193-4b00-b733-4f26abeef6d9",
+      "name": "LeftPillar_113",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "29f95c6a-e437-4e37-a38c-aebc6b0c8aa1",
+      "name": "RightPillar_113",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 330],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "327247db-0970-4a9b-a734-c883a7e13892",
+      "name": "LeftPillar_123",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "beb31b30-dc48-4228-a91e-c16d825d10f0",
+      "name": "RightPillar_123",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 360],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "31c994f7-e00e-47ac-bfd5-5992fb43a53a",
+      "name": "LeftPillar_133",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "c4eeb62a-936f-4710-b060-d21d67187aed",
+      "name": "RightPillar_133",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 390],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "59560efd-9e24-4bb5-bf48-2f161a547db6",
+      "name": "LeftPillar_143",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "0b777924-c7a3-4eff-af42-2b7e75570e27",
+      "name": "RightPillar_143",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 420],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "6b9db9cf-6c61-4e7a-94fd-18a5ef3f933c",
+      "name": "LeftPillar_153",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "cc6d6a92-7626-43a9-8d96-5b42ad4be127",
+      "name": "RightPillar_153",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 450],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.25, 0.28, 0.35, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "9ed6e77a-f0e0-41bd-99db-ee65ab6f560d",
+      "name": "LeftPillar_163",
+      "visible": true,
+      "transform": {
+        "position": [-50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
+        }
+      ]
+    },
+    {
+      "uuid": "31064a36-e43b-420b-a069-ee9a0f74864b",
+      "name": "RightPillar_163",
+      "visible": true,
+      "transform": {
+        "position": [50, 4, 480],
+        "rotation": [0, 0, 0],
+        "scale": [1, 8, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 0,
+          "texture_key": "white",
+          "model_key": "cube",
+          "env_map_key": "",
+          "color": [0.7, 0.6, 0.2, 1],
+          "lighting_mode": 2,
+          "shininess": 30,
+          "environment_coefficient": 1,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     }

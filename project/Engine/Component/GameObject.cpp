@@ -21,6 +21,7 @@
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
 #include <cmath>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <cstring>
@@ -48,6 +49,41 @@ namespace {
     char sNewScriptBuffer[kScriptBufferLength] = "";
     bool sOpenNewScriptModal = false;
 
+    // --- AntiGravity風モダンUI インスペクター定数 (マジックナンバー排除) ---
+    // カード背景色: ウィンドウ背景(0.06f)よりさらに深く沈み込んだ漆黒ダーク（引き締まった外観）
+    constexpr ImVec4 kModernCardBg = { 0.035f, 0.035f, 0.045f, 0.98f };
+    // カード外枠ボーダー: 繊細でシャープな1px暗色ボーダー
+    constexpr ImVec4 kModernCardBorder = { 0.140f, 0.150f, 0.180f, 0.85f };
+    // カード角丸
+    constexpr float kModernCardRounding = 3.0f;
+    // カード内部パディング
+    constexpr float kCardPaddingX = 4.0f; // 内部インデントを詰めてコントロール有効幅を拡大
+    constexpr float kCardPaddingY = 6.0f;
+    constexpr float kCardSpacingY = 8.0f;
+    constexpr float kCardExpandX = 3.0f;  // カード枠を左右へダイナミックにワイド化
+
+    // コントロール文字飛び出し防止＆引き延ばし連動用プロポーショナル幅定数 (マジックナンバー排除)
+    constexpr float kComponentItemWidthRatio = 0.45f; // 利用可能幅の45%をコントロールに割り当て、55%をラベル領域に確保
+    constexpr float kComponentItemMinWidth = 100.0f;  // 最小スライダー幅
+    constexpr float kComponentItemMaxWidth = 200.0f;  // 最大スライダー幅（引き延ばした際にラベルスペースが広大に広がる）
+
+    constexpr float kTransformItemWidthRatio = 0.55f; // Transform用（3連ドラッグ）
+    constexpr float kTransformItemMinWidth = 120.0f;
+    constexpr float kTransformItemMaxWidth = 260.0f;
+
+    // 一体化ヘッダー（タイトルバー）背景色: 白浮き・青灰色感を完全に排除した落ち着いた超ダーク
+    constexpr ImVec4 kModernHeaderBg = { 0.070f, 0.075f, 0.090f, 1.0f };
+    constexpr ImVec4 kModernHeaderHovered = { 0.110f, 0.115f, 0.135f, 1.0f };
+    constexpr ImVec4 kModernHeaderActive = { 0.140f, 0.145f, 0.170f, 1.0f };
+
+    // アクセントバー定数
+    constexpr float kScriptAccentBarWidth = 2.5f;
+    constexpr float kDefaultAccentBarWidth = 2.0f;
+    constexpr ImVec4 kScriptAccentBar = { 0.28f, 0.45f, 0.65f, 0.85f }; // スクリプト用控えめなスレートブルー
+    constexpr ImVec4 kDefaultComponentAccentBar = { 0.20f, 0.22f, 0.26f, 0.80f };
+
+
+
     void CreateScriptTemplateFiles(const std::string& scriptName) {
         std::filesystem::create_directories(kScriptsDirectory);
 
@@ -60,14 +96,55 @@ namespace {
             if (ofs.is_open()) {
                 ofs << "#pragma once\n";
                 ofs << "#include \"Engine/Component/ScriptComponent.h\"\n\n";
+                ofs << "/// <summary>\n";
+                ofs << "/// 【スクリプトクラス: " << scriptName << "】\n";
+                ofs << "/// UnityのMonoBehaviourに相当するユーザースクリプトコンポーネントです。\n";
+                ofs << "/// \n";
+                ofs << "/// ■ 基底クラス (ScriptComponent) で最初から利用可能な主なメンバー変数・関数:\n";
+                ofs << "///   - GetOwner()           : このスクリプトがアタッチされている GameObject へのポインタ\n";
+                ofs << "///                            (例: GetOwner()->transform_.translate で自身の座標操作)\n";
+                ofs << "///   - targetObject_        : インスペクターの「Target Object」スロットから登録した外部GameObjectへのポインタ\n";
+                ofs << "///   - targetUUID_          : targetObject_ の識別UUID文字列 (シーン保存・復元用)\n";
+                ofs << "///   - Instantiate(prefab, pos, rot) : プレハブから動的にゲームオブジェクトを生成\n";
+                ofs << "///   - Destroy(gameObject)  : ゲームオブジェクトを安全に破棄\n";
+                ofs << "///   - ShakeCamera(intensity, duration) : カメラシェイク(画面揺れ演出)を発生\n";
+                ofs << "///   - DrawGameObjectSlot(\"名前\", uuid, objPtr) : インスペクターにドラッグ＆ドロップ可能な参照スロットを描画\n";
+                ofs << "/// </summary>\n";
                 ofs << "class " << scriptName << " : public ScriptComponent {\n";
                 ofs << "public:\n";
                 ofs << "    " << scriptName << "() : ScriptComponent(\"" << scriptName << "\") {}\n";
                 ofs << "    ~" << scriptName << "() override = default;\n\n";
-                ofs << "    void Awake() override;\n";
-                ofs << "    void Start() override;\n";
-                ofs << "    void OnUpdate() override;\n";
-                ofs << "    void OnInspectorGUI() override;\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// コンポーネント生成直後に1度だけ呼ばれる初期化処理\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void Awake() override;\n\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// 最初のフレーム更新直前に1度だけ呼ばれる初期化処理\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void Start() override;\n\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// 毎フレーム呼ばれる更新ロジック (移動・入力処理など)\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void OnUpdate() override;\n\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// インスペクターUI描画処理 (ImGuiでパラメータを自由に公開・編集可能)\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void OnInspectorGUI() override;\n\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// ゲーム画面上のHUD / UI描画処理 (画面への文字やゲージの描画)\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void OnGUI() override;\n\n";
+                ofs << "    /// <summary>\n";
+                ofs << "    /// コンポーネント破棄時の後始末処理\n";
+                ofs << "    /// </summary>\n";
+                ofs << "    void OnDestroy() override;\n\n";
+                ofs << "private:\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // メンバ変数の宣言例 (マジックナンバーを排除し、インスペクターで調整可能に)\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    float moveSpeed_ = 5.0f;           // 移動速度\n";
+                ofs << "    bool isEnabledFeature_ = true;     // 機能の有効/無効フラグ\n";
+                ofs << "    Vector3 initialPosition_{};        // 開始座標のキャッシュ\n";
                 ofs << "};\n";
             }
         }
@@ -78,24 +155,77 @@ namespace {
             if (ofs.is_open()) {
                 ofs << "#include \"" << scriptName << ".h\"\n";
                 ofs << "#include \"Engine/Component/ScriptRegistry.h\"\n";
+                ofs << "#include \"Engine/Component/GameObject.h\"\n";
                 ofs << "#ifdef _USEIMGUI\n";
                 ofs << "#include <imgui.h>\n";
                 ofs << "#endif\n\n";
+                ofs << "// =================================================================\n";
                 ofs << "// スクリプト自動登録マクロ（エディタ認識用）\n";
+                ofs << "// ※この記述を残しておくことで、エディタのAdd Componentやコンテンツブラウザから即座に認識されます\n";
+                ofs << "// =================================================================\n";
                 ofs << "REGISTER_SCRIPT(" << scriptName << ")\n\n";
                 ofs << "void " << scriptName << "::Awake() {\n";
-                ofs << "    // コンポーネント生成直後の初期化\n";
+                ofs << "    // コンポーネント生成直後の初期化処理\n";
+                ofs << "    // ※自身のオーナー (GetOwner()) や初期状態のセットアップを行います\n";
                 ofs << "}\n\n";
                 ofs << "void " << scriptName << "::Start() {\n";
-                ofs << "    // 初回フレーム前の初期化\n";
+                ofs << "    // 初回フレーム更新直前の初期化処理\n";
+                ofs << "    // ※他オブジェクトの検索や、シーン配置完了後の初期値取得を行います\n";
+                ofs << "    if (auto* owner = GetOwner()) {\n";
+                ofs << "        initialPosition_ = owner->transform_.translate;\n";
+                ofs << "    }\n";
                 ofs << "}\n\n";
                 ofs << "void " << scriptName << "::OnUpdate() {\n";
-                ofs << "    // 毎フレームの更新ロジック\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // 毎フレームの更新ロジック (移動、入力処理、状態遷移など)\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    auto* owner = GetOwner();\n";
+                ofs << "    if (!owner) return;\n\n";
+                ofs << "    // 【移動処理の書き方例】\n";
+                ofs << "    // constexpr float kDeltaTime = 1.0f / 60.0f;\n";
+                ofs << "    // owner->transform_.translate.x += moveSpeed_ * kDeltaTime;\n\n";
+                ofs << "    // 【プレハブ動的生成の書き方例 (弾の発射など)】\n";
+                ofs << "    // if (/* 発射条件 */) {\n";
+                ofs << "    //     Vector3 spawnPos = owner->transform_.translate;\n";
+                ofs << "    //     GameObject* bullet = ScriptComponent::Instantiate(\"Bullet\", spawnPos, { 0.0f, 0.0f, 0.0f });\n";
+                ofs << "    // }\n\n";
+                ofs << "    // 【外部オブジェクト (targetObject_) を参照する書き方例】\n";
+                ofs << "    // if (targetObject_) {\n";
+                ofs << "    //     Vector3 targetPos = targetObject_->transform_.translate;\n";
+                ofs << "    //     // targetPosに向かって処理を行う\n";
+                ofs << "    // }\n";
                 ofs << "}\n\n";
                 ofs << "void " << scriptName << "::OnInspectorGUI() {\n";
                 ofs << "#ifdef _USEIMGUI\n";
-                ofs << "    ImGui::Text(\"Hello from " << scriptName << "!\");\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // インスペクター描画処理\n";
+                ofs << "    // ※ImGuiのウィジェットを使って、エディタ上でリアルタイムにパラメータを変更できます\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    constexpr float kSpeedMin = 0.0f;\n";
+                ofs << "    constexpr float kSpeedMax = 100.0f;\n";
+                ofs << "    constexpr float kSpeedDragStep = 0.1f;\n\n";
+                ofs << "    ImGui::Text(\"--- パラメータ設定 ---\");\n";
+                ofs << "    ImGui::DragFloat(\"移動速度 (Move Speed)\", &moveSpeed_, kSpeedDragStep, kSpeedMin, kSpeedMax, \"%.2f\");\n";
+                ofs << "    ImGui::Checkbox(\"機能の有効化 (Enable Feature)\", &isEnabledFeature_);\n\n";
+                ofs << "    // 独自のオブジェクト参照スロットを追加したい場合の書き方例:\n";
+                ofs << "    // static std::string customUUID;\n";
+                ofs << "    // static GameObject* customObj = nullptr;\n";
+                ofs << "    // DrawGameObjectSlot(\"Custom Target\", customUUID, customObj);\n";
                 ofs << "#endif\n";
+                ofs << "}\n\n";
+                ofs << "void " << scriptName << "::OnGUI() {\n";
+                ofs << "#ifdef _USEIMGUI\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // ゲーム画面 (GameView) 上へのHUD / UI描画\n";
+                ofs << "    // ※画面の特定位置にデバッグ情報やスコアを表示したい場合に使用します\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // ImGui::Text(\"Player Score: 100\");\n";
+                ofs << "#endif\n";
+                ofs << "}\n\n";
+                ofs << "void " << scriptName << "::OnDestroy() {\n";
+                ofs << "    // -------------------------------------------------------------\n";
+                ofs << "    // コンポーネント破棄時の後始末処理 (動的メモリの解放や終了通知など)\n";
+                ofs << "    // -------------------------------------------------------------\n";
                 ofs << "}\n";
             }
         }
@@ -243,8 +373,28 @@ void GameObject::DrawInspector() {
 #ifdef _USEIMGUI
     std::string idPrefix = "##" + name_;
 
-    // Transform 操作ヘッダー
-    if (ImGui::CollapsingHeader(("Transform" + idPrefix).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+    // Transform 操作ヘッダー（AntiGravity風モダン一体化カード）
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->ChannelsSplit(2);
+    drawList->ChannelsSetCurrent(1); // 前景チャンネル（ヘッダーとコンテンツを描画）
+
+    ImVec2 transformCardStartPos = ImGui::GetCursorScreenPos();
+    float availWidth = ImGui::GetContentRegionAvail().x;
+
+    ImGui::PushStyleColor(ImGuiCol_Header, kModernHeaderBg);
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kModernHeaderHovered);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, kModernHeaderActive);
+    bool isTransformOpen = ImGui::CollapsingHeader(("Transform" + idPrefix).c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+    ImGui::PopStyleColor(3);
+
+    if (isTransformOpen) {
+        ImGui::Spacing();
+        ImGui::Indent(kCardPaddingX);
+
+        ImGui::BeginGroup();
+        float tfItemWidth = std::clamp(availWidth * kTransformItemWidthRatio, kTransformItemMinWidth, kTransformItemMaxWidth);
+        ImGui::PushItemWidth(tfItemWidth);
+
         if (ImGui::DragFloat3(("Position" + idPrefix).c_str(), &transform_.translate.x, kDragSpeed, 0.0f, 0.0f, "%.2f")) {
             isMatrixDirty_ = true;
         }
@@ -254,6 +404,8 @@ void GameObject::DrawInspector() {
         if (ImGui::DragFloat3(("Scale" + idPrefix).c_str(), &transform_.scale.x, kDragSpeed, kMinScale, kMaxScale, "%.2f")) {
             isMatrixDirty_ = true;
         }
+
+        ImGui::PopItemWidth();
 
         if (Is2D()) {
             ImGui::Spacing();
@@ -291,13 +443,32 @@ void GameObject::DrawInspector() {
                 }
             }
         }
+
+        ImGui::Spacing();
+        ImGui::EndGroup();
+        ImGui::Unindent(kCardPaddingX);
+
+        ImVec2 cardEndPos = ImGui::GetItemRectMax();
+        ImVec2 rectMin = ImVec2(transformCardStartPos.x - kCardExpandX, transformCardStartPos.y);
+        ImVec2 rectMax = ImVec2(transformCardStartPos.x + availWidth + kCardExpandX, cardEndPos.y + kCardPaddingY * 0.5f);
+
+        // 背景チャンネルに切り替えて、コントロールの背面に確実に描画（濁り・白浮きの根絶）
+        drawList->ChannelsSetCurrent(0);
+        drawList->AddRectFilled(rectMin, rectMax, ImGui::ColorConvertFloat4ToU32(kModernCardBg), kModernCardRounding);
+        drawList->AddRect(rectMin, rectMax, ImGui::ColorConvertFloat4ToU32(kModernCardBorder), kModernCardRounding);
+        drawList->AddRectFilled(rectMin, ImVec2(rectMin.x + kDefaultAccentBarWidth, rectMax.y),
+                                ImGui::ColorConvertFloat4ToU32(kDefaultComponentAccentBar), kModernCardRounding, ImDrawFlags_RoundCornersLeft);
+
+        ImGui::Spacing();
     }
+    drawList->ChannelsMerge();
 
     if (isMatrixDirty_) {
         UpdateMatrix();
     }
 
     ImGui::Separator();
+    ImGui::Spacing();
 
     // 保持している各コンポーネントの描画
     int removeIndex = -1;
@@ -307,27 +478,85 @@ void GameObject::DrawInspector() {
 
         ImGui::PushID(static_cast<int>(i));
 
-        std::string headerName = comp->GetComponentTypeName();
+        auto* scriptComp = dynamic_cast<ScriptComponent*>(comp.get());
+        bool isScript = (scriptComp != nullptr);
+
+        std::string headerName;
+        if (isScript) {
+            std::string sName = scriptComp->GetScriptName();
+            if (sName.empty()) {
+                sName = comp->GetComponentTypeName();
+            }
+            headerName = "[Script] " + sName;
+        } else {
+            headerName = comp->GetComponentTypeName();
+        }
+
+        // 前景チャンネル（ヘッダーと内部コンテンツ）
+        drawList->ChannelsSplit(2);
+        drawList->ChannelsSetCurrent(1);
+
+        ImVec2 cardStartPos = ImGui::GetCursorScreenPos();
+        float compAvailWidth = ImGui::GetContentRegionAvail().x;
+
+        // 一体化ヘッダー背景色（全コンポーネント・スクリプトで統一された落ち着いた超ダーク）
+        ImGui::PushStyleColor(ImGuiCol_Header, kModernHeaderBg);
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kModernHeaderHovered);
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, kModernHeaderActive);
+
         bool isComponentAlive = true;
         // ImGui公式のクローズボックス付きCollapsingHeaderを使用
         bool isHeaderOpen = ImGui::CollapsingHeader(headerName.c_str(), &isComponentAlive, ImGuiTreeNodeFlags_DefaultOpen);
+
+        ImGui::PopStyleColor(3);
 
         if (!isComponentAlive) {
             removeIndex = static_cast<int>(i);
         }
 
         if (isHeaderOpen && isComponentAlive) {
+            ImGui::Spacing();
+            ImGui::Indent(kCardPaddingX);
+
+            ImGui::BeginGroup();
+
             // アクティブトグル
             bool active = comp->IsActive();
             if (ImGui::Checkbox("Enabled", &active)) {
                 comp->SetActive(active);
             }
 
-            // コンポーネント独自のインスペクターUI呼び出し
+            // コンポーネント独自のインスペクターUI呼び出し（引き延ばしに連動してラベル領域が拡大し文字見切れを完全根絶）
+            float compItemWidth = std::clamp(compAvailWidth * kComponentItemWidthRatio, kComponentItemMinWidth, kComponentItemMaxWidth);
+            ImGui::PushItemWidth(compItemWidth);
             comp->DrawInspector();
+            ImGui::PopItemWidth();
+
+            ImGui::Spacing();
+            ImGui::EndGroup();
+
+            ImGui::Unindent(kCardPaddingX);
+
+            // ヘッダー天面（cardStartPos.y）からコンテンツ最下部まで一体のカード枠を描画
+            ImVec2 cardEndPos = ImGui::GetItemRectMax();
+            ImVec2 rectMin = ImVec2(cardStartPos.x - kCardExpandX, cardStartPos.y);
+            ImVec2 rectMax = ImVec2(cardStartPos.x + compAvailWidth + kCardExpandX, cardEndPos.y + kCardPaddingY * 0.5f);
+
+            // 背景チャンネルに切り替えて、コントロールの背面に確実に描画
+            drawList->ChannelsSetCurrent(0);
+
+            float barWidth = isScript ? kScriptAccentBarWidth : kDefaultAccentBarWidth;
+            ImVec4 barCol = isScript ? kScriptAccentBar : kDefaultComponentAccentBar;
+
+            drawList->AddRectFilled(rectMin, rectMax, ImGui::ColorConvertFloat4ToU32(kModernCardBg), kModernCardRounding);
+            drawList->AddRect(rectMin, rectMax, ImGui::ColorConvertFloat4ToU32(kModernCardBorder), kModernCardRounding);
+            drawList->AddRectFilled(rectMin, ImVec2(rectMin.x + barWidth, rectMax.y),
+                                    ImGui::ColorConvertFloat4ToU32(barCol), kModernCardRounding, ImDrawFlags_RoundCornersLeft);
+
             ImGui::Spacing();
         }
 
+        drawList->ChannelsMerge();
         ImGui::PopID();
     }
 

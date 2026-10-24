@@ -23,15 +23,24 @@ public:
         IDxcCompiler3* compiler,
         IDxcIncludeHandler* includeHandler);
 
+    bool CompileCS(
+        const std::wstring& filepath,
+        IDxcUtils* utils,
+        IDxcCompiler3* compiler,
+        IDxcIncludeHandler* includeHandler);
+
     // PSO用のバイトコード
     D3D12_SHADER_BYTECODE GetVS() const;
     D3D12_SHADER_BYTECODE GetPS() const;
+    D3D12_SHADER_BYTECODE GetCS() const;
 
     // コンパイル済みのBlobそのまま渡したいとき
     IDxcBlob* GetVSBlob() const { return vs_.Get(); }
     IDxcBlob* GetPSBlob() const { return ps_.Get(); }
+    IDxcBlob* GetCSBlob() const { return cs_.Get(); }
 
 private:
     Microsoft::WRL::ComPtr<IDxcBlob> vs_;
     Microsoft::WRL::ComPtr<IDxcBlob> ps_;
+    Microsoft::WRL::ComPtr<IDxcBlob> cs_;
 };

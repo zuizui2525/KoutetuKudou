@@ -72,6 +72,18 @@ public:
     const Transform& GetOffset() const { return offset_; }
     void SetOffset(const Transform& offset) { offset_ = offset; }
 
+    // ==========================================
+    // アニメーション設定 (Step 1: 資料 01.Animation)
+    // ==========================================
+    const std::string& GetAnimationKey() const { return animationKey_; }
+    void SetAnimationKey(const std::string& key);
+
+    bool IsAnimationPlaying() const { return isAnimationPlaying_; }
+    void SetAnimationPlaying(bool play);
+
+    bool IsShowSkeleton() const { return showSkeleton_; }
+    void SetShowSkeleton(bool show);
+
 private:
     void RecreateMeshObject();
 
@@ -87,6 +99,9 @@ private:
     std::string textureKey_ = kDefaultTexturePath;
     std::string modelKey_ = kDefaultModelPath;
     std::string envMapKey_ = "";
+    std::string animationKey_ = "";
+    bool isAnimationPlaying_ = false;
+    bool showSkeleton_ = true;
 
     Vector4 color_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     int lightingMode_ = 2; // 0:None, 1:Lambert, 2:HalfLambert (デフォルト: HalfLambert)

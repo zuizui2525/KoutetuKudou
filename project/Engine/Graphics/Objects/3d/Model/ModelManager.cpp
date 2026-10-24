@@ -35,11 +35,24 @@ void ModelManager::LoadModel(const std::string& name, const std::string& filenam
     data->vbv.SizeInBytes = sizeof(VertexData) * (UINT)data->vertices.size();
     data->vbv.StrideInBytes = sizeof(VertexData);
  
-    // データ転送
+    // データ転送 (頂点)
     VertexData* vertexData = nullptr;
     data->vertexResource->Map(0, nullptr, reinterpret_cast<void**>(&vertexData));
     memcpy(vertexData, data->vertices.data(), sizeof(VertexData) * data->vertices.size());
     data->vertexResource->Unmap(0, nullptr);
+
+    // インデックスリソース作成 (Step 3: 資料 03.DrawIndexd)
+    if (!data->indices.empty()) {
+        data->indexResource = DxUtils::CreateBufferResource(device_, sizeof(uint32_t) * data->indices.size());
+        data->ibv.BufferLocation = data->indexResource->GetGPUVirtualAddress();
+        data->ibv.SizeInBytes = sizeof(uint32_t) * static_cast<UINT>(data->indices.size());
+        data->ibv.Format = DXGI_FORMAT_R32_UINT;
+
+        uint32_t* indexData = nullptr;
+        data->indexResource->Map(0, nullptr, reinterpret_cast<void**>(&indexData));
+        memcpy(indexData, data->indices.data(), sizeof(uint32_t) * data->indices.size());
+        data->indexResource->Unmap(0, nullptr);
+    }
  
     models_[name] = std::move(data);
 

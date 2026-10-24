@@ -59,6 +59,18 @@ public:
         const std::string& psoKey = "Object3D"
     );
 
+    /// @brief GPUスキニングを用いたインデックス描画 (DrawIndexedInstanced)
+    void DrawSkinning(
+        Object3D* object,
+        const D3D12_VERTEX_BUFFER_VIEW& vbView,
+        const D3D12_VERTEX_BUFFER_VIEW& influenceVbView,
+        const D3D12_INDEX_BUFFER_VIEW& ibView,
+        uint32_t indexCount,
+        D3D12_GPU_DESCRIPTOR_HANDLE paletteSrvHandleGPU,
+        const std::string& textureKey = "white",
+        const std::string& envMapKey = ""
+    );
+
 private:
     Object3DDrawer() = default;
     ~Object3DDrawer() = default;

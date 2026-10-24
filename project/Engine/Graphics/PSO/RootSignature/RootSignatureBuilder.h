@@ -14,10 +14,15 @@ public:
     // ★修正: テクスチャ用に Descriptor Table として設定するように変更
     void AddSRV(UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
 
+    // Compute Shader等で使用するUAV（Unordered Access View）を Descriptor Table として設定
+    void AddUAV(UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
+
     void AddSampler(const D3D12_SAMPLER_DESC& samplerDesc, UINT shaderRegister = 0);
 
-    // ルートシグネチャ生成
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> Build(ID3D12Device* device);
+    // ルートシグネチャ生成（Compute用等でフラグを変更可能）
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> Build(
+        ID3D12Device* device,
+        D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 private:
     std::vector<D3D12_ROOT_PARAMETER> rootParams_;

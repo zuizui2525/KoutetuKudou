@@ -1,6 +1,10 @@
 #include "EffectManager.h"
 #include "../Core/SpriteParticleObject.h"
 #include "../Core/MeshParticleObject.h"
+#include "../GPU/GPUParticleObject.h"
+#include "../GPU/GPUParticleSetting.h"
+#include "Engine/Zuizui.h"
+#include "Engine/Base/BaseResource.h"
 #include "Engine/Base/Log/Log.h"
 #include "Engine/Base/Utils/StringUtility.h"
 #include <random>
@@ -14,7 +18,9 @@ EffectManager* EffectManager::GetInstance() {
 
 void EffectManager::Initialize() {
     effectMap_.clear();
-    Log::Write(L" ├─ 【エフェクトシステム初期化】 エフェクトマネージャの初期化を完了しました。");
+    gpuParticle_ = std::make_unique<GPUParticleObject>();
+    gpuParticle_->Initialize(GPUParticleObject::kDefaultMaxParticles);
+    Log::Write(L" ├─ 【エフェクトシステム初期化】 エフェクトマネージャおよびGPUパーティクルの初期化を完了しました。");
 }
 
 void EffectManager::Finalize() {
@@ -23,25 +29,38 @@ void EffectManager::Finalize() {
         Log::Write(std::format(L" │   ├─ 【エフェクト解放完了】 名前:「{}」をメモリから解放しました。", ConvertString(pair.first)));
     }
     effectMap_.clear();
+    gpuParticle_.reset();
     Log::Write(L" └─ 【エフェクトシステム終了処理完了】 すべてのエフェクトリソースの破棄が完了しました。");
 }
 
 void EffectManager::Update() {
-    for (auto& pair : effectMap_) {
-        pair.second->Update();
+    // 【GPUパーティクル完全移行】CPUパーティクルのループ更新を停止し、GPUシミュレーションのみを実行
+    if (gpuParticle_) {
+        gpuParticle_->Update();
     }
 }
 
 void EffectManager::UpdateMatrices() {
-    for (auto& pair : effectMap_) {
-        pair.second->UpdateMatrices();
-    }
+    // GPUパーティクルではGPU側で自動計算されるためCPU行列更新は不要
 }
 
 void EffectManager::Draw() {
-    for (auto& pair : effectMap_) {
-        const std::string& texName = pair.second->GetSetting().textureName;
-        pair.second->Draw(texName, true);
+    // 【GPUパーティクル完全移行】CPUパーティクル描画を停止し、GPUパーティクルのDispatchとDrawのみを実行
+    if (gpuParticle_) {
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                auto* cmdList = dxCommon->GetCommandList();
+                gpuParticle_->DispatchCompute(cmdList);
+                gpuParticle_->Draw(cmdList, "white");
+            }
+        }
+    }
+}
+
+void EffectManager::PlayGPUEffect(const Vector3& position, uint32_t count) {
+    if (gpuParticle_) {
+        gpuParticle_->SetPosition(position);
+        gpuParticle_->EmitBurst(count);
     }
 }
 
@@ -65,59 +84,32 @@ void EffectManager::RegisterEffect(const EffectSetting& setting) {
 }
 
 void EffectManager::PlayEffect2D(const std::string& name, const EffectPlayParam& param) {
-    auto it = effectMap_.find(name);
-    if (it != effectMap_.end()) {
-        it->second->SetEmitterMode(param.isLoop);
-
-        if (!param.isLoop) {
-            // 単発：エミッター自体は(0,0,0)のままで、指定座標に直接パーティクルを出す
-            // (これでエミッター行列による二重適用を防ぐ)
-            it->second->SetPosition({ 0.0f, 0.0f, 0.0f });
-
-            const EffectSetting& setting = it->second->GetSetting();
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<uint32_t> distCount(setting.emitCountMin, setting.emitCountMax);
-            uint32_t count = distCount(gen);
-
-            if (count > 0) {
-                it->second->EmitAt(count, param);
-            }
-        } else {
-            // ループ：エミッター自体を移動・回転・スケールさせ、そこから出す
-            Transform& transform = it->second->GetTransform();
-            transform.translate = param.position;
-            transform.rotate = param.rotation;
-            transform.scale = param.scale;
+    if (gpuParticle_) {
+        GPUParticleSetting setting;
+        std::string jsonPath = GPUParticlePresets::kParticleDirectory + "/" + name + GPUParticlePresets::kFileExtension;
+        if (!GPUParticlePresets::LoadFromJson(jsonPath, setting)) {
+            setting = GPUParticlePresets::GetPresetByName(name);
         }
+        gpuParticle_->ApplySetting(setting);
+        gpuParticle_->SetPosition(param.position);
+        constexpr uint32_t kDefaultGpuBurstCount2D = 300;
+        uint32_t burst = (setting.burstCount > 0) ? setting.burstCount : kDefaultGpuBurstCount2D;
+        gpuParticle_->EmitBurst(burst);
     }
 }
 
 void EffectManager::PlayEffect3D(const std::string& name, const EffectPlayParam& param) {
-    auto it = effectMap_.find(name);
-    if (it != effectMap_.end()) {
-        it->second->SetEmitterMode(param.isLoop);
-
-        if (!param.isLoop) {
-            // 単発：エミッター自体は(0,0,0)のままで、指定座標に直接パーティクルを出す
-            it->second->SetPosition({ 0.0f, 0.0f, 0.0f });
-
-            const EffectSetting& setting = it->second->GetSetting();
-            std::random_device rd;
-            std::mt19937 gen(rd());
-            std::uniform_int_distribution<uint32_t> distCount(setting.emitCountMin, setting.emitCountMax);
-            uint32_t count = distCount(gen);
-
-            if (count > 0) {
-                it->second->EmitAt(count, param);
-            }
-        } else {
-            // ループ：エミッター自体を移動・回転・スケールさせ、そこから出す
-            Transform& transform = it->second->GetTransform();
-            transform.translate = param.position;
-            transform.rotate = param.rotation;
-            transform.scale = param.scale;
+    if (gpuParticle_) {
+        GPUParticleSetting setting;
+        std::string jsonPath = GPUParticlePresets::kParticleDirectory + "/" + name + GPUParticlePresets::kFileExtension;
+        if (!GPUParticlePresets::LoadFromJson(jsonPath, setting)) {
+            setting = GPUParticlePresets::GetPresetByName(name);
         }
+        gpuParticle_->ApplySetting(setting);
+        gpuParticle_->SetPosition(param.position);
+        constexpr uint32_t kDefaultGpuBurstCount3D = 800;
+        uint32_t burst = (setting.burstCount > 0) ? setting.burstCount : kDefaultGpuBurstCount3D;
+        gpuParticle_->EmitBurst(burst);
     }
 }
 
@@ -144,6 +136,10 @@ void EffectManager::ImGuiControl(const std::string& name) {
     if (showListWindow_) {
         if (ImGui::Begin("エフェクト一覧###Effects List", &showListWindow_)) {
             ImGui::Checkbox("エフェクト詳細設定", &isWindowOpen_);
+            ImGui::Separator();
+            if (gpuParticle_) {
+                gpuParticle_->ImGuiControl("GPUパーティクル (Compute Shader)");
+            }
         }
         ImGui::End();
     }

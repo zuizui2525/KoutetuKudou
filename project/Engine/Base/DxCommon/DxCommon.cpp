@@ -49,15 +49,12 @@ void DxCommon::BeginFrame() {
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	commandList_->ResourceBarrier(1, &barrier);
 	
-	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = dsvDescriptorHeap_->GetCPUDescriptorHandleForHeapStart();
-	commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex_], false, &dsvHandle);
+	// スワップチェーンは最終画面コピーおよびImGui（2D描画）用のため、DSVはバインドせずRTVのみ設定（解像度差によるGPUハングを防止）
+	commandList_->OMSetRenderTargets(1, &rtvHandles_[backBufferIndex_], false, nullptr);
 
 	// バックバッファのクリアカラー（マジックナンバー排除のためのローカル定数）
 	static constexpr FLOAT kClearColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f }; // 暗いグレーでクリア
 	commandList_->ClearRenderTargetView(rtvHandles_[backBufferIndex_], kClearColor, 0, nullptr);
-	
-	// 深度バッファのクリア
-	commandList_->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 }
 
 void DxCommon::EndFrame() {

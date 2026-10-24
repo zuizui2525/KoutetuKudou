@@ -22,7 +22,9 @@ private:
     // 祝砲花火パラメータ（インスペクター調整可能）
     int minInterval_ = 30;
     int maxIntervalRange_ = 61;
-    float rangeX_ = 60.0f;
-    float rangeZ_ = 20.0f;
-    float minY_ = -5.0f;
+    float rangeX_ = 40.0f;
+    float baseY_ = 10.0f;
+    float rangeY_ = 8.0f;
+    float baseZ_ = 20.0f;
+    float rangeZ_ = 15.0f;
 };

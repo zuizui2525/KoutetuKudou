@@ -35,6 +35,11 @@ HRESULT PSOManager::Initialize(
         device_, dxcUtils, dxcCompiler, includeHandler);
     RegisterPreset("Object3D_Line", object3DLinePreset);
 
+    // Object3D_Skinning用プリセット作成 (GPUスキニング用)
+    PSOPreset object3DSkinningPreset = PSOPreset::CreateObject3DSkinningPreset(
+        device_, dxcUtils, dxcCompiler, includeHandler);
+    RegisterPreset("Object3D_Skinning", object3DSkinningPreset);
+
     // Particle用プリセット作成
     PSOPreset particlePreset = PSOPreset::CreateParticlePreset(
         device_, dxcUtils, dxcCompiler, includeHandler);

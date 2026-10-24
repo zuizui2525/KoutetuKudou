@@ -497,6 +497,118 @@ namespace Math {
 		path.push_back(controlPoints.back());
 		return path;
 	}
+
+	// 線形補間 (Lerp)
+	Vector3 Lerp(const Vector3& v1, const Vector3& v2, float t) {
+		return {
+			v1.x + t * (v2.x - v1.x),
+			v1.y + t * (v2.y - v1.y),
+			v1.z + t * (v2.z - v1.z)
+		};
+	}
+
+	// 単位クォータニオン
+	Quaternion IdentityQuaternion() {
+		constexpr float kZero = 0.0f;
+		constexpr float kOne = 1.0f;
+		return { kZero, kZero, kZero, kOne };
+	}
+
+	// 球面線形補間 (Slerp)
+	Quaternion Slerp(const Quaternion& q0, const Quaternion& q1, float t) {
+		constexpr float kZero = 0.0f;
+		constexpr float kOne = 1.0f;
+		constexpr float kThreshold = 0.9995f;
+
+		float dot = q0.x * q1.x + q0.y * q1.y + q0.z * q1.z + q0.w * q1.w;
+
+		Quaternion targetQ = q1;
+		if (dot < kZero) {
+			dot = -dot;
+			targetQ.x = -targetQ.x;
+			targetQ.y = -targetQ.y;
+			targetQ.z = -targetQ.z;
+			targetQ.w = -targetQ.w;
+		}
+
+		if (dot > kThreshold) {
+			Quaternion result = {
+				q0.x + t * (targetQ.x - q0.x),
+				q0.y + t * (targetQ.y - q0.y),
+				q0.z + t * (targetQ.z - q0.z),
+				q0.w + t * (targetQ.w - q0.w)
+			};
+			float lenSq = result.x * result.x + result.y * result.y + result.z * result.z + result.w * result.w;
+			if (lenSq > kZero) {
+				float invLen = kOne / std::sqrt(lenSq);
+				result.x *= invLen;
+				result.y *= invLen;
+				result.z *= invLen;
+				result.w *= invLen;
+			}
+			return result;
+		}
+
+		float theta = std::acos(dot);
+		float sinTheta = std::sin(theta);
+		float scale0 = std::sin((kOne - t) * theta) / sinTheta;
+		float scale1 = std::sin(t * theta) / sinTheta;
+
+		return {
+			scale0 * q0.x + scale1 * targetQ.x,
+			scale0 * q0.y + scale1 * targetQ.y,
+			scale0 * q0.z + scale1 * targetQ.z,
+			scale0 * q0.w + scale1 * targetQ.w
+		};
+	}
+
+	// クォータニオン回転行列
+	Matrix4x4 MakeRotateMatrix(const Quaternion& q) {
+		constexpr float kZero = 0.0f;
+		constexpr float kOne = 1.0f;
+		constexpr float kTwo = 2.0f;
+
+		float xx = q.x * q.x;
+		float yy = q.y * q.y;
+		float zz = q.z * q.z;
+		float xy = q.x * q.y;
+		float xz = q.x * q.z;
+		float yz = q.y * q.z;
+		float wx = q.w * q.x;
+		float wy = q.w * q.y;
+		float wz = q.w * q.z;
+
+		Matrix4x4 m{};
+		m.m[0][0] = kOne - kTwo * (yy + zz);
+		m.m[0][1] = kTwo * (xy + wz);
+		m.m[0][2] = kTwo * (xz - wy);
+		m.m[0][3] = kZero;
+
+		m.m[1][0] = kTwo * (xy - wz);
+		m.m[1][1] = kOne - kTwo * (xx + zz);
+		m.m[1][2] = kTwo * (yz + wx);
+		m.m[1][3] = kZero;
+
+		m.m[2][0] = kTwo * (xz + wy);
+		m.m[2][1] = kTwo * (yz - wx);
+		m.m[2][2] = kOne - kTwo * (xx + yy);
+		m.m[2][3] = kZero;
+
+		m.m[3][0] = kZero;
+		m.m[3][1] = kZero;
+		m.m[3][2] = kZero;
+		m.m[3][3] = kOne;
+
+		return m;
+	}
+
+	// クォータニオン版アフィン変換行列
+	Matrix4x4 MakeAffineMatrix(const Vector3& scale, const Quaternion& rotate, const Vector3& translate) {
+		Matrix4x4 s = MakeScaleMatrix(scale);
+		Matrix4x4 r = MakeRotateMatrix(rotate);
+		Matrix4x4 t = MakeTranslateMatrix(translate);
+		return Multiply(Multiply(s, r), t);
+	}
 }
 
 // 二公演算子

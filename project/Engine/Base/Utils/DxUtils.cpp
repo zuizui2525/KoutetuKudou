@@ -139,4 +139,63 @@ namespace DxUtils {
         return resource;
     }
 
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateUAVBufferResource(
+        ID3D12Device* device,
+        size_t sizeInBytes,
+        D3D12_RESOURCE_STATES initialState) {
+        assert(device != nullptr);
+
+        // VRAM上に高速配置するためのDEFAULTヒープ設定
+        D3D12_HEAP_PROPERTIES heapProps{};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+        heapProps.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+        heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+        // UAV（Unordered Access）を許可したバッファリソース記述子
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Alignment = 0;
+        desc.Width = sizeInBytes;
+        desc.Height = 1;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DXGI_FORMAT_UNKNOWN;
+        desc.SampleDesc.Count = 1;
+        desc.SampleDesc.Quality = 0;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource = nullptr;
+        HRESULT hr = device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &desc,
+            initialState,
+            nullptr,
+            IID_PPV_ARGS(&resource));
+        assert(SUCCEEDED(hr) && "Failed to create UAV Buffer Resource!");
+        return resource;
+    }
+
+    void CreateBufferUAV(
+        ID3D12Device* device,
+        ID3D12Resource* resource,
+        uint32_t numElements,
+        uint32_t structureByteStride,
+        D3D12_CPU_DESCRIPTOR_HANDLE destHandle) {
+        assert(device != nullptr);
+        assert(resource != nullptr);
+
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+        uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+        uavDesc.Buffer.FirstElement = 0;
+        uavDesc.Buffer.NumElements = numElements;
+        uavDesc.Buffer.StructureByteStride = structureByteStride;
+        uavDesc.Buffer.CounterOffsetInBytes = 0;
+        uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+        device->CreateUnorderedAccessView(resource, nullptr, &uavDesc, destHandle);
+    }
+
 } // namespace DxUtils

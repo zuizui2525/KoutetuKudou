@@ -59,6 +59,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "",
           "color": [0.18, 0.2, 0.24, 1],
           "lighting_mode": 1,
@@ -75,7 +78,7 @@
       "name": "SamplePlayer",
       "visible": true,
       "transform": {
-        "position": [0, 0.5, 0],
+        "position": [0.962362, 0.5, -5.88754],
         "rotation": [0, 0, 0],
         "scale": [2, 2, 2]
       },
@@ -85,6 +88,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "",
           "color": [1, 0.35, 0.3, 1],
           "lighting_mode": 1,
@@ -101,11 +107,10 @@
         },
         {
           "type": "BoxCollider",
-          "center_offset": [0, 0, 0],
+          "center": [0, 0, 0],
           "size": [1, 1, 1],
           "is_trigger": false,
-          "show_gizmo": true,
-          "wire_thickness": 0.03
+          "show_gizmo": true
         }
       ]
     },
@@ -114,8 +119,8 @@
       "name": "SampleFollower",
       "visible": true,
       "transform": {
-        "position": [1.76777, 0.5, -1.76777],
-        "rotation": [0, -45, 0],
+        "position": [-3.44093, 0.5, -3.34871],
+        "rotation": [0, 2.09381, 0],
         "scale": [1.8, 1.8, 1.8]
       },
       "components": [
@@ -124,6 +129,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "",
           "color": [0.25, 0.65, 1, 1],
           "lighting_mode": 1,
@@ -140,11 +148,39 @@
         },
         {
           "type": "BoxCollider",
-          "center_offset": [0, 0, 0],
+          "center": [0, 0, 0],
           "size": [1, 1, 1],
           "is_trigger": false,
-          "show_gizmo": true,
-          "wire_thickness": 0.03
+          "show_gizmo": true
+        }
+      ]
+    },
+    {
+      "uuid": "animation-human-uuid-0001",
+      "name": "AnimationHuman",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "MeshRenderer",
+          "mesh_type": 10,
+          "texture_key": "resources/AnimationHuman/white.png",
+          "model_key": "resources/AnimationHuman/walk.gltf",
+          "animation_key": "resources/AnimationHuman/walk.gltf",
+          "is_animation_playing": true,
+          "show_skeleton": true,
+          "env_map_key": "",
+          "color": [1, 1, 1, 1],
+          "lighting_mode": 1,
+          "shininess": 30,
+          "environment_coefficient": 0,
+          "offset_position": [0, 0, 0],
+          "offset_rotation": [0, 0, 0],
+          "offset_scale": [1, 1, 1]
         }
       ]
     }

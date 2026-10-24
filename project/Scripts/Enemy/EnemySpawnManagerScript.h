@@ -20,6 +20,14 @@ public:
     void Start() override;
     void OnUpdate() override;
     void OnInspectorGUI() override;
+    void OnGUI() override;
+
+    /// <summary>
+    /// 独立した敵配置パレットウィンドウ（ImGui）を開閉します。
+    /// </summary>
+    /// <param name="open">開く場合は true</param>
+    void SetEditorWindowOpen(bool open) { isEditorWindowOpen_ = open; }
+    bool IsEditorWindowOpen() const { return isEditorWindowOpen_; }
 
     /// <summary>
     /// エリア切り替え時やリセット時に、シーン上の全スポーンポイントの出現フラグをリセットします。
@@ -69,8 +77,25 @@ private:
     /// </summary>
     void CheckPeriodicFallback(const Vector3& playerPos);
 
+    /// <summary>
+    /// 独立した敵配置パレット（ImGui）の内部GUIを描画します。
+    /// </summary>
+    void DrawPaletteUI();
+
+    /// <summary>
+    /// エディタ用カメラ（SceneViewカメラ）の注視点を指定オブジェクトの位置へスムーズにフォーカスします。
+    /// </summary>
+    /// <param name="targetObj">注視対象のGameObject</param>
+    void FocusCameraOnObject(GameObject* targetObj);
+
 private:
     // マジックナンバー排除のための定数
+    static constexpr float kDefaultPaletteWidth = 420.0f;  // 独立パレットの初期幅
+    static constexpr float kDefaultPaletteHeight = 560.0f; // 独立パレットの初期高さ
+    static constexpr float kSpawnListChildHeight = 240.0f; // スポーン一覧テーブルの高さ
+    static constexpr float kReopenButtonHeight = 32.0f;    // パレット再表示ボタンの高さ
+    static constexpr float kCameraFocusElevation = 5.0f;   // フォーカス時のカメラ高さオフセット
+    static constexpr float kCameraFocusDistance = 14.0f;   // フォーカス時のカメラ手前距離
     static constexpr float kDefaultSpawnIntervalZ = 30.0f; // 定期湧き間隔（Z距離）
     static constexpr float kDefaultBossSpawnZ = 360.0f;    // ボス出現ラインZ
     static constexpr int kBossAreaIndex = 3;               // ボスが存在するエリアインデックス
@@ -87,6 +112,7 @@ private:
     int currentArea_ = 0;
     bool enableSpawning_ = true;
     bool enablePeriodicFallback_ = false; // スポーンポイント未配置時の自動定期湧き（デフォルトOFF）
+    bool isEditorWindowOpen_ = true;      // 独立した敵配置パレットの開閉状態（デフォルトON）
 
     // シーンから収集したスポーンポイント参照キャッシュ
     std::vector<EnemySpawnPointScript*> cachedSpawnPoints_;

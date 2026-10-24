@@ -9,9 +9,12 @@
 #include "App/Scene/Core/SceneManager.h"
 #include "App/Scene/Generic/GenericScene.h"
 #include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
+
+#include <cmath>
 
 REGISTER_SCRIPT(BulletScript)
 
@@ -25,6 +28,16 @@ void BulletScript::Awake() {
 }
 
 void BulletScript::Start() {
+}
+
+void BulletScript::SetDirection(const Vector3& direction) {
+    direction_ = direction;
+    if (owner_) {
+        float yaw = std::atan2(direction.x, direction.z);
+        float horizontalDist = std::sqrt(direction.x * direction.x + direction.z * direction.z);
+        float pitch = std::atan2(-direction.y, horizontalDist);
+        owner_->SetRotate({ pitch, yaw, 0.0f });
+    }
 }
 
 namespace {
@@ -63,6 +76,22 @@ void BulletScript::OnUpdate() {
     currentPos.y += direction_.y * speed_;
     currentPos.z += direction_.z * speed_;
     owner_->SetPosition(currentPos);
+
+    // 自機弾の火炎（Fire）エフェクト発生（弾頭・軌跡）
+    if (isPlayerBullet_) {
+        EffectPlayParam fireParam{};
+        fireParam.position = currentPos;
+        fireParam.scale = { kBulletFireScale, kBulletFireScale, kBulletFireScale };
+        fireParam.velocityOverride = {
+            -direction_.x * speed_ * kTrailVelocityRatio,
+            -direction_.y * speed_ * kTrailVelocityRatio,
+            -direction_.z * speed_ * kTrailVelocityRatio
+        };
+        fireParam.isLoop = false;
+        if (auto* effectMgr = EffectManager::GetInstance()) {
+            effectMgr->PlayEffect3D(kEffectBulletFire, fireParam);
+        }
+    }
 
     // 3. 衝突判定の確認
     CheckCollisions();
@@ -127,6 +156,16 @@ void BulletScript::CheckCollisions() {
                         // 命中フラグ設定と弾丸の破棄
                         isDead_ = true;
                         owner_->SetVisible(false);
+
+                        // 敵命中爆発エフェクトの発生
+                        EffectPlayParam hitParam{};
+                        hitParam.position = bulletPos;
+                        hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
+                        hitParam.isLoop = false;
+                        if (auto* effectMgr = EffectManager::GetInstance()) {
+                            effectMgr->PlayEffect3D(kEffectBulletHit, hitParam);
+                        }
+
                         float shakeIntensity = isCritical ? kCriticalShakeIntensity : kHitShakeIntensity;
                         float shakeDuration = isCritical ? kCriticalShakeDuration : kHitShakeDuration;
                         ShakeCamera(shakeIntensity, shakeDuration);

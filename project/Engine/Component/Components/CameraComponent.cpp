@@ -92,60 +92,58 @@ void CameraComponent::DrawInspector() {
 #ifdef _USEIMGUI
     std::string tag = "##Camera_" + (owner_ ? owner_->GetName() : "Unnamed");
 
-    if (ImGui::CollapsingHeader(("Camera" + tag).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-        // メインカメラ切替
-        bool prevIsMain = isMainCamera_;
-        if (ImGui::Checkbox(("Main Camera" + tag).c_str(), &isMainCamera_)) {
-            if (isMainCamera_ && !prevIsMain) {
-                if (auto cameraMgr = CameraResource::GetCameraManager()) {
-                    std::string camName = owner_ ? owner_->GetName() : "Camera";
-                    cameraMgr->SetActiveCamera(camName);
-                }
+    // メインカメラ切替
+    bool prevIsMain = isMainCamera_;
+    if (ImGui::Checkbox(("Main Camera" + tag).c_str(), &isMainCamera_)) {
+        if (isMainCamera_ && !prevIsMain) {
+            if (auto cameraMgr = CameraResource::GetCameraManager()) {
+                std::string camName = owner_ ? owner_->GetName() : "Camera";
+                cameraMgr->SetActiveCamera(camName);
             }
         }
+    }
 
-        // 現在アクティブかどうかの表示 (マジックナンバー排除の上品なシアン色バッジ)
-        if (auto cameraMgr = CameraResource::GetCameraManager()) {
-            std::string activeCamName = cameraMgr->GetActiveCameraName();
-            std::string myName = owner_ ? owner_->GetName() : "";
-            bool isCurrentActive = (!myName.empty() && activeCamName == myName);
-            if (isCurrentActive) {
-                ImGui::SameLine();
-                constexpr ImVec4 kActiveCameraTextColor = { 0.2f, 0.9f, 1.0f, 1.0f };
-                ImGui::TextColored(kActiveCameraTextColor, "[★ 現在レンダリング中]");
-            } else {
-                ImGui::SameLine();
-                if (ImGui::Button(("このカメラに切り替え" + tag).c_str())) {
-                    cameraMgr->SetActiveCamera(myName);
-                    isMainCamera_ = true;
-                }
+    // 現在アクティブかどうかの表示 (マジックナンバー排除の上品なシアン色バッジ)
+    if (auto cameraMgr = CameraResource::GetCameraManager()) {
+        std::string activeCamName = cameraMgr->GetActiveCameraName();
+        std::string myName = owner_ ? owner_->GetName() : "";
+        bool isCurrentActive = (!myName.empty() && activeCamName == myName);
+        if (isCurrentActive) {
+            ImGui::SameLine();
+            constexpr ImVec4 kActiveCameraTextColor = { 0.2f, 0.9f, 1.0f, 1.0f };
+            ImGui::TextColored(kActiveCameraTextColor, "[★ 現在レンダリング中]");
+        } else {
+            ImGui::SameLine();
+            if (ImGui::Button(("このカメラに切り替え" + tag).c_str())) {
+                cameraMgr->SetActiveCamera(myName);
+                isMainCamera_ = true;
             }
         }
+    }
 
-        // 画角 (FOV: 度数法で表示・編集)
-        float fovDegrees = fov_ * kRadToDeg;
-        if (ImGui::SliderFloat(("Field of View (deg)" + tag).c_str(), &fovDegrees, kMinFovDeg, kMaxFovDeg, "%.1f deg")) {
-            fov_ = fovDegrees * kDegToRad;
-            UpdateProjection();
-        }
+    // 画角 (FOV: 度数法で表示・編集)
+    float fovDegrees = fov_ * kRadToDeg;
+    if (ImGui::SliderFloat(("Field of View" + tag).c_str(), &fovDegrees, kMinFovDeg, kMaxFovDeg, "%.1f deg")) {
+        fov_ = fovDegrees * kDegToRad;
+        UpdateProjection();
+    }
 
-        // クリップ面 (Near / Far)
-        if (ImGui::DragFloat(("Near Clip" + tag).c_str(), &nearZ_, kDragSpeedClip, kMinNearZ, kMaxNearZ, "%.3f")) {
-            nearZ_ = (std::max)(kMinNearZ, nearZ_);
-            UpdateProjection();
-        }
+    // クリップ面 (Near / Far)
+    if (ImGui::DragFloat(("Near Clip" + tag).c_str(), &nearZ_, kDragSpeedClip, kMinNearZ, kMaxNearZ, "%.3f")) {
+        nearZ_ = (std::max)(kMinNearZ, nearZ_);
+        UpdateProjection();
+    }
 
-        if (ImGui::DragFloat(("Far Clip" + tag).c_str(), &farZ_, kDragSpeedClip, kMinFarZ, kMaxFarZ, "%.1f")) {
-            farZ_ = (std::max)(nearZ_ + kMinNearZ, farZ_);
-            UpdateProjection();
-        }
+    if (ImGui::DragFloat(("Far Clip" + tag).c_str(), &farZ_, kDragSpeedClip, kMinFarZ, kMaxFarZ, "%.1f")) {
+        farZ_ = (std::max)(nearZ_ + kMinNearZ, farZ_);
+        UpdateProjection();
+    }
 
-        // 注視点 (Target) モード
-        ImGui::Separator();
-        ImGui::Checkbox(("Use LookAt Target" + tag).c_str(), &useTarget_);
-        if (useTarget_) {
-            ImGui::DragFloat3(("Target Position" + tag).c_str(), &target_.x, kDragSpeedTarget);
-        }
+    // 注視点 (Target) モード
+    ImGui::Separator();
+    ImGui::Checkbox(("Use LookAt Target" + tag).c_str(), &useTarget_);
+    if (useTarget_) {
+        ImGui::DragFloat3(("Target Position" + tag).c_str(), &target_.x, kDragSpeedTarget);
     }
 #endif
 }

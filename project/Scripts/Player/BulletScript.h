@@ -1,6 +1,7 @@
 #pragma once
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Math/MathStructs.h"
+#include <string>
 
 /// <summary>
 /// 弾丸（自機弾・敵弾）の直進移動、寿命カウント、当たり判定を制御するスクリプトコンポーネント
@@ -16,10 +17,10 @@ public:
     void OnInspectorGUI() override;
 
     /// <summary>
-    /// 弾丸の進行方向（正規化ベクトル）を設定します。
+    /// 弾丸の進行方向（正規化ベクトル）を設定し、先端が進行方向を向くよう姿勢を同期します。
     /// </summary>
     /// <param name="direction">進行方向ベクトル</param>
-    void SetDirection(const Vector3& direction) { direction_ = direction; }
+    void SetDirection(const Vector3& direction);
     const Vector3& GetDirection() const { return direction_; }
 
     /// <summary>
@@ -81,6 +82,13 @@ private:
     static constexpr float kMaxSpeed = 5.0f;
     static constexpr int kMinLifeTime = 1;
     static constexpr int kMaxLifeTimeLimit = 600;
+
+    // エフェクト演出定数
+    static inline const std::string kEffectBulletFire = "Fire";
+    static inline const std::string kEffectBulletHit = "Explosion";
+    static constexpr float kBulletFireScale = 0.4f;
+    static constexpr float kBulletHitScale = 1.2f;
+    static constexpr float kTrailVelocityRatio = 0.25f; // 弾道後方へのトレイル速度比率
 
     // メンバ変数
     float speed_ = kDefaultSpeed;

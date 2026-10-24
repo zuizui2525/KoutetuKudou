@@ -19,6 +19,7 @@
 #include "Engine/Zuizui.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include <filesystem>
 #include <format>
 #include <algorithm>
@@ -222,6 +223,11 @@ void Scene::Draw() {
     if (director_) {
         director_->Draw();
     }
+
+    // 3. 3Dエフェクト・パーティクルの描画
+    if (auto* effectMgr = EffectManager::GetInstance()) {
+        effectMgr->Draw();
+    }
 }
 
 void Scene::Draw2D() {
@@ -256,6 +262,15 @@ void Scene::ImGuiControl() {
                         script->OnGUI();
                     }
                 }
+            }
+        }
+    }
+
+    // シーン専属ディレクター（[Scene] Game等）のスクリプトによる OnGUI 描画
+    if (director_) {
+        for (const auto& script : director_->GetScripts()) {
+            if (script && script->IsActive()) {
+                script->OnGUI();
             }
         }
     }

@@ -93,18 +93,19 @@ void RenderTexture::PreDraw(ID3D12GraphicsCommandList* commandList, D3D12_CPU_DE
         currentState_ = D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
-    // レンダーターゲットの設定
-    commandList->OMSetRenderTargets(1, &rtvHandleCPU_, false, &dsvHandle);
+    // レンダーターゲットの設定 (DSVハンドルが有効な場合のみポインタを渡し、無効なら nullptr)
+    const D3D12_CPU_DESCRIPTOR_HANDLE* pDsv = (dsvHandle.ptr != 0) ? &dsvHandle : nullptr;
+    commandList->OMSetRenderTargets(1, &rtvHandleCPU_, false, pDsv);
 
     // クリア最適化値をそのまま使用してクリア
     float clearColorRGBA[4] = { clearColor_.x, clearColor_.y, clearColor_.z, clearColor_.w };
     commandList->ClearRenderTargetView(rtvHandleCPU_, clearColorRGBA, 0, nullptr);
 
-    if (clearDepth) {
+    if (clearDepth && pDsv) {
         // 深度バッファのクリア（マジックナンバーの排除ルールを適用）
         const float kClearDepthValue = 1.0f;
         const uint8_t kClearStencilValue = 0;
-        commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, kClearDepthValue, kClearStencilValue, 0, nullptr);
+        commandList->ClearDepthStencilView(*pDsv, D3D12_CLEAR_FLAG_DEPTH, kClearDepthValue, kClearStencilValue, 0, nullptr);
     }
 }
 

@@ -25,6 +25,8 @@
 #include "App/Scene/Core/SceneDirector.h"
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
+#include "Engine/Audio/Audio.h"
+#include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include <cmath>
 #include <algorithm>
 #ifdef _USEIMGUI
@@ -74,6 +76,26 @@ namespace {
     constexpr float kRouteLineThickness = 2.5f;
     constexpr float kCompletedLineThickness = 3.0f;
     constexpr float kMapBoundaryX = 50.0f; // ルート境界半幅
+
+    // 自機初期配置定数
+    constexpr float kDefaultPlayerPosX = 0.0f;
+    constexpr float kDefaultPlayerPosY = 0.0f;
+    constexpr Vector3 kDefaultPlayerForward = { 0.0f, 0.0f, 1.0f };
+
+    // ガイダンス・カウントダウン用カラー
+    constexpr Vector4 kDxGuidanceBgColor = { 10.0f / 255.0f, 15.0f / 255.0f, 25.0f / 255.0f, 220.0f / 255.0f };
+    constexpr Vector4 kDxGuidanceBorderColor = { 40.0f / 255.0f, 180.0f / 255.0f, 255.0f / 255.0f, 230.0f / 255.0f };
+    constexpr Vector4 kDxCountdownBgColor = { 6.0f / 255.0f, 10.0f / 255.0f, 18.0f / 255.0f, 230.0f / 255.0f };
+    constexpr Vector4 kDxCountdownBorderColor = { 255.0f / 255.0f, 200.0f / 255.0f, 40.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kDxCountdownNumberColor = { 255.0f / 255.0f, 220.0f / 255.0f, 50.0f / 255.0f, 1.0f };
+    constexpr Vector4 kDxStartTextColor = { 40.0f / 255.0f, 240.0f / 255.0f, 120.0f / 255.0f, 1.0f };
+
+    // ガイダンス・カウントダウン用テキスト定数
+    const std::string kGuidanceDrawPrompt = "画面をドラッグしてスタートからゴールまで線を引いてください";
+    const std::string kGuidanceGoalPrompt = "ルート完成！ [SPACE]キー または [GO!] ボタンで発進します";
+    const std::string kCountdownSubText = "GET READY...";
+    const std::string kCountdownStartText = "START!!";
+    const std::string kCountdownStartSubText = "GO!! GO!! GO!!";
 }
 
 REGISTER_SCRIPT(GamePhaseControllerScript)
@@ -95,6 +117,7 @@ void GamePhaseControllerScript::Awake() {
     currentPhase_ = Phase::DrawRoute;
     currentArea_ = 0;
     currentDistance_ = 0.0f;
+    isSceneChanging_ = false;
 }
 
 void GamePhaseControllerScript::Start() {
@@ -115,6 +138,16 @@ void GamePhaseControllerScript::Start() {
                 playerScript_ = obj->GetComponent<PlayerControllerScript>();
                 break;
             }
+        }
+    }
+
+    // 効果音 (SE) のロード
+    if (!isSeLoaded_) {
+        if (auto* audio = Audio::GetInstance()) {
+            seCountdownBeep_ = audio->LoadSound(kSeCountdownBeepPath);
+            seStartSignal_ = audio->LoadSound(kSeStartSignalPath);
+            seEngineBoost_ = audio->LoadSound(kSeEngineBoostPath);
+            isSeLoaded_ = true;
         }
     }
 
@@ -151,8 +184,17 @@ void GamePhaseControllerScript::OnUpdate() {
         }
     }
 
+    // シーン遷移中はゲームプレイ更新を停止
+    if (isSceneChanging_) {
+        return;
+    }
+
     // ゲームオーバー判定（自機死亡）
     if (playerScript_ && playerScript_->IsDead()) {
+        isSceneChanging_ = true;
+        if (playerScript_) {
+            playerScript_->SetAutoMoving(false);
+        }
         SceneManager::GetInstance()->ChangeScene(kGameOverSceneName);
         return;
     }
@@ -160,6 +202,8 @@ void GamePhaseControllerScript::OnUpdate() {
     // フェーズごとの処理
     if (currentPhase_ == Phase::DrawRoute) {
         UpdateDrawRoutePhase();
+    } else if (currentPhase_ == Phase::Countdown) {
+        UpdateCountdownPhase();
     } else if (currentPhase_ == Phase::Play) {
         UpdatePlayPhase();
     }
@@ -190,6 +234,12 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
     Vector2 mousePos = GameViewWindow::GetMousePosition();
 
     if (viewSize.x <= 0.0f || viewSize.y <= 0.0f) return;
+
+    // マウスがゲーム画面（GameViewWindow）上にない場合、または画面外領域の場合はルート入力を完全無視
+    if (!GameViewWindow::IsGameViewVisible() || !GameViewWindow::IsMouseOnGameView() ||
+        mousePos.x < 0.0f || mousePos.x > viewSize.x || mousePos.y < 0.0f || mousePos.y > viewSize.y) {
+        return;
+    }
 
     // レンダーターゲット解像度（1280x720）へのマウス座標スケーリング
     constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
@@ -253,10 +303,10 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
         return;
     }
 
-    // GOボタンまたはSPACEキーで走行開始（ゴール到達時のみ）
+    // GOボタンまたはSPACEキーでカウントダウン開始（ゴール到達時のみ）
     if (routeMgr_->HasReachedGoal()) {
         if (input->Trigger(DIK_SPACE) || (isTrigger && isMouseOverGoBtn)) {
-            TransitionToPlay();
+            TransitionToCountdown();
             return;
         }
     }
@@ -311,9 +361,8 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
 /// 走行距離 currentDistance_ を進行させ、ルートマネージャから求めた3D座標および接線方向を自機へ反映します。
 /// </summary>
 void GamePhaseControllerScript::UpdatePlayPhase() {
-    if (!routeMgr_ || !playerScript_) return;
-
-    currentDistance_ += playerMoveSpeed_;
+    float moveSpeed = playerScript_ ? playerScript_->GetMoveSpeed() : playerMoveSpeed_;
+    currentDistance_ += moveSpeed;
 
     // 自機位置と向きをルートから更新
     Vector3 playerPos = routeMgr_->GetPositionAtDistance(currentDistance_);
@@ -336,25 +385,40 @@ void GamePhaseControllerScript::UpdatePlayPhase() {
 /// 未完了の場合は次エリアをセットアップしてルート手書きフェーズへ移行します。
 /// </summary>
 void GamePhaseControllerScript::HandleAreaClear() {
+    // すでにシーン遷移中なら多重実行を防止
+    if (isSceneChanging_) {
+        return;
+    }
+
     // 前エリアの残敵・残留弾を一括消去
     ClearAllEnemies();
 
-    currentArea_++;
-    if (currentArea_ >= kMaxAreas) {
+    // 最終エリア走破判定 (currentArea_ は 0-indexed なので 0, 1, ..., kMaxAreas - 1)
+    if (currentArea_ + 1 >= kMaxAreas) {
         // 全エリアクリア
-        SceneManager::GetInstance()->ChangeScene(kClearSceneName);
-    } else {
-        // 次のエリアへ移行
+        isSceneChanging_ = true;
+        currentArea_ = kMaxAreas - 1; // 表示上「AREA 4/4」に固定
         if (routeMgr_) {
-            routeMgr_->SetupArea(currentArea_);
+            currentDistance_ = routeMgr_->GetTotalDistance(); // 100% に固定
         }
-        if (spawnMgr_ && routeMgr_) {
-            spawnMgr_->ResetSpawns(routeMgr_->GetCurrentAreaStartZ());
-            spawnMgr_->SetCurrentArea(currentArea_);
+        if (playerScript_) {
+            playerScript_->SetAutoMoving(false); // 自機の自動走行を即時停止
         }
-        currentDistance_ = 0.0f;
-        TransitionToDraw();
+        SceneManager::GetInstance()->ChangeScene(kClearSceneName);
+        return;
     }
+
+    // 次のエリアへ移行
+    currentArea_++;
+    if (routeMgr_) {
+        routeMgr_->SetupArea(currentArea_);
+    }
+    if (spawnMgr_ && routeMgr_) {
+        spawnMgr_->ResetSpawns(routeMgr_->GetCurrentAreaStartZ());
+        spawnMgr_->SetCurrentArea(currentArea_);
+    }
+    currentDistance_ = 0.0f;
+    TransitionToDraw();
 }
 
 /// <summary>
@@ -369,8 +433,14 @@ void GamePhaseControllerScript::TransitionToDraw() {
     ClearAllEnemies();
     SetReticleVisible(false);
 
+    // 自機（プレイヤー）の自動走行停止およびエリア開始地点への位置・向き初期化
     if (playerScript_) {
         playerScript_->SetAutoMoving(false);
+        if (auto* playerGo = playerScript_->GetOwner()) {
+            float startZ = routeMgr_ ? routeMgr_->GetCurrentAreaStartZ() : 0.0f;
+            playerGo->SetPosition({ kDefaultPlayerPosX, kDefaultPlayerPosY, startZ });
+        }
+        playerScript_->SetDirection(kDefaultPlayerForward);
     }
 
     // カメラを見下ろし視点へ切り替え
@@ -387,13 +457,121 @@ void GamePhaseControllerScript::TransitionToDraw() {
 }
 
 /// <summary>
+/// 発進前カウントダウンフェーズ（Countdown）への遷移設定を行います。
+/// ルートを確定し、自機をルート始点に配置・整列させ、発進カウントダウンを開始します。
+/// </summary>
+void GamePhaseControllerScript::TransitionToCountdown() {
+    currentPhase_ = Phase::Countdown;
+    countdownTimer_ = kCountdownDuration;
+    lastCountdownSec_ = -1;
+    pulseTimer_ = 0.0f;
+    flashAlpha_ = 0.0f;
+    lastRenderedCountdownText_.clear();
+    lastRenderedCountdownSubText_.clear();
+
+    // 照準レティクルは発進まで非表示
+    SetReticleVisible(false);
+
+    // ルート確定
+    if (routeMgr_) {
+        routeMgr_->FinalizeRoute();
+    }
+
+    // 自機をスタート位置に配置し進行方向に向ける
+    if (playerScript_) {
+        playerScript_->SetAutoMoving(false);
+        if (routeMgr_) {
+            Vector3 startPos = routeMgr_->GetPositionAtDistance(0.0f);
+            Vector3 startDir = routeMgr_->GetTangentAtDistance(0.0f);
+            if (auto* go = playerScript_->GetOwner()) {
+                go->SetPosition(startPos);
+            }
+            playerScript_->SetDirection(startDir);
+        }
+    }
+}
+
+/// <summary>
+/// 発進前カウントダウンフェーズの毎フレーム更新処理を行います。
+/// タイマー減算、SE再生、エンジンエフェクト、白フラッシュ演出、完了時のTransitionToPlay遷移を制御します。
+/// </summary>
+void GamePhaseControllerScript::UpdateCountdownPhase() {
+    constexpr float kDeltaTime = 1.0f / 60.0f;
+    countdownTimer_ -= kDeltaTime;
+    pulseTimer_ += kDeltaTime;
+
+    // 発進白フラッシュの指数減衰
+    if (flashAlpha_ > 0.0f) {
+        flashAlpha_ -= kFlashFadeSpeed * kDeltaTime;
+        if (flashAlpha_ < 0.0f) flashAlpha_ = 0.0f;
+    }
+
+    constexpr float kStartThreshold = 0.8f;
+    if (countdownTimer_ > kStartThreshold) {
+        int sec = static_cast<int>(std::ceil(countdownTimer_ - kStartThreshold));
+        if (sec != lastCountdownSec_) {
+            lastCountdownSec_ = sec;
+            pulseTimer_ = 0.0f; // パルスアニメーションをリセット
+
+            // 1. カウント音（ピッ）再生
+            if (auto* audio = Audio::GetInstance()) {
+                audio->PlaySoundW(seCountdownBeep_, 0.8f, false);
+            }
+
+            // 2. 自機エンジン周辺に RingAura エフェクトを発生
+            if (playerScript_ && playerScript_->GetOwner()) {
+                Vector3 pPos = playerScript_->GetOwner()->GetPosition();
+                EffectPlayParam param{};
+                param.position = { pPos.x, pPos.y + 0.1f, pPos.z };
+                param.rotation = { 0.0f, 0.0f, 0.0f };
+                param.scale = { 1.0f, 1.0f, 1.0f };
+                param.isLoop = false;
+                EffectManager::GetInstance()->PlayEffect3D(kEffectCountdownAura, param);
+            }
+        }
+    } else {
+        // START!! 突入時（1回だけ発火）
+        if (lastCountdownSec_ != 0) {
+            lastCountdownSec_ = 0;
+            pulseTimer_ = 0.0f;
+            flashAlpha_ = kFlashInitialAlpha; // 全画面白フラッシュ発動！
+
+            // 1. スタートシグナル音（ポーン）再生
+            if (auto* audio = Audio::GetInstance()) {
+                audio->PlaySoundW(seStartSignal_, 0.95f, false);
+            }
+
+            // 2. 自機から全方位へ衝撃波リング (RingSlash) & スパークル (FireworksSparkle) を同時放出！
+            if (playerScript_ && playerScript_->GetOwner()) {
+                Vector3 pPos = playerScript_->GetOwner()->GetPosition();
+                EffectPlayParam param{};
+                param.position = { pPos.x, pPos.y + 0.3f, pPos.z };
+                param.scale = { 1.5f, 1.5f, 1.5f };
+                param.isLoop = false;
+                EffectManager::GetInstance()->PlayEffect3D(kEffectStartRing, param);
+                EffectManager::GetInstance()->PlayEffect3D(kEffectStartSparkle, param);
+            }
+        }
+    }
+
+    if (countdownTimer_ <= 0.0f) {
+        TransitionToPlay();
+    }
+}
+
+/// <summary>
 /// 走行・戦闘フェーズ（Play）への遷移設定を行います。
-/// 照準レティクルUIを表示し、敵スポーンタイマーの初期化、ルートの最終化（FinalizeRoute）、
-/// 自機の自動走行フラグ有効化、スタート位置への初期配置を実行します。
+/// 発進エンジン音の再生、照準レティクルUI表示、敵スポーンタイマーの初期化、
+/// 自機の自動走行フラグ有効化を実行します。
 /// </summary>
 void GamePhaseControllerScript::TransitionToPlay() {
     currentPhase_ = Phase::Play;
     currentDistance_ = 0.0f;
+
+    // 発進エンジン音（ギュン！）再生
+    if (auto* audio = Audio::GetInstance()) {
+        audio->PlaySoundW(seEngineBoost_, 0.85f, false);
+    }
 
     // 照準レティクルを表示
     SetReticleVisible(true);
@@ -434,10 +612,20 @@ void GamePhaseControllerScript::OnInspectorGUI() {
     ImGui::Text("現在走行距離: %.2f m", currentDistance_);
     ImGui::Spacing();
 
-    ImGui::TextColored(kSubHeaderColor, "【ルート走行設定】");
-    ImGui::DragFloat("ルート走行速度##PlayerMoveSpeed", &playerMoveSpeed_, 0.005f, kMinPlayerMoveSpeed, kMaxPlayerMoveSpeed, "%.3f");
+    // 自機スクリプトが存在する場合は速度を双方向同期
+    if (playerScript_) {
+        playerMoveSpeed_ = playerScript_->GetMoveSpeed();
+    }
+    if (ImGui::DragFloat("ルート走行速度##PlayerMoveSpeed", &playerMoveSpeed_, 0.005f, kMinPlayerMoveSpeed, kMaxPlayerMoveSpeed, "%.3f")) {
+        if (playerScript_) {
+            playerScript_->SetMoveSpeed(playerMoveSpeed_);
+        }
+    }
     if (ImGui::Button("速度リセット (0.15)##ResetSpeed", ImVec2(kResetBtnWidth, kResetBtnHeight))) {
         playerMoveSpeed_ = kDefaultPlayerMoveSpeed;
+        if (playerScript_) {
+            playerScript_->SetMoveSpeed(kDefaultPlayerMoveSpeed);
+        }
     }
     ImGui::Separator();
 
@@ -463,18 +651,35 @@ void GamePhaseControllerScript::Draw2D() {
         Init2DObjects();
     }
 
-    // 1. ルート手書きフェーズ中のみ2DミニマップおよびGOサインを描画
+    // 1. ルート手書きフェーズ中
     if (currentPhase_ == Phase::DrawRoute) {
         // 2Dミニマップの描画 (DirectX 12)
         Render2DMapDirectX();
+
+        // 案内ガイダンスの描画 (DirectX 12)
+        RenderGuidanceDirectX();
 
         // ゴール到達時のGOサイン・リセットボタンの描画 (DirectX 12)
         if (routeMgr_ && routeMgr_->HasReachedGoal()) {
             RenderGoSignDirectX();
         }
+    } else if (currentPhase_ == Phase::Countdown) {
+        // 2. 発進前カウントダウンフェーズ中の演出描画 (DirectX 12)
+        RenderCountdownDirectX();
     } else if (currentPhase_ == Phase::Play) {
-        // 2. 走行戦闘プレイフェーズ中のHUD描画 (DirectX 12)
+        // 3. 走行戦闘プレイフェーズ中のHUD描画 (DirectX 12)
         RenderPlayHUDDirectX();
+    }
+
+    // 4. 発進白フラッシュ描画（全フェーズ共通の最前面オーバーレイ）
+    if (flashSprite_ && flashAlpha_ > 0.005f) {
+        constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+        constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+        flashSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        flashSprite_->SetSize(kRenderWidth, kRenderHeight);
+        flashSprite_->GetMaterialData()->color = { 1.0f, 1.0f, 1.0f, flashAlpha_ };
+        flashSprite_->Update();
+        flashSprite_->Draw("white", true);
     }
 }
 
@@ -695,6 +900,61 @@ void GamePhaseControllerScript::Init2DObjects() {
     hudAreaTextObj_->Initialize();
     SceneHierarchy::GetInstance()->Unregister(hudAreaTextObj_.get());
     hudAreaTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // 10. ガイダンスパネル用パーツ (DirectX 12)
+    guidanceBgSprite_ = std::make_unique<SpriteObject>();
+    guidanceBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(guidanceBgSprite_.get());
+    guidanceBgSprite_->SetSize(kGuidancePanelWidth, kGuidancePanelHeight);
+    guidanceBgSprite_->GetMaterialData()->color = kDxGuidanceBgColor;
+
+    for (int i = 0; i < 4; ++i) {
+        guidanceBorders_[i] = std::make_unique<Line2DObject>();
+        guidanceBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(guidanceBorders_[i].get());
+        guidanceBorders_[i]->SetThickness(2.0f);
+        guidanceBorders_[i]->GetMaterialData()->color = kDxGuidanceBorderColor;
+    }
+
+    guidanceTextObj_ = std::make_unique<TextObject2D>();
+    guidanceTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(guidanceTextObj_.get());
+    guidanceTextGen_ = std::make_unique<TextTextureGenerator>();
+    lastGuidanceText_.clear();
+
+    // 11. カウントダウン用パーツ (DirectX 12)
+    countdownBgSprite_ = std::make_unique<SpriteObject>();
+    countdownBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(countdownBgSprite_.get());
+    countdownBgSprite_->SetSize(kCountdownBoxWidth, kCountdownBoxHeight);
+    countdownBgSprite_->GetMaterialData()->color = kDxCountdownBgColor;
+
+    for (int i = 0; i < 4; ++i) {
+        countdownBorders_[i] = std::make_unique<Line2DObject>();
+        countdownBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(countdownBorders_[i].get());
+        countdownBorders_[i]->SetThickness(2.0f);
+        countdownBorders_[i]->GetMaterialData()->color = kDxCountdownBorderColor;
+    }
+
+    countdownTextObj_ = std::make_unique<TextObject2D>();
+    countdownTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(countdownTextObj_.get());
+    countdownTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    countdownSubTextObj_ = std::make_unique<TextObject2D>();
+    countdownSubTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(countdownSubTextObj_.get());
+    countdownSubTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // 12. 全画面白フラッシュ用スプライト (DirectX 12)
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+    flashSprite_ = std::make_unique<SpriteObject>();
+    flashSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(flashSprite_.get());
+    flashSprite_->SetSize(kRenderWidth, kRenderHeight);
+    flashSprite_->GetMaterialData()->color = { 1.0f, 1.0f, 1.0f, 0.0f };
 
     is2DInitialized_ = true;
 }
@@ -1148,6 +1408,139 @@ void GamePhaseControllerScript::RenderPlayHUDDirectX() {
     hudAreaTextObj_->SetColor(kDxTextColor);
     hudAreaTextObj_->Update();
     hudAreaTextObj_->Draw(hudAreaTextGen_->GetGpuHandle(), true);
+}
+
+/// <summary>
+/// ルート手書きフェーズ中に画面上部に案内ガイダンス（「線を引いてください」等）をDirectX 12で描画します。
+/// </summary>
+void GamePhaseControllerScript::RenderGuidanceDirectX() {
+    if (!guidanceBgSprite_ || !guidanceTextObj_ || !guidanceTextGen_) return;
+
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    float panelX = (kRenderWidth - kGuidancePanelWidth) * 0.5f;
+    float panelY = kGuidancePanelMarginTop;
+
+    bool isGoal = (routeMgr_ && routeMgr_->HasReachedGoal());
+    const std::string& currentPrompt = isGoal ? kGuidanceGoalPrompt : kGuidanceDrawPrompt;
+    Vector4 borderColor = isGoal ? kDxPanelConnectedBorderColor : kDxGuidanceBorderColor;
+    Vector4 textColor = isGoal ? kDxStartTextColor : kDxTextColor;
+
+    // パネル背景描画
+    guidanceBgSprite_->SetPosition({ panelX, panelY, 0.0f });
+    guidanceBgSprite_->SetSize(kGuidancePanelWidth, kGuidancePanelHeight);
+    guidanceBgSprite_->GetMaterialData()->color = kDxGuidanceBgColor;
+    guidanceBgSprite_->Update();
+    guidanceBgSprite_->Draw("white", true);
+
+    // 外枠4辺描画
+    guidanceBorders_[0]->SetPoints({ panelX, panelY }, { panelX + kGuidancePanelWidth, panelY });
+    guidanceBorders_[1]->SetPoints({ panelX, panelY + kGuidancePanelHeight }, { panelX + kGuidancePanelWidth, panelY + kGuidancePanelHeight });
+    guidanceBorders_[2]->SetPoints({ panelX, panelY }, { panelX, panelY + kGuidancePanelHeight });
+    guidanceBorders_[3]->SetPoints({ panelX + kGuidancePanelWidth, panelY }, { panelX + kGuidancePanelWidth, panelY + kGuidancePanelHeight });
+    for (int i = 0; i < 4; ++i) {
+        guidanceBorders_[i]->GetMaterialData()->color = borderColor;
+        guidanceBorders_[i]->Update();
+        guidanceBorders_[i]->Draw("white", true);
+    }
+
+    // ガイダンステキスト描画（内容変化時のみ再生成）
+    if (lastGuidanceText_ != currentPrompt) {
+        lastGuidanceText_ = currentPrompt;
+        guidanceTextGen_->Generate(currentPrompt, "Yu Gothic UI", 14.0f, 1, true, false, false);
+        guidanceTextObj_->SetSize(static_cast<float>(guidanceTextGen_->GetWidth()), static_cast<float>(guidanceTextGen_->GetHeight()));
+    }
+
+    float textX = panelX + (kGuidancePanelWidth - guidanceTextGen_->GetWidth()) * 0.5f;
+    float textY = panelY + (kGuidancePanelHeight - guidanceTextGen_->GetHeight()) * 0.5f;
+    guidanceTextObj_->SetPosition({ textX, textY, 0.0f });
+    guidanceTextObj_->SetColor(textColor);
+    guidanceTextObj_->Update();
+    guidanceTextObj_->Draw(guidanceTextGen_->GetGpuHandle(), true);
+}
+
+/// <summary>
+/// 発進前カウントダウンフェーズ中に画面中央に大型カウントダウン数字をDirectX 12で描画します。
+/// </summary>
+void GamePhaseControllerScript::RenderCountdownDirectX() {
+    if (!countdownBgSprite_ || !countdownTextObj_ || !countdownTextGen_) return;
+
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+
+    // パルス倍率の計算（切り替わり時に大きく飛び出し、指数関数的に通常サイズへ収束）
+    float pulseScale = 1.0f + (kPulseMaxScale - 1.0f) * std::exp(-pulseTimer_ * kPulseDecayRate);
+
+    // フェード計算（秒数の終盤で次の秒数へ滑らかに遷移）
+    float alphaFade = 1.0f;
+    constexpr float kFadeThreshold = 0.18f;
+    constexpr float kStartThreshold = 0.8f;
+
+    if (countdownTimer_ > kStartThreshold) {
+        float frac = (countdownTimer_ - kStartThreshold) - std::floor(countdownTimer_ - kStartThreshold);
+        if (frac < kFadeThreshold && frac > 0.0f) {
+            alphaFade = frac / kFadeThreshold;
+        }
+    }
+
+    // 表示秒数判定
+    std::string mainText;
+    std::string subText;
+    Vector4 textColor = kDxCountdownNumberColor;
+    float baseFontSize = 130.0f;
+
+    if (countdownTimer_ > kStartThreshold) {
+        int sec = static_cast<int>(std::ceil(countdownTimer_ - kStartThreshold));
+        mainText = std::to_string(sec);
+        subText = kCountdownSubText;
+        textColor = kDxCountdownNumberColor;
+        baseFontSize = 130.0f;
+    } else {
+        mainText = kCountdownStartText;
+        subText = kCountdownStartSubText;
+        textColor = kDxStartTextColor;
+        baseFontSize = 95.0f;
+    }
+
+    // テキスト内容が変化した瞬間のみテクスチャを1度だけ生成 (毎フレームのGDI再生成を完全排除)
+    constexpr float kMainOutlineWidth = 6.0f;
+    constexpr Vector4 kSolidBlack = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+    if (lastRenderedCountdownText_ != mainText) {
+        lastRenderedCountdownText_ = mainText;
+        countdownTextGen_->Generate(mainText, "Yu Gothic UI", baseFontSize, 1, true, false, true, kSolidBlack, kMainOutlineWidth, textColor);
+        cachedCountdownTextWidth_ = static_cast<float>(countdownTextGen_->GetWidth());
+        cachedCountdownTextHeight_ = static_cast<float>(countdownTextGen_->GetHeight());
+    }
+
+    constexpr float kSubFontSize = 22.0f;
+    constexpr float kSubOutlineWidth = 3.5f;
+    if (lastRenderedCountdownSubText_ != subText) {
+        lastRenderedCountdownSubText_ = subText;
+        countdownSubTextGen_->Generate(subText, "Yu Gothic UI", kSubFontSize, 1, true, false, true, kSolidBlack, kSubOutlineWidth, kDxTextColor);
+        cachedCountdownSubWidth_ = static_cast<float>(countdownSubTextGen_->GetWidth());
+        cachedCountdownSubHeight_ = static_cast<float>(countdownSubTextGen_->GetHeight());
+    }
+
+    // パルス拡縮とアルファフェードをGPUスプライト上で高速実行 (テクスチャ再生成ゼロ)
+    float currentW = cachedCountdownTextWidth_ * pulseScale;
+    float currentH = cachedCountdownTextHeight_ * pulseScale;
+    float mainTextX = (kRenderWidth - currentW) * 0.5f;
+    float mainTextY = (kRenderHeight * 0.5f) - (currentH * 0.58f);
+
+    countdownTextObj_->SetSize(currentW, currentH);
+    countdownTextObj_->SetPosition({ mainTextX, mainTextY, 0.0f });
+    countdownTextObj_->SetColor({ 1.0f, 1.0f, 1.0f, alphaFade });
+    countdownTextObj_->Update();
+    countdownTextObj_->Draw(countdownTextGen_->GetGpuHandle(), true);
+
+    // サブテキスト描画 (アウトライン付き、GPUフェード)
+    float subTextX = (kRenderWidth - cachedCountdownSubWidth_) * 0.5f;
+    float subTextY = mainTextY + currentH + 8.0f;
+    countdownSubTextObj_->SetSize(cachedCountdownSubWidth_, cachedCountdownSubHeight_);
+    countdownSubTextObj_->SetPosition({ subTextX, subTextY, 0.0f });
+    countdownSubTextObj_->SetColor({ 1.0f, 1.0f, 1.0f, alphaFade });
+    countdownSubTextObj_->Update();
+    countdownSubTextObj_->Draw(countdownSubTextGen_->GetGpuHandle(), true);
 }
 
 

@@ -293,6 +293,97 @@ PSOPreset PSOPreset::CreateObject3DLinePreset(
     return preset;
 }
 
+PSOPreset PSOPreset::CreateObject3DSkinningPreset(
+    ID3D12Device* device,
+    IDxcUtils* dxcUtils,
+    IDxcCompiler3* dxcCompiler,
+    IDxcIncludeHandler* includeHandler) {
+
+    PSOPreset preset;
+
+    // ---------------------------
+    // 1. RootSignature
+    // ---------------------------
+    RootSignatureBuilder rs;
+    // 行列 (b0, VS) -> index 0
+    rs.AddCBV(0, D3D12_SHADER_VISIBILITY_VERTEX);
+    // マテリアル (b0, PS) -> index 1
+    rs.AddCBV(0, D3D12_SHADER_VISIBILITY_PIXEL);
+    // カメラ (b1, PS) -> index 2
+    rs.AddCBV(1, D3D12_SHADER_VISIBILITY_PIXEL);
+    // ライティング (b2, PS) directionalLight -> index 3
+    rs.AddCBV(2, D3D12_SHADER_VISIBILITY_PIXEL);
+    // ライティング (b3, PS) pointLight -> index 4
+    rs.AddCBV(3, D3D12_SHADER_VISIBILITY_PIXEL);
+    // ライティング (b4, PS) spotLight -> index 5
+    rs.AddCBV(4, D3D12_SHADER_VISIBILITY_PIXEL);
+    // テクスチャ (t0, PS) -> index 6
+    rs.AddSRV(0, D3D12_SHADER_VISIBILITY_PIXEL);
+    // 環境マップテクスチャ (t1, PS) -> index 7
+    rs.AddSRV(1, D3D12_SHADER_VISIBILITY_PIXEL);
+    // マトリックスパレット (t0, VS) -> index 8
+    rs.AddSRV(0, D3D12_SHADER_VISIBILITY_VERTEX);
+    // サンプラー (s0)
+    D3D12_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    rs.AddSampler(sampler, 0);
+
+    preset.rootSignature = rs.Build(device);
+    assert(preset.rootSignature && "Skinning RootSignature creation failed!");
+
+    // ---------------------------
+    // 2. InputLayout (Slot 0: 頂点座標/UV/法線, Slot 1: ボーンウェイト/インデックス)
+    // ---------------------------
+    constexpr uint32_t kSlot0 = 0;
+    constexpr uint32_t kSlot1 = 1;
+    preset.ilBuilder_.Add("POSITION", DXGI_FORMAT_R32G32B32A32_FLOAT, kSlot0);
+    preset.ilBuilder_.Add("TEXCOORD", DXGI_FORMAT_R32G32_FLOAT, kSlot0);
+    preset.ilBuilder_.Add("NORMAL", DXGI_FORMAT_R32G32B32_FLOAT, kSlot0);
+    preset.ilBuilder_.Add("WEIGHT", DXGI_FORMAT_R32G32B32A32_FLOAT, kSlot1);
+    preset.ilBuilder_.Add("INDEX", DXGI_FORMAT_R32G32B32A32_SINT, kSlot1);
+
+    preset.inputLayoutDesc = preset.ilBuilder_.Build();
+
+    // ---------------------------
+    // 3. Blend State
+    // ---------------------------
+    BlendStateBuilder blendBuilder;
+    blendBuilder.SetBlendMode(kBlendModeNormal);
+    preset.blendDesc = blendBuilder.Build();
+
+    // ---------------------------
+    // 4. Rasterizer State (Backカリング)
+    // ---------------------------
+    RasterizerStateBuilder rsb;
+    rsb.SetCullMode(CullMode::Back);
+    preset.rasterizerDesc = rsb.Build();
+
+    // ---------------------------
+    // 5. Depth Stencil State
+    // ---------------------------
+    DepthStencilStateBuilder dsb;
+    dsb.SetDepthEnable(true);
+    preset.depthStencilDesc = dsb.GetDesc();
+
+    // ---------------------------
+    // 6. Shader
+    // ---------------------------
+    bool vsResult = preset.shaderProgram.CompileVS(
+        L"resources/Shader/Object3d/SkinningObject3d.VS.hlsl",
+        dxcUtils, dxcCompiler, includeHandler
+    );
+    assert(vsResult && "Skinning Vertex Shader Compile Failed! Check filepath or code.");
+
+    bool psResult = preset.shaderProgram.CompilePS(
+        L"resources/Shader/Object3d/Object3d.PS.hlsl",
+        dxcUtils, dxcCompiler, includeHandler
+    );
+    assert(psResult && "Skinning Pixel Shader Compile Failed! Check filepath or code.");
+
+    return preset;
+}
+
 PSOPreset PSOPreset::CreateParticlePreset(
     ID3D12Device* device,
     IDxcUtils* dxcUtils,

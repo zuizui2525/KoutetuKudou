@@ -18,8 +18,11 @@
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
 #include "Engine/Graphics/Objects/Light/Directional/DirectionalLight.h"
 #include "Engine/Base/Utils/StringUtility.h"
+#include "App/Scene/Core/Scene.h"
+#include "Engine/Component/ScriptComponent.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include <format>
+#include <unordered_map>
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
@@ -285,6 +288,23 @@ GameObject* SceneManager::Instantiate(
 
     // カレントシーンへ追加（ヒエラルキー登録も自動で行われる）
     currentScene_->AddGameObject(std::move(go));
+
+    // プレハブスクリプト内のターゲット参照を解決（ResolveReferences）
+    if (auto* scene = dynamic_cast<Scene*>(currentScene_.get())) {
+        std::unordered_map<std::string, GameObject*> uuidMap;
+        for (const auto& sceneObj : scene->GetGameObjects()) {
+            if (sceneObj) {
+                uuidMap[sceneObj->GetUUID()] = sceneObj.get();
+            }
+        }
+        uuidMap[rawPtr->GetUUID()] = rawPtr;
+
+        for (const auto& comp : rawPtr->GetComponents()) {
+            if (auto* sc = dynamic_cast<ScriptComponent*>(comp.get())) {
+                sc->ResolveReferences(uuidMap);
+            }
+        }
+    }
 
     return rawPtr;
 }

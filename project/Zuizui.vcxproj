@@ -202,6 +202,9 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Base\BaseResource.cpp" />
     <ClCompile Include="Engine\Base\DeferredRelease\DeferredReleaseManager.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Model\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Graphics\Animation\Animation.cpp" />
+    <ClCompile Include="Engine\Graphics\Animation\Skeleton.cpp" />
+    <ClCompile Include="Engine\Graphics\Animation\SkinCluster.cpp" />
     <ClCompile Include="Engine\Graphics\PSO\Shader\ShaderCompiler.cpp" />
     <ClCompile Include="Engine\Math\Collision\Collision.cpp" />
     <ClCompile Include="main.cpp" />
@@ -294,6 +297,8 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Graphics\Objects\3d\Triangle\TriangleObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Drawer\Object3DDrawer.cpp" />
     <ClCompile Include="Engine\\Graphics\\PSO\\Shader\ShaderProgram.cpp" />
+    <ClCompile Include="Engine\Graphics\PSO\Compute\ComputePipeline.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\Effect\GPU\GPUParticleObject.cpp" />
     <ClCompile Include="Engine\Base\WindowApp\WindowApp.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Model\ModelManager.cpp" />
     <ClCompile Include="Engine\Graphics\Texture\Texture.cpp" />
@@ -327,6 +332,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Debug\Command\CreateGameObjectCommand.cpp" />
     <ClCompile Include="Engine\Debug\Command\DeleteGameObjectCommand.cpp" />
     <ClCompile Include="Engine\Debug\ContentBrowserWindow.cpp" />
+    <ClCompile Include="Engine\Debug\ParticleStudioWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="resources\Shader\Object3d\Object3d.PS.hlsl">
@@ -338,6 +344,14 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="resources\Shader\Object3d\Object3d.VS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="resources\Shader\Object3d\SkinningObject3d.VS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Development|x64'">Vertex</ShaderType>
@@ -453,10 +467,15 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\Base\BaseResource.h" />
     <ClInclude Include="Engine\Base\DeferredRelease\DeferredReleaseManager.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Model\ModelLoader.h" />
+    <ClInclude Include="Engine\Graphics\Animation\Animation.h" />
+    <ClInclude Include="Engine\Graphics\Animation\Skeleton.h" />
+    <ClInclude Include="Engine\Graphics\Animation\SkinCluster.h" />
     <ClInclude Include="Engine\Graphics\PSO\Shader\ShaderCompiler.h" />
     <ClInclude Include="Engine\Math\Collision\Collision.h" />
     <ClInclude Include="Engine\Graphics\Objects\Effect\Manager\EffectManager.h" />
     <ClInclude Include="Engine\Graphics\Objects\Effect\Settings\EffectSetting.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Effect\GPU\GPUParticleSetting.h" />
+    <ClInclude Include="Engine\Debug\ParticleStudioWindow.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\Manager\PSOManager.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\Preset\PSOPreset.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\DepthStencilState\DepthStencilStateBuilder.h" />
@@ -514,6 +533,8 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\Graphics\Objects\2d\Ring\Ring2DObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\2d\Line\Line2DObject.h" />
     <ClInclude Include="Engine\\Graphics\\PSO\\Shader\ShaderProgram.h" />
+    <ClInclude Include="Engine\Graphics\PSO\Compute\ComputePipeline.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Effect\GPU\GPUParticleObject.h" />
     <ClInclude Include="Engine\Base\Utils\D3DResourceLeakChecker.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Triangle\TriangleObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Drawer\Object3DDrawer.h" />

@@ -1,0 +1,37 @@
+{
+  "prefab_name": "SampleFollower",
+  "game_object": {
+    "name": "SampleFollower",
+    "visible": true,
+    "transform": {
+      "position": [-4.36974, 0.5, -1.50988],
+      "rotation": [1.10467e-06, -0.897207, 1.10467e-06],
+      "scale": [1.8, 1.8, 1.8]
+    },
+    "components": [
+      {
+        "type": "MeshRenderer",
+        "mesh_type": 0,
+        "texture_key": "white",
+        "model_key": "cube",
+        "env_map_key": "",
+        "color": [0.25, 0.65, 1, 1],
+        "lighting_mode": 1,
+        "shininess": 96,
+        "environment_coefficient": 0
+      },
+      {
+        "type": "ScriptComponent",
+        "script_name": "SampleFollowerScript",
+        "target_uuid": "sample-player-uuid-0001"
+      },
+      {
+        "type": "BoxCollider",
+        "center": [0, 0, 0],
+        "size": [1, 1, 1],
+        "is_trigger": false,
+        "show_gizmo": true
+      }
+    ]
+  }
+}

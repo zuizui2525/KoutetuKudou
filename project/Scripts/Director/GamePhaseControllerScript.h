@@ -1,6 +1,7 @@
 #pragma once
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Math/MathStructs.h"
+#include "Engine/Audio/AudioStructs.h"
 #include <string>
 #include <memory>
 #include <vector>
@@ -21,6 +22,7 @@ class GamePhaseControllerScript : public ScriptComponent {
 public:
     enum class Phase {
         DrawRoute, // ルート手書きフェーズ
+        Countdown, // 発進前カウントダウン演出フェーズ
         Play       // 走行戦闘フェーズ
     };
 
@@ -41,6 +43,12 @@ public:
     void TransitionToDraw();
 
     /// <summary>
+    /// カウントダウン演出フェーズ（Countdown）へ遷移します。
+    /// 自機をスタート位置に配置し、カメラを走行視点へ切り替え、3秒カウントダウンを開始します。
+    /// </summary>
+    void TransitionToCountdown();
+
+    /// <summary>
     /// 走行・戦闘フェーズ（Play）へ遷移します。
     /// カメラをFPS自機視点へ同期し、照準UIを表示して自動等速前進を開始します。
     /// </summary>
@@ -57,6 +65,11 @@ private:
     /// ルート手書きフェーズ中の入力（マウスドラッグ、ミニマップ内クリック、GO/リセットボタン判定）を処理します。
     /// </summary>
     void UpdateDrawRoutePhase();
+
+    /// <summary>
+    /// 発進前カウントダウン演出フェーズ（3, 2, 1, START!!）のタイマー更新を処理します。
+    /// </summary>
+    void UpdateCountdownPhase();
 
     /// <summary>
     /// 走行・戦闘フェーズ中の自機等速前進、向き・回転の反映、およびゴール到達判定を処理します。
@@ -99,6 +112,16 @@ private:
     /// ルート完成時に画面中央下に表示されるGOボタンおよびリセットボタンをDirectX 12で描画します。
     /// </summary>
     void RenderGoSignDirectX();
+
+    /// <summary>
+    /// ルート手書きフェーズ中に画面上部に案内ガイダンス（「線を引いてください」等）をDirectX 12で描画します。
+    /// </summary>
+    void RenderGuidanceDirectX();
+
+    /// <summary>
+    /// 発進前カウントダウンフェーズ中に画面中央に大型カウントダウン数字をDirectX 12で描画します。
+    /// </summary>
+    void RenderCountdownDirectX();
 
     /// <summary>
     /// 走行・戦闘フェーズ（Play）中に画面端に自機HPバー、残弾数、リロード状態、エリア進捗をDirectX 12で描画します。
@@ -158,11 +181,36 @@ private:
     static constexpr float kHudAreaPanelHeight = 36.0f;  // エリア進行度パネル高さ (px)
     static constexpr float kHudAreaMarginTop = 24.0f;    // 上マージン (px)
 
+    // ガイダンスパネル定数
+    static constexpr float kGuidancePanelWidth = 560.0f;  // ガイダンスパネル幅 (px)
+    static constexpr float kGuidancePanelHeight = 44.0f;  // ガイダンスパネル高さ (px)
+    static constexpr float kGuidancePanelMarginTop = 28.0f; // 上マージン (px)
+
+    // カウントダウン表示定数
+    static constexpr float kCountdownDuration = 3.5f;     // カウントダウン総秒数
+    static constexpr float kCountdownBoxWidth = 320.0f;   // カウントダウン背景幅 (px)
+    static constexpr float kCountdownBoxHeight = 160.0f;  // カウントダウン背景高さ (px)
+
+    // サウンド・エフェクト・アニメーション定数
+    static inline const std::string kSeCountdownBeepPath = "resources/Sounds/countdown_beep.wav";
+    static inline const std::string kSeStartSignalPath = "resources/Sounds/start_signal.wav";
+    static inline const std::string kSeEngineBoostPath = "resources/Sounds/engine_boost.wav";
+
+    static inline const std::string kEffectCountdownAura = "RingAura";
+    static inline const std::string kEffectStartRing = "RingSlash";
+    static inline const std::string kEffectStartSparkle = "FireworksSparkle";
+
+    static constexpr float kFlashInitialAlpha = 0.85f;    // 発進白フラッシュ最大アルファ
+    static constexpr float kFlashFadeSpeed = 2.8f;        // 白フラッシュ減衰速度 (/秒)
+    static constexpr float kPulseMaxScale = 1.35f;        // 数字パルス最大拡大率
+    static constexpr float kPulseDecayRate = 7.0f;        // パルス減衰速度
+
     // メンバ変数
     Phase currentPhase_ = Phase::DrawRoute;
     int currentArea_ = 0;
     float currentDistance_ = 0.0f;
     float playerMoveSpeed_ = kDefaultPlayerMoveSpeed;
+    bool isSceneChanging_ = false;
 
     RouteManagerScript* routeMgr_ = nullptr;
     PlayerControllerScript* playerScript_ = nullptr;
@@ -218,5 +266,39 @@ private:
     std::unique_ptr<Line2DObject> hudAreaBorders_[4];
     std::unique_ptr<TextObject2D> hudAreaTextObj_;
     std::unique_ptr<TextTextureGenerator> hudAreaTextGen_;
+
+    // ガイダンスパネル用パーツ (DirectX 12)
+    std::unique_ptr<SpriteObject> guidanceBgSprite_;
+    std::unique_ptr<Line2DObject> guidanceBorders_[4];
+    std::unique_ptr<TextObject2D> guidanceTextObj_;
+    std::unique_ptr<TextTextureGenerator> guidanceTextGen_;
+    std::string lastGuidanceText_;
+
+    // カウントダウンフェーズ用パーツ (DirectX 12)
+    float countdownTimer_ = 0.0f;
+    int lastCountdownSec_ = -1;
+    std::unique_ptr<SpriteObject> countdownBgSprite_;
+    std::unique_ptr<Line2DObject> countdownBorders_[4];
+    std::unique_ptr<TextObject2D> countdownTextObj_;
+    std::unique_ptr<TextTextureGenerator> countdownTextGen_;
+    std::unique_ptr<TextObject2D> countdownSubTextObj_;
+    std::unique_ptr<TextTextureGenerator> countdownSubTextGen_;
+    std::string lastRenderedCountdownText_;
+    std::string lastRenderedCountdownSubText_;
+    float cachedCountdownTextWidth_ = 0.0f;
+    float cachedCountdownTextHeight_ = 0.0f;
+    float cachedCountdownSubWidth_ = 0.0f;
+    float cachedCountdownSubHeight_ = 0.0f;
+
+    // 効果音 (SE) データ
+    SoundData seCountdownBeep_{};
+    SoundData seStartSignal_{};
+    SoundData seEngineBoost_{};
+    bool isSeLoaded_ = false;
+
+    // パルス＆フラッシュ演出用
+    float pulseTimer_ = 0.0f;
+    float flashAlpha_ = 0.0f;
+    std::unique_ptr<SpriteObject> flashSprite_;
 };
 

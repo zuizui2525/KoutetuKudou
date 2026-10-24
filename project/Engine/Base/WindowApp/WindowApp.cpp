@@ -26,7 +26,8 @@ bool WindowApp::Initialize(const wchar_t* title, int32_t width, int32_t height) 
  
     RegisterClass(&wc_);
  
-    UINT windowStyle = WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
+    // 標準のWS_OVERLAPPEDWINDOWを使用し、最大化ボタン（□）および枠ドラッグによる自由拡縮を有効化
+    UINT windowStyle = WS_OVERLAPPEDWINDOW;
  
     AdjustWindowRect(&wrc_, windowStyle, false);
  
