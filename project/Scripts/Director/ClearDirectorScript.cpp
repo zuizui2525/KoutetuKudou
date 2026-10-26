@@ -53,15 +53,8 @@ void ClearDirectorScript::OnUpdate() {
         return;
     }
 
-    // 祝砲花火エフェクトのランダム打ち上げ (GPUパーティクルによる超大量祝砲花火)
-    if (--fireworkTimer_ <= 0) {
-        fireworkTimer_ = minInterval_ + rand() % maxIntervalRange_;
-        float rx = (static_cast<float>(rand()) / RAND_MAX - kRandCenterOffset) * rangeX_;
-        float ry = baseY_ + (static_cast<float>(rand()) / RAND_MAX) * rangeY_;
-        float rz = baseZ_ + (static_cast<float>(rand()) / RAND_MAX) * rangeZ_;
-        Vector3 fireworkPos = { rx, ry, rz };
-        EffectManager::GetInstance()->PlayGPUEffect(fireworkPos, kGpuFireworkParticleCount);
-    }
+    // 【コンポーネント主導運用への統一】ディレクターからのタイマー自動打ち上げは停止
+    // （演出を出す場合は GameObject に ParticleEffectComponent を持たせるか、インスペクターの手動発射ボタンを使用）
 }
 
 /// <summary>

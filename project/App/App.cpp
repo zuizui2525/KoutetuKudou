@@ -63,8 +63,12 @@ void App::Initialize() {
     SceneManager::GetInstance()->SetSceneFactory(sceneFactory_.get());
     SceneManager::GetInstance()->Initialize();
 
-    static const std::string kDefaultInitialSceneName = "Debug";
-    SceneManager::GetInstance()->ChangeSceneImmediate(kDefaultInitialSceneName);
+#ifdef _USEIMGUI
+    const std::string startupScene = SceneManager::GetInstance()->GetDebugStartupSceneName();
+#else
+    const std::string startupScene = SceneManager::GetInstance()->GetReleaseStartupSceneName();
+#endif
+    SceneManager::GetInstance()->ChangeSceneImmediate(startupScene);
 
     // --- PostProcess の初期化 ---
     postProcess_ = std::make_unique<PostProcess>();

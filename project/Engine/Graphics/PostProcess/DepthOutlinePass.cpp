@@ -7,6 +7,7 @@
 #include "Engine/Zuizui.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <cassert>
 
 #ifdef _USEIMGUI
@@ -15,7 +16,7 @@
 
 namespace {
     // マジックナンバー排除のための定数定義
-    constexpr UINT kReservedSrvIndexDepth = 125; // 深度用SRVのヒープ予約インデックス
+    constexpr UINT kReservedSrvIndexDepth = TextureManager::kReservedDepthOutlineIndex; // 深度用SRVのヒープ予約インデックス
     
     // デフォルトパラメータ
     const Vector3 kDefaultEdgeColor = { 0.0f, 0.0f, 0.0f }; // 黒

@@ -20,6 +20,7 @@ void EffectManager::Initialize() {
     effectMap_.clear();
     gpuParticle_ = std::make_unique<GPUParticleObject>();
     gpuParticle_->Initialize(GPUParticleObject::kDefaultMaxParticles);
+    gpuParticle_->Reset(); // 初期状態では粒子を一切放出せず待機
     Log::Write(L" ├─ 【エフェクトシステム初期化】 エフェクトマネージャおよびGPUパーティクルの初期化を完了しました。");
 }
 

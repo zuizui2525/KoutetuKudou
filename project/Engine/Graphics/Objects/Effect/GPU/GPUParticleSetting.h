@@ -38,9 +38,9 @@ struct GPUParticleSetting {
     float killAtY           = -999.0f; // -900.0f 以下で無効
 
     // 発生制御
-    float spawnRatePerSec   = 1000.0f; // 1秒あたりの自動発生数
-    bool  isAutoSpawning    = true;    // 自動連続発生を行うか
-    uint32_t burstCount     = 1000;    // 手動バースト発生時の個数
+    float spawnRatePerSec   = 0.0f;     // 1秒あたりの自動発生数（初期状態は停止）
+    bool  isAutoSpawning    = false;    // 自動連続発生を行うか（コンポーネントや明示呼び出しがあるまでOFF）
+    uint32_t burstCount     = 1000;     // 手動バースト発生時の個数
 };
 
 /// <summary>

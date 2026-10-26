@@ -50,7 +50,18 @@ void ModelObject::StopAnimation() {
     }
 }
 
+void ModelObject::ClearSkeletonAndSkin() {
+    hasSkeleton_ = false;
+    hasSkinCluster_ = false;
+    skeleton_ = Skeleton{};
+    skinCluster_ = SkinCluster{};
+    boneLines_.clear();
+    animationLocalMatrix_ = Math::MakeIdentity();
+}
+
 void ModelObject::UpdateSkeleton(const std::string& modelKey) {
+    ClearSkeletonAndSkin();
+
     auto modelData = sModelMgr->GetModelData(modelKey);
     if (!modelData || modelData->rootNode.name.empty()) return;
 
@@ -110,6 +121,7 @@ void ModelObject::Update() {
         }
 
         // 2. ルートノード名に対応するアニメーションを抽出して localMatrix に合成 (Step 1基盤)
+        bool appliedRootAnim = false;
         if (!currentModelKey_.empty()) {
             auto modelData = sModelMgr->GetModelData(currentModelKey_);
             if (modelData && !modelData->rootNode.name.empty()) {
@@ -120,8 +132,12 @@ void ModelObject::Update() {
                     Quaternion rotate = AnimationHelper::CalculateValue(rootAnim.rotate, animationTime_);
                     Vector3 scale = AnimationHelper::CalculateValue(rootAnim.scale, animationTime_);
                     animationLocalMatrix_ = Math::MakeAffineMatrix(scale, rotate, translate);
+                    appliedRootAnim = true;
                 }
             }
+        }
+        if (!appliedRootAnim) {
+            animationLocalMatrix_ = Math::MakeIdentity();
         }
     }
 
@@ -203,5 +219,21 @@ void ModelObject::DrawSkeletonDebug() {
             boneLines_[i]->Draw(kBoneLineTextureKey);
         }
     }
+}
+
+std::optional<Matrix4x4> ModelObject::GetJointWorldMatrix(const std::string& jointName) const {
+    if (!hasSkeleton_) return std::nullopt;
+
+    auto jointMatOpt = GetJointSkeletonMatrix(skeleton_, jointName);
+    if (!jointMatOpt) return std::nullopt;
+
+    return Math::Multiply(*jointMatOpt, matWorld_);
+}
+
+std::optional<Vector3> ModelObject::GetJointWorldPosition(const std::string& jointName) const {
+    auto worldMatOpt = GetJointWorldMatrix(jointName);
+    if (!worldMatOpt) return std::nullopt;
+
+    return Vector3{ worldMatOpt->m[3][0], worldMatOpt->m[3][1], worldMatOpt->m[3][2] };
 }
 

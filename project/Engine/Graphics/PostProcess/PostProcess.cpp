@@ -15,6 +15,7 @@
 #include "Engine/Zuizui.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
 #include "Engine/Base/Log/Log.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <cassert>
 #include <format>
 
@@ -68,8 +69,8 @@ void PostProcess::Initialize() {
     
     UINT srvDescriptorSize = engine->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    constexpr UINT kReservedSrvIndex = 127;
-    constexpr UINT kReservedSrvIndexTemp = 126;
+    constexpr UINT kReservedSrvIndex = TextureManager::kReservedPostProcessMainIndex;
+    constexpr UINT kReservedSrvIndexTemp = TextureManager::kReservedPostProcessTempIndex;
     srvHandleCPU.ptr += kReservedSrvIndex * srvDescriptorSize;
     srvHandleGPU.ptr += kReservedSrvIndex * srvDescriptorSize;
     srvHandleCPUTemp.ptr += kReservedSrvIndexTemp * srvDescriptorSize;

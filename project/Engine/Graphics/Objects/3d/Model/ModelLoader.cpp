@@ -1,5 +1,7 @@
 #include "Engine/Graphics/Objects/3d/Model/ModelLoader.h"
 #include "Engine/Math/Matrix/Matrix.h"
+#include "Engine/Base/Log/Log.h"
+#include "Engine/Base/Utils/StringUtility.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -7,8 +9,12 @@
 #include <sstream>
 #include <filesystem>
 #include <cassert>
+#include <format>
 
 namespace {
+	constexpr uint32_t kFirstTextureIndex = 0;
+	constexpr char kEmbeddedTexturePrefix = '*';
+
 	Node ReadNode(aiNode* node) {
 		assert(node != nullptr);
 		Node result;
@@ -127,14 +133,33 @@ ModelData ModelLoader::LoadObjFile(const std::string& filename) {
 		}
 	}
 
+	// マテリアル・テクスチャパスの安全抽出 (DIFFUSE または glTF PBR BASE_COLOR のフォールバック探索)
 	for (uint32_t materialIndex = 0; materialIndex < scene->mNumMaterials; ++materialIndex) {
 		aiMaterial* material = scene->mMaterials[materialIndex];
-		if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
-			aiString textureFilePath;
-			material->GetTexture(aiTextureType_DIFFUSE, 0, &textureFilePath);
-			std::filesystem::path fullPath(filename);
-			std::string directoryPath = fullPath.parent_path().string();
-			modelData.material.textureFilePath = directoryPath + "/" + textureFilePath.C_Str();
+		aiString textureFilePath;
+
+		bool hasTexture = (material->GetTextureCount(aiTextureType_DIFFUSE) > 0 &&
+			material->GetTexture(aiTextureType_DIFFUSE, kFirstTextureIndex, &textureFilePath) == AI_SUCCESS);
+
+		// glTF 2.0 形式の BASE_COLOR テクスチャをフォールバック探索
+		if (!hasTexture && material->GetTextureCount(aiTextureType_BASE_COLOR) > 0) {
+			hasTexture = (material->GetTexture(aiTextureType_BASE_COLOR, kFirstTextureIndex, &textureFilePath) == AI_SUCCESS);
+		}
+
+		if (hasTexture) {
+			std::string texPathStr = textureFilePath.C_Str();
+
+			// 埋め込みテクスチャ (*0, *1 等) のハンドリング
+			if (!texPathStr.empty() && texPathStr[0] == kEmbeddedTexturePrefix) {
+				Log::Write(std::format(L" [警告] モデル「{}」に埋め込みテクスチャ「{}」が検出されました。外部テクスチャファイルの利用を推奨します。",
+					ConvertString(filename), ConvertString(texPathStr)));
+			} else {
+				std::filesystem::path fullPath(filename);
+				std::filesystem::path dirPath = fullPath.parent_path();
+				std::filesystem::path combinedPath = dirPath / texPathStr;
+				modelData.material.textureFilePath = combinedPath.generic_string();
+				break; // 最初に見つかった有効な外部テクスチャを採用
+			}
 		}
 	}
 

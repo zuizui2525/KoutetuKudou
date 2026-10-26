@@ -104,11 +104,15 @@ void ImguiManager::Initialize(HWND hwnd, ID3D12Device* device, int backBufferCou
         "C:\\Windows\\Fonts\\msgothic.ttc"       // ＭＳ ゴシック
     };
 
+    // 日本語フォント合成時の垂直位置調整オフセット（プライマリフォントとの垂直中央揃え・ベースライン補正用定数）
+    static constexpr float kJpFontOffsetY = 1.0f;
+
     ImFontConfig jpFontConfig;
     jpFontConfig.MergeMode = (font != nullptr); // プライマリフォントがある場合は合成、無ければ単体としてロード
     jpFontConfig.PixelSnapH = true;
     jpFontConfig.OversampleH = 2;
     jpFontConfig.OversampleV = 1;
+    jpFontConfig.GlyphOffset.y = kJpFontOffsetY; // 日本語文字の浮き上がりを抑え、チェックボックス中央と高さを整合
 
     for (const char* jpPath : japaneseFontPaths) {
         if (std::filesystem::exists(jpPath)) {

@@ -5,6 +5,7 @@
 #include "Engine/Debug/PerformanceMonitorWindow.h"
 #include "Engine/Debug/ContentBrowserWindow.h"
 #include "Engine/Debug/ParticleStudioWindow.h"
+#include "Engine/Debug/EngineHelpData.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Debug/IGameObject.h"
 #include "Engine/Zuizui.h"
@@ -35,6 +36,7 @@
 #include "Engine/Debug/Command/CommandHistory.h"
 #include "Engine/Debug/Command/CreateGameObjectCommand.h"
 #include "Engine/Debug/Command/DeleteGameObjectCommand.h"
+#include "Engine/Debug/EditorNotification.h"
 #include "Engine/Base/Utils/StringUtility.h"
 #include <filesystem>
 #include <format>
@@ -115,6 +117,200 @@ namespace {
     // シーン削除モーダル用ステート変数
     static std::string sSceneNameToDelete = "";
     static bool sTriggerOpenDeleteSceneModal = false;
+
+    // エディタ用アイコン定数 (マジックナンバー・ストリング排除)
+    constexpr const char* kIconEyeOpenKey    = "sys_icon_eye_open";
+    constexpr const char* kIconEyeClosedKey  = "sys_icon_eye_closed";
+    constexpr const char* kIconLockClosedKey = "sys_icon_lock_closed";
+    constexpr const char* kIconLockOpenKey   = "sys_icon_lock_open";
+
+    constexpr const char* kIconEyeOpenPath    = "resources/Textures/Icons/icon_eye_open.png";
+    constexpr const char* kIconEyeClosedPath  = "resources/Textures/Icons/icon_eye_closed.png";
+    constexpr const char* kIconLockClosedPath = "resources/Textures/Icons/icon_lock_closed.png";
+    constexpr const char* kIconLockOpenPath   = "resources/Textures/Icons/icon_lock_open.png";
+
+    static bool sEditorIconsLoaded = false;
+    void EnsureEditorIconsLoaded() {
+        if (sEditorIconsLoaded) return;
+        if (auto texMgr = TextureResource::GetTextureManager()) {
+            texMgr->LoadTexture(kIconEyeOpenKey, kIconEyeOpenPath);
+            texMgr->LoadTexture(kIconEyeClosedKey, kIconEyeClosedPath);
+            texMgr->LoadTexture(kIconLockClosedKey, kIconLockClosedPath);
+            texMgr->LoadTexture(kIconLockOpenKey, kIconLockOpenPath);
+            sEditorIconsLoaded = true;
+        }
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE GetEditorIconHandle(const char* key) {
+        if (auto texMgr = TextureResource::GetTextureManager()) {
+            if (texMgr->HasTexture(key)) {
+                return texMgr->GetGpuHandle(key);
+            }
+        }
+        D3D12_GPU_DESCRIPTOR_HANDLE nullHandle{};
+        nullHandle.ptr = 0;
+        return nullHandle;
+    }
+
+    // 南京錠（レイアウト固定）トグルボタンのPNG画像＆ベクターフォールバック描画ヘルパー (マジックナンバー排除)
+    bool RenderLockToggleButton(bool& isLocked) {
+        EnsureEditorIconsLoaded();
+
+        constexpr float kBtnWidth = 26.0f;
+        constexpr float kRounding = 3.0f;
+        constexpr ImVec4 kLockedBgColor   = { 0.22f, 0.44f, 0.72f, 1.0f }; // ロック時: アクセントブルー
+        constexpr ImVec4 kUnlockedBgColor = { 0.16f, 0.17f, 0.19f, 0.85f }; // アンロック時: ダークグレー
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, kRounding);
+        ImGui::PushStyleColor(ImGuiCol_Button, isLocked ? kLockedBgColor : kUnlockedBgColor);
+        
+        bool clicked = ImGui::Button("##LockLayoutBtn", ImVec2(kBtnWidth, 0.0f));
+        if (clicked) {
+            isLocked = !isLocked;
+        }
+
+        // ボタン領域にアイコンを描画
+        ImVec2 rectMin = ImGui::GetItemRectMin();
+        ImVec2 rectMax = ImGui::GetItemRectMax();
+        ImVec2 center = { (rectMin.x + rectMax.x) * 0.5f, (rectMin.y + rectMax.y) * 0.5f };
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        constexpr float kIconDisplaySize = 14.0f;
+        auto handle = GetEditorIconHandle(isLocked ? kIconLockClosedKey : kIconLockOpenKey);
+        if (handle.ptr != 0) {
+            ImVec2 iconMin = { center.x - kIconDisplaySize * 0.5f, center.y - kIconDisplaySize * 0.5f };
+            ImVec2 iconMax = { center.x + kIconDisplaySize * 0.5f, center.y + kIconDisplaySize * 0.5f };
+            ImU32 tintColor = isLocked ? IM_COL32(255, 255, 255, 255) : IM_COL32(205, 210, 220, 255);
+            drawList->AddImage((ImTextureID)handle.ptr, iconMin, iconMax, ImVec2(0, 0), ImVec2(1, 1), tintColor);
+        } else {
+            // フォールバックベクター描画
+            constexpr float kBodyWidth = 11.5f;
+            constexpr float kBodyHeight = 8.0f;
+            constexpr float kBodyRounding = 1.5f;
+            constexpr float kShackleHalfW = 3.4f;
+            constexpr float kShackleRadius = 3.4f;
+            constexpr float kShackleThickness = 1.8f;
+            constexpr float kPi = 3.14159265358979323846f;
+            constexpr int kArcSegments = 16;
+            constexpr float kKeyHoleRadius = 1.2f;
+            constexpr float kKeyHoleSlotW = 1.0f;
+            constexpr float kKeyHoleSlotH = 2.0f;
+
+            const ImU32 kIconColor = isLocked ? IM_COL32(255, 255, 255, 255) : IM_COL32(205, 210, 220, 255);
+            const ImU32 kHoleColor = isLocked ? IM_COL32(35, 75, 135, 255) : IM_COL32(30, 32, 36, 255);
+
+            ImVec2 bodyMin = { center.x - kBodyWidth * 0.5f, center.y - 0.5f };
+            ImVec2 bodyMax = { center.x + kBodyWidth * 0.5f, center.y - 0.5f + kBodyHeight };
+
+            drawList->PathClear();
+            if (isLocked) {
+                ImVec2 arcCenter = { center.x, center.y - 3.8f };
+                drawList->PathLineTo({ center.x - kShackleHalfW, bodyMin.y + 1.2f });
+                drawList->PathLineTo({ center.x - kShackleHalfW, arcCenter.y });
+                drawList->PathArcTo(arcCenter, kShackleRadius, kPi, 0.0f, kArcSegments);
+                drawList->PathLineTo({ center.x + kShackleHalfW, arcCenter.y });
+                drawList->PathLineTo({ center.x + kShackleHalfW, bodyMin.y + 1.2f });
+                drawList->PathStroke(kIconColor, 0, kShackleThickness);
+            } else {
+                constexpr float kLiftY = 3.0f;
+                ImVec2 arcCenter = { center.x, center.y - 3.8f - kLiftY };
+                drawList->PathLineTo({ center.x - kShackleHalfW, bodyMin.y - 0.5f });
+                drawList->PathLineTo({ center.x - kShackleHalfW, arcCenter.y });
+                drawList->PathArcTo(arcCenter, kShackleRadius, kPi, 0.0f, kArcSegments);
+                drawList->PathLineTo({ center.x + kShackleHalfW, arcCenter.y });
+                drawList->PathLineTo({ center.x + kShackleHalfW, arcCenter.y + 2.0f });
+                drawList->PathStroke(kIconColor, 0, kShackleThickness);
+            }
+
+            drawList->AddRectFilled(bodyMin, bodyMax, kIconColor, kBodyRounding);
+            ImVec2 holeCenter = { center.x, bodyMin.y + kBodyHeight * 0.42f };
+            drawList->AddCircleFilled(holeCenter, kKeyHoleRadius, kHoleColor);
+            drawList->AddRectFilled({ holeCenter.x - kKeyHoleSlotW * 0.5f, holeCenter.y },
+                                    { holeCenter.x + kKeyHoleSlotW * 0.5f, holeCenter.y + kKeyHoleSlotH },
+                                    kHoleColor);
+        }
+
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(isLocked ? "レイアウト固定中 (境界サイズ変更をロック中 / クリックで解除)" : "レイアウト可動 (クリックで境界サイズを固定)");
+        }
+
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+
+        return clicked;
+    }
+
+    // ヒエラルキー用：Blender風フレームレス目アイコン描画ボタン (マジックナンバー排除)
+    bool RenderEyeVisibilityButton(const char* strId, bool isVisible) {
+        EnsureEditorIconsLoaded();
+
+        float frameHeight = ImGui::GetFrameHeight();
+        // アイコンの横幅と描画サイズ (マジックナンバー排除)
+        constexpr float kIconBtnWidth = 18.0f;
+        constexpr float kIconDisplaySize = 14.0f;
+
+        // ボタンのクリック幅は kIconBtnWidth、高さは行の高さ frameHeight に合わせる
+        ImGui::SetNextItemAllowOverlap();
+        bool clicked = ImGui::InvisibleButton(strId, ImVec2(kIconBtnWidth, frameHeight));
+        bool hovered = ImGui::IsItemHovered();
+
+        // Selectable テキスト（Camera等）の視覚的中心とアイコンの天地中央を一致させるための垂直オフセット (マジックナンバー排除)
+        constexpr float kVerticalAlignOffsetY = -1.5f;
+
+        ImVec2 rectMin = ImGui::GetItemRectMin();
+        ImVec2 rectMax = ImGui::GetItemRectMax();
+        ImVec2 center = { (rectMin.x + rectMax.x) * 0.5f, (rectMin.y + rectMax.y) * 0.5f + kVerticalAlignOffsetY };
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        // Blender風：アイコン自体をホバー時に高輝度発光させる（行全体の背景ハイライトと一体化）
+        const ImU32 eyeTintColor = isVisible
+            ? (hovered ? IM_COL32(255, 255, 255, 255) : IM_COL32(215, 222, 235, 230)) // 表示時: 通常はソフトホワイト、ホバー時はクリアホワイトに発光
+            : (hovered ? IM_COL32(190, 195, 205, 240) : IM_COL32(100, 105, 115, 160)); // 非表示時: 通常は控えめなダークグレー、ホバー時はライトグレー
+
+        auto handle = GetEditorIconHandle(isVisible ? kIconEyeOpenKey : kIconEyeClosedKey);
+        if (handle.ptr != 0) {
+            ImVec2 iconMin = { center.x - kIconDisplaySize * 0.5f, center.y - kIconDisplaySize * 0.5f };
+            ImVec2 iconMax = { center.x + kIconDisplaySize * 0.5f, center.y + kIconDisplaySize * 0.5f };
+            drawList->AddImage((ImTextureID)handle.ptr, iconMin, iconMax, ImVec2(0, 0), ImVec2(1, 1), eyeTintColor);
+        } else {
+            // フォールバックベクター描画
+            constexpr float kEyeWidthRatio = 0.58f;
+            constexpr float kEyeHeightRatio = 0.28f;
+            constexpr float kStrokeThickness = 1.5f;
+            float eyeHalfW = kIconDisplaySize * kEyeWidthRatio * 0.5f;
+            float eyeH = kIconDisplaySize * kEyeHeightRatio;
+
+            if (isVisible) {
+                ImVec2 pL = { center.x - eyeHalfW, center.y };
+                ImVec2 pR = { center.x + eyeHalfW, center.y };
+                ImVec2 cTop1 = { center.x - eyeHalfW * 0.5f, center.y - eyeH };
+                ImVec2 cTop2 = { center.x + eyeHalfW * 0.5f, center.y - eyeH };
+                ImVec2 cBot1 = { center.x - eyeHalfW * 0.5f, center.y + eyeH };
+                ImVec2 cBot2 = { center.x + eyeHalfW * 0.5f, center.y + eyeH };
+
+                drawList->AddBezierCubic(pL, cTop1, cTop2, pR, eyeTintColor, kStrokeThickness);
+                drawList->AddBezierCubic(pL, cBot1, cBot2, pR, eyeTintColor, kStrokeThickness);
+                drawList->AddCircleFilled(center, eyeH * 0.45f, eyeTintColor);
+            } else {
+                ImVec2 pL = { center.x - eyeHalfW, center.y };
+                ImVec2 pR = { center.x + eyeHalfW, center.y };
+                ImVec2 cBot1 = { center.x - eyeHalfW * 0.5f, center.y + eyeH * 0.5f };
+                ImVec2 cBot2 = { center.x + eyeHalfW * 0.5f, center.y + eyeH * 0.5f };
+                drawList->AddBezierCubic(pL, cBot1, cBot2, pR, eyeTintColor, kStrokeThickness);
+
+                ImVec2 slashStart = { center.x - eyeHalfW * 0.65f, center.y + eyeH * 0.75f };
+                ImVec2 slashEnd   = { center.x + eyeHalfW * 0.65f, center.y - eyeH * 0.75f };
+                drawList->AddLine(slashStart, slashEnd, eyeTintColor, kStrokeThickness);
+            }
+        }
+
+        if (hovered) {
+            ImGui::SetTooltip(isVisible ? "表示中 (クリックで非表示)" : "非表示中 (クリックで表示)");
+        }
+
+        return clicked;
+    }
+
 
     // 単一フェーズ（INまたはOUT）のGUI描画ヘルパー
     bool RenderSingleTransitionSettingUI(const char* idPrefix, SingleTransitionSetting& setting, bool isOut) {
@@ -257,6 +453,32 @@ namespace {
                 ImGui::CloseCurrentPopup();
             }
 
+            ImGui::Separator();
+            ImGui::Text("【起動シーン設定】");
+
+            auto sceneMgr = SceneManager::GetInstance();
+            std::string debugStartup = sceneMgr->GetDebugStartupSceneName();
+            std::string releaseStartup = sceneMgr->GetReleaseStartupSceneName();
+
+            bool isDebugStartup = (sceneName == debugStartup);
+            bool isReleaseStartup = (sceneName == releaseStartup);
+
+            std::string debugStartupLabel = isDebugStartup
+                ? "★ デバッグ起動シーンに設定中"
+                : "☆ デバッグ起動シーンに設定";
+            if (ImGui::MenuItem(debugStartupLabel.c_str(), nullptr, isDebugStartup)) {
+                sceneMgr->SetDebugStartupSceneName(sceneName);
+                EditorNotification::ShowSuccess("デバッグ起動シーンを「" + sceneName + "」に設定しました");
+            }
+
+            std::string releaseStartupLabel = isReleaseStartup
+                ? "★ 本番(Release)起動シーンに設定中"
+                : "☆ 本番(Release)起動シーンに設定";
+            if (ImGui::MenuItem(releaseStartupLabel.c_str(), nullptr, isReleaseStartup)) {
+                sceneMgr->SetReleaseStartupSceneName(sceneName);
+                EditorNotification::ShowSuccess("本番起動シーンを「" + sceneName + "」に設定しました");
+            }
+
             ImGui::EndPopup();
         }
     }
@@ -331,9 +553,11 @@ namespace {
             SceneMemoryCache::GetInstance()->ClearCache(currentSceneName);
             Log::Write(std::format(L"[Scene] 現在のシーン「{}」({} 個の GameObject) を「{}」に正常保存しました！",
                 ConvertString(currentSceneName), gameObjects.size(), ConvertString(scenePath)));
+            EditorNotification::ShowSuccess("シーン「" + currentSceneName + "」を保存しました");
         } else {
             Log::Write(std::format(L"[Scene] シーン「{}」の保存に失敗しました。",
                 ConvertString(currentSceneName)));
+            EditorNotification::ShowWarning("シーン「" + currentSceneName + "」の保存に失敗しました");
         }
     }
 
@@ -689,6 +913,8 @@ DebugEditor::DebugEditor()
       showContentBrowser_(true),
       showShortcutsWindow_(false),
       helpWindowTargetTab_(-1),
+      helpSearchBuffer_{},
+      helpSearchExactMatch_(false),
       isGameViewVisible_(false),
       currentWorkspace_(EditorWorkspace::Layout),
       activeWorkspaceIndex_(0),
@@ -887,6 +1113,7 @@ void DebugEditor::SaveWorkspacesConfig() {
 
     ofs << "{\n";
     ofs << "  \"activeWorkspaceIndex\": " << activeWorkspaceIndex_ << ",\n";
+    ofs << "  \"isLayoutLocked\": " << (isLayoutLocked_ ? "true" : "false") << ",\n";
     ofs << "  \"workspaces\": [\n";
 
     for (size_t i = 0; i < workspaces_.size(); ++i) {
@@ -931,6 +1158,7 @@ void DebugEditor::LoadWorkspacesConfig() {
 
     try {
         int loadedActiveIndex = ExtractJsonInt(jsonStr, "activeWorkspaceIndex", 0);
+        isLayoutLocked_ = ExtractJsonBool(jsonStr, "isLayoutLocked", false);
 
         size_t arrayStart = jsonStr.find("\"workspaces\":");
         if (arrayStart == std::string::npos) return;
@@ -1057,6 +1285,26 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
     // 描画開始時に可視性フラグを初期化
     HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
 
+    // 右上の最大化（□）ボタンや復元ボタンによるウィンドウサイズ変更の監視
+    static bool sInitializedZoomState = false;
+    static bool sLastIsZoomed = false;
+    bool isCurrentlyZoomed = (IsZoomed(hwnd) != FALSE);
+    if (!isFullscreen_) {
+        if (!sInitializedZoomState) {
+            sLastIsZoomed = isCurrentlyZoomed;
+            sInitializedZoomState = true;
+        } else if (isCurrentlyZoomed != sLastIsZoomed) {
+            sLastIsZoomed = isCurrentlyZoomed;
+            if (isCurrentlyZoomed) {
+                EditorNotification::ShowInfo("ウィンドウを最大化しました");
+            } else {
+                EditorNotification::ShowInfo("ウィンドウサイズを復元しました");
+            }
+        }
+    } else {
+        sLastIsZoomed = isCurrentlyZoomed;
+    }
+
     // Ctrl+S ショートカットによる即時シーン保存 & ワークスペース設定保存
     ImGuiIO& io = ImGui::GetIO();
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
@@ -1099,7 +1347,12 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
     std::string wsId = (activeWorkspaceIndex_ < workspaces_.size()) ? workspaces_[activeWorkspaceIndex_].id : "layout";
     std::string dockspaceName = std::string(kDockSpacePrefix) + wsId;
     ImGuiID dockspaceId = ImGui::GetID(dockspaceName.c_str());
-    ImGui::DockSpaceOverViewport(dockspaceId, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+    ImGuiDockNodeFlags dockFlags = ImGuiDockNodeFlags_PassthruCentralNode;
+    if (isLayoutLocked_) {
+        dockFlags |= ImGuiDockNodeFlags_NoResize;
+    }
+    ImGui::DockSpaceOverViewport(dockspaceId, ImGui::GetMainViewport(), dockFlags);
 
     // -------------------------------------------------------------
     // 各ウィンドウの描画 (ワークスペース別フラグに基づき排他制御・FPS最適化)
@@ -1245,27 +1498,30 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
                 ImGui::PushID(static_cast<int>(i));
 
-                // 表示フラグ用のチェックボックス
-                bool isVisible = obj->IsVisible();
-                std::string chkLabel = "##visible_" + obj->GetName();
-                if (ImGui::Checkbox(chkLabel.c_str(), &isVisible)) {
-                    obj->SetVisible(isVisible);
-                }
-                ImGui::SameLine();
-
                 auto* go = dynamic_cast<GameObject*>(obj);
                 bool isSelected = (obj == selected);
 
                 if (go) {
-                    // 枠線や四角い背景を一切持たないシンプルな「x」テキストUI (マジックナンバー排除)
-                    constexpr float kDeleteBtnWidth = 14.0f;
-                    constexpr float kItemSpacing = 4.0f;
-                    constexpr float kMinSelectableWidth = 50.0f;
-                    const ImVec4 kNormalTextColor = { 0.5f, 0.5f, 0.5f, 0.7f };  // 通常時: 控えめなグレー
-                    const ImVec4 kHoveredTextColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // ホバー時: 白くハイライト（赤色は完全排除）
+                    // --- Blender風アウトライナー行レイアウト定数 (マジックナンバー排除) ---
+                    constexpr float kEyeBtnWidth = 18.0f;       // 目アイコンボタンのクリック幅
+                    constexpr float kDeleteBtnWidth = 14.0f;    // 削除「x」ボタンのクリック幅
+                    constexpr float kItemSpacing = 4.0f;        // アイコン間の間隔
+                    constexpr float kRightPadding = 4.0f;       // 右端の余白
+                    const ImVec4 kNormalTextColor = { 0.5f, 0.5f, 0.5f, 0.7f };  // 削除ボタン通常色（控えめなグレー）
+                    const ImVec4 kHoveredTextColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 削除ボタンホバー色（クリアホワイト）
 
+                    float rowStartX = ImGui::GetCursorPosX();
+                    float rowStartY = ImGui::GetCursorPosY();
                     float availWidth = ImGui::GetContentRegionAvail().x;
-                    float selectableWidth = (std::max)(kMinSelectableWidth, availWidth - kDeleteBtnWidth - kItemSpacing);
+                    float frameHeight = ImGui::GetFrameHeight();
+
+                    // 【一体ハイライト判定】マウスが文字・目・xのどこにあっても、行全体（横幅全域）を1本の帯として発光させる
+                    ImVec2 rowScreenMin = ImGui::GetCursorScreenPos();
+                    ImVec2 rowScreenMax = ImVec2(rowScreenMin.x + availWidth, rowScreenMin.y + frameHeight);
+                    ImVec2 mousePos = ImGui::GetIO().MousePos;
+                    bool isMouseInRow = (mousePos.x >= rowScreenMin.x && mousePos.x <= rowScreenMax.x &&
+                                         mousePos.y >= rowScreenMin.y && mousePos.y <= rowScreenMax.y) &&
+                                        ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
                     // 現在アクティブなカメラかどうか判定
                     bool isActiveCam = false;
@@ -1282,11 +1538,25 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         ImGui::PushStyleColor(ImGuiCol_Text, kActiveCamColor);
                     }
 
-                    ImGui::Selectable(label.c_str(), isSelected, 0, ImVec2(selectableWidth, 0.0f));
+                    // 幅 0.0f（全幅）で Selectable を敷き、行内ホバー時は ImGuiSelectableFlags_Highlight を付与して一体発光
+                    ImGuiSelectableFlags selectableFlags = ImGuiSelectableFlags_AllowOverlap;
+                    if (isMouseInRow && !isSelected) {
+                        selectableFlags |= ImGuiSelectableFlags_Highlight;
+                    }
+
+                    ImGui::Selectable(label.c_str(), isSelected, selectableFlags, ImVec2(0.0f, 0.0f));
+                    float nextRowY = ImGui::GetCursorPosY(); // 次の行の開始Y座標を保持
 
                     if (isActiveCam) {
                         ImGui::PopStyleColor();
                     }
+
+                    // 行全体のクリック・ダブルクリック状態を取得
+                    bool isRowHovered = ImGui::IsItemHovered();
+                    bool isRowDoubleClicked = isRowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+                    bool isRowClickedL = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                    bool isRowClickedM = ImGui::IsItemClicked(ImGuiMouseButton_Middle);
+                    bool isRowClickedR = ImGui::IsItemClicked(ImGuiMouseButton_Right);
 
                     // GameObject参照用のドラッグ＆ドロップソース (インスペクターのスロットへD&D可能)
                     if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
@@ -1296,29 +1566,12 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         ImGui::EndDragDropSource();
                     }
 
-                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                        isSceneSelected_ = false;
-                        SceneHierarchy::GetInstance()->SetSelected(obj);
-                        FocusOnSelectedObject();
-                    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-                        isSceneSelected_ = false;
-                        SceneHierarchy::GetInstance()->SetSelected(obj);
-                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpTranslate);
-                    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
-                        isSceneSelected_ = false;
-                        SceneHierarchy::GetInstance()->SetSelected(obj);
-                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpRotate);
-                    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-                        isSceneSelected_ = false;
-                        SceneHierarchy::GetInstance()->SetSelected(obj);
-                        if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
-                    }
-
                     // GameObject項目の右クリックコンテキストメニュー
                     if (ImGui::BeginPopupContextItem()) {
                         if (ImGui::MenuItem("Save as Prefab (プレハブとして保存)")) {
                             std::string prefabFilePath = "resources/Prefabs/" + go->GetName() + ".prefab";
                             PrefabManager::GetInstance().SavePrefab(prefabFilePath, go);
+                            EditorNotification::ShowSuccess("プレハブ「" + go->GetName() + "」を保存しました");
                         }
                         ImGui::Separator();
                         if (ImGui::MenuItem("削除 (Delete)")) {
@@ -1327,17 +1580,60 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                         ImGui::EndPopup();
                     }
 
+                    // ── 右端の操作アイコン群を行ハイライトの上にオーバーレイ配置 ──
+                    float iconsTotalWidth = kEyeBtnWidth + kItemSpacing + kDeleteBtnWidth + kRightPadding;
+                    float iconsStartX = (std::max)(rowStartX, rowStartX + availWidth - iconsTotalWidth);
+                    ImGui::SetCursorPos(ImVec2(iconsStartX, rowStartY));
+
+                    // 👁 1. 表示フラグ用の目アイコンボタン (名前の右端に配置・フレームレス)
+                    bool isVisible = obj->IsVisible();
+                    std::string eyeBtnId = "##eye_vis_" + obj->GetName() + "_" + std::to_string(i);
+                    bool eyeClicked = RenderEyeVisibilityButton(eyeBtnId.c_str(), isVisible);
+                    bool isEyeHovered = ImGui::IsItemHovered();
+                    if (eyeClicked) {
+                        obj->SetVisible(!isVisible);
+                    }
+
+                    // ✖ 2. 削除ボタン (目アイコンの右隣に配置・フレームレス)
                     ImGui::SameLine();
-                    // 四角い枠や背景を描画しない不可視ボタンでクリックとホバーを検知
+                    ImGui::SetNextItemAllowOverlap();
                     ImVec2 btnPos = ImGui::GetCursorPos();
+                    bool delClicked = false;
                     if (ImGui::InvisibleButton("##del_btn", ImVec2(kDeleteBtnWidth, ImGui::GetTextLineHeight()))) {
+                        delClicked = true;
                         objToDelete = go;
                     }
-                    bool isBtnHovered = ImGui::IsItemHovered();
+                    bool isDelHovered = ImGui::IsItemHovered();
 
-                    // 同じ位置にテキスト単体を描画（ホバー時のみ上品に白く点灯）
+                    // テキスト単体描画（ホバー時のみ白く点灯）
                     ImGui::SetCursorPos(btnPos);
-                    ImGui::TextColored(isBtnHovered ? kHoveredTextColor : kNormalTextColor, "x");
+                    ImGui::TextColored(isDelHovered ? kHoveredTextColor : kNormalTextColor, "x");
+
+                    // 【排他制御】アイコン（目やx）のクリック/ホバー時は、背後のオブジェクト選択処理をスキップして誤爆を防止
+                    bool isIconActive = isEyeHovered || isDelHovered || eyeClicked || delClicked;
+
+                    if (!isIconActive) {
+                        if (isRowDoubleClicked) {
+                            isSceneSelected_ = false;
+                            SceneHierarchy::GetInstance()->SetSelected(obj);
+                            FocusOnSelectedObject();
+                        } else if (isRowClickedL) {
+                            isSceneSelected_ = false;
+                            SceneHierarchy::GetInstance()->SetSelected(obj);
+                            if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpTranslate);
+                        } else if (isRowClickedM) {
+                            isSceneSelected_ = false;
+                            SceneHierarchy::GetInstance()->SetSelected(obj);
+                            if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpRotate);
+                        } else if (isRowClickedR) {
+                            isSceneSelected_ = false;
+                            SceneHierarchy::GetInstance()->SetSelected(obj);
+                            if (sceneViewWindow_) sceneViewWindow_->SetGizmoOperation(SceneViewWindow::kGizmoOpScale);
+                        }
+                    }
+
+                    // カーソル位置を次の行の先頭へ確実に進める
+                    ImGui::SetCursorPos(ImVec2(rowStartX, nextRowY));
                 } else {
                     ImGui::Selectable(obj->GetName().c_str(), isSelected);
                     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
@@ -1427,6 +1723,7 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
                     if (ImGui::Button(kPrefabBtnText, ImVec2(prefabBtnWidth, 0.0f))) {
                         std::string prefabFilePath = "resources/Prefabs/" + selectedGo->GetName() + ".prefab";
                         PrefabManager::GetInstance().SavePrefab(prefabFilePath, selectedGo);
+                        EditorNotification::ShowSuccess("プレハブ「" + selectedGo->GetName() + "」を保存しました");
                     }
                     if (ImGui::IsItemHovered()) {
                         ImGui::SetTooltip("このオブジェクトをプレハブとして保存します (resources/Prefabs/)");
@@ -1450,10 +1747,18 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // 各ウィンドウの開閉状態（×ボタンでの閉鎖やメニュー切り替え）を現在の作業ページにリアルタイム同期
     SyncCurrentWorkspaceWindowState();
+
+    // トースト通知の更新・最前面オーバーレイ描画
+    EditorNotification::Draw();
 }
 
 void DebugEditor::ToggleFullscreen(HWND hwnd) {
     isFullscreen_ = !isFullscreen_;
+    if (isFullscreen_) {
+        EditorNotification::ShowInfo("フルスクリーン表示に切り替えました (F11で解除)");
+    } else {
+        EditorNotification::ShowInfo("ウィンドウ表示に戻しました");
+    }
     DWORD dwStyle = GetWindowLong(hwnd, GWL_STYLE);
 
     // 通常時のウィンドウスタイル（最大化ボタンおよび枠ドラッグによる自由拡縮を許可・可視状態を維持）
@@ -1574,6 +1879,9 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 }
             }
 
+            std::string currentDebugStartup = SceneManager::GetInstance()->GetDebugStartupSceneName();
+            std::string currentReleaseStartup = SceneManager::GetInstance()->GetReleaseStartupSceneName();
+
             // シーン一覧表示
             for (const auto& sName : jsonScenes) {
                 std::string itemId = "json_scene_" + sName;
@@ -1585,8 +1893,21 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 bool hasOut = transCfg.HasOut();
                 bool hasIn = transCfg.HasIn();
 
+                bool isDebugStartup = (sName == currentDebugStartup);
+                bool isReleaseStartup = (sName == currentReleaseStartup);
+
+                // 起動シーンバッジ
+                std::string startupBadge;
+                if (isDebugStartup && isReleaseStartup) {
+                    startupBadge = " [D/R]";
+                } else if (isDebugStartup) {
+                    startupBadge = " [Debug]";
+                } else if (isReleaseStartup) {
+                    startupBadge = " [Release]";
+                }
+
                 // 星を描画するための余白を確保したラベル
-                std::string label = sName;
+                std::string label = sName + startupBadge;
                 if (hasIn && hasOut) {
                     label += "    ";
                 } else if (hasIn || hasOut) {
@@ -1602,6 +1923,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                             isPaused_ = true;
                         }
                         SceneManager::GetInstance()->ChangeScene(sName, false);
+                        EditorNotification::ShowInfo("シーンを「" + sName + "」に切り替えました");
                     }
                 }
 
@@ -1610,7 +1932,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                     ImDrawList* drawList = ImGui::GetWindowDrawList();
                     ImVec2 itemMin = ImGui::GetItemRectMin();
                     ImVec2 itemMax = ImGui::GetItemRectMax();
-                    float textWidth = ImGui::CalcTextSize(sName.c_str()).x;
+                    float textWidth = ImGui::CalcTextSize((sName + startupBadge).c_str()).x;
                     float lineHeight = ImGui::GetTextLineHeight();
                     float posY = itemMin.y + (itemMax.y - itemMin.y - lineHeight) * 0.5f;
                     float currentX = itemMin.x + textWidth + kTransitionStarSpacingX;
@@ -1624,7 +1946,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                     }
                 }
 
-                // 各シーンの右クリックでトランジション設定
+                // 各シーンの右クリックでトランジション設定・起動シーン設定
                 RenderSceneTransitionContextMenu(sName);
 
                 ImGui::PopID();
@@ -1633,10 +1955,61 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
 
 
             ImGui::Separator();
-            ImGui::TextDisabled("※各シーン右クリック: 画面切り替え設定");
+            ImGui::TextDisabled("※各シーン右クリック: 画面切り替え & 起動シーン設定");
             ImGui::TextColored(kTransitionColorIn, " * : 入場演出");
             ImGui::SameLine();
             ImGui::TextColored(kTransitionColorOut, " * : 退場演出");
+
+            ImGui::Separator();
+
+            // 起動シーン設定サブメニュー
+            if (ImGui::BeginMenu("起動シーン設定 (Startup Scene)")) {
+                std::string curDebug = SceneManager::GetInstance()->GetDebugStartupSceneName();
+                std::string curRelease = SceneManager::GetInstance()->GetReleaseStartupSceneName();
+
+                ImGui::Text("【現在の起動設定】");
+                ImGui::BulletText("デバッグ起動: %s", curDebug.c_str());
+                ImGui::BulletText("本番(Release)起動: %s", curRelease.c_str());
+                ImGui::Separator();
+
+                if (!currentSceneName.empty() && currentSceneName != "None") {
+                    std::string setCurDebugLabel = "編集中シーン (" + currentSceneName + ") をデバッグ起動に設定";
+                    if (ImGui::MenuItem(setCurDebugLabel.c_str())) {
+                        SceneManager::GetInstance()->SetDebugStartupSceneName(currentSceneName);
+                        EditorNotification::ShowSuccess("デバッグ起動シーンを「" + currentSceneName + "」に設定しました");
+                    }
+                    std::string setCurRelLabel = "編集中シーン (" + currentSceneName + ") を本番起動に設定";
+                    if (ImGui::MenuItem(setCurRelLabel.c_str())) {
+                        SceneManager::GetInstance()->SetReleaseStartupSceneName(currentSceneName);
+                        EditorNotification::ShowSuccess("本番起動シーンを「" + currentSceneName + "」に設定しました");
+                    }
+                    ImGui::Separator();
+                }
+
+                if (ImGui::BeginMenu("デバッグ起動シーンを変更")) {
+                    for (const auto& s : jsonScenes) {
+                        bool sel = (s == curDebug);
+                        if (ImGui::MenuItem(s.c_str(), nullptr, sel)) {
+                            SceneManager::GetInstance()->SetDebugStartupSceneName(s);
+                            EditorNotification::ShowSuccess("デバッグ起動シーンを「" + s + "」に設定しました");
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+
+                if (ImGui::BeginMenu("本番(Release)起動シーンを変更")) {
+                    for (const auto& s : jsonScenes) {
+                        bool sel = (s == curRelease);
+                        if (ImGui::MenuItem(s.c_str(), nullptr, sel)) {
+                            SceneManager::GetInstance()->SetReleaseStartupSceneName(s);
+                            EditorNotification::ShowSuccess("本番起動シーンを「" + s + "」に設定しました");
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+
+                ImGui::EndMenu();
+            }
 
             ImGui::Separator();
 
@@ -1663,6 +2036,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 SceneSerializer::SaveScene(newPath, newName, emptyObjects);
 
                 SceneManager::GetInstance()->ChangeScene(newName, false);
+                EditorNotification::ShowSuccess("新規シーン「" + newName + "」を作成しました");
 
                 newSceneNameBuf[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -1754,6 +2128,11 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             }
             if (ImGui::MenuItem("ウィンドウ配置を初期化 (Reset Layout)")) {
                 ResetWorkspaceLayout(activeWorkspaceIndex_);
+                EditorNotification::ShowInfo("ウィンドウ配置を初期化しました");
+            }
+            if (ImGui::MenuItem("レイアウトを固定 (Lock Layout)", nullptr, isLayoutLocked_)) {
+                isLayoutLocked_ = !isLayoutLocked_;
+                EditorNotification::ShowInfo(isLayoutLocked_ ? "レイアウトを固定しました" : "レイアウト固定を解除しました");
             }
             
             ImGui::Separator();
@@ -1779,18 +2158,22 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
                 if (ImGui::MenuItem("16:9 (1280x720)", nullptr, currentAspect_ == AspectType::Aspect16_9_Low)) {
                     currentAspect_ = AspectType::Aspect16_9_Low;
                     ChangeWindowSize(1280, 720);
+                    EditorNotification::ShowInfo("画面サイズを 16:9 (1280x720) に変更しました");
                 }
                 if (ImGui::MenuItem("16:9 (1920x1080)", nullptr, currentAspect_ == AspectType::Aspect16_9_High)) {
                     currentAspect_ = AspectType::Aspect16_9_High;
                     ChangeWindowSize(1920, 1080);
+                    EditorNotification::ShowInfo("画面サイズを 16:9 (1920x1080) に変更しました");
                 }
                 if (ImGui::MenuItem("4:3 (960x720)", nullptr, currentAspect_ == AspectType::Aspect4_3)) {
                     currentAspect_ = AspectType::Aspect4_3;
                     ChangeWindowSize(960, 720);
+                    EditorNotification::ShowInfo("画面サイズを 4:3 (960x720) に変更しました");
                 }
                 if (ImGui::MenuItem("1:1 (720x720)", nullptr, currentAspect_ == AspectType::Aspect1_1)) {
                     currentAspect_ = AspectType::Aspect1_1;
                     ChangeWindowSize(720, 720);
+                    EditorNotification::ShowInfo("画面サイズを 1:1 (720x720) に変更しました");
                 }
                 ImGui::EndMenu();
             }
@@ -1813,32 +2196,44 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         if (ImGui::BeginMenu("ヘルプ###Help")) {
             if (ImGui::MenuItem("総合ヘルプ＆操作マニュアル (User Guide)", "F1")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 0;
+                helpWindowTargetTab_ = HelpTabIndex::kShortcuts;
             }
             ImGui::Separator();
             if (ImGui::MenuItem("  ○ ショートカットキー一覧")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 0;
+                helpWindowTargetTab_ = HelpTabIndex::kShortcuts;
             }
             if (ImGui::MenuItem("  ○ シーン＆ヒエラルキーの使い方")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 1;
+                helpWindowTargetTab_ = HelpTabIndex::kScene;
             }
             if (ImGui::MenuItem("  ○ プレハブ＆アセット管理")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 2;
+                helpWindowTargetTab_ = HelpTabIndex::kPrefab;
             }
             if (ImGui::MenuItem("  ○ コンポーネント機能一覧")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 3;
+                helpWindowTargetTab_ = HelpTabIndex::kComponents;
             }
             if (ImGui::MenuItem("  ○ スクリプト開発ガイド")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 4;
+                helpWindowTargetTab_ = HelpTabIndex::kScripting;
             }
             if (ImGui::MenuItem("  ○ アニメーション＆3D形状ガイド")) {
                 showShortcutsWindow_ = true;
-                helpWindowTargetTab_ = 5;
+                helpWindowTargetTab_ = HelpTabIndex::kAnimation;
+            }
+            if (ImGui::MenuItem("  ○ エフェクト＆パーティクルガイド")) {
+                showShortcutsWindow_ = true;
+                helpWindowTargetTab_ = HelpTabIndex::kParticles;
+            }
+            if (ImGui::MenuItem("  ○ エンジン設計＆アーキテクチャ")) {
+                showShortcutsWindow_ = true;
+                helpWindowTargetTab_ = HelpTabIndex::kArchitecture;
+            }
+            if (ImGui::MenuItem("  ○ 全ウィンドウ操作マニュアル")) {
+                showShortcutsWindow_ = true;
+                helpWindowTargetTab_ = HelpTabIndex::kWindows;
             }
             ImGui::EndMenu();
         }
@@ -1984,18 +2379,24 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
         }
 
         // -------------------------------------------------------------
-        // メインメニューバーの右端に再生/一時停止ボタンを配置 (Godot方式: 衝突完全解消)
+        // メインメニューバーの右端にレイアウト固定アイコンと再生/一時停止ボタンを配置 (マジックナンバー排除)
         // -------------------------------------------------------------
         float menuBarWidth = ImGui::GetWindowWidth();
         constexpr float kPlayPauseBtnWidth = 90.0f;
+        constexpr float kLockBtnWidth = 26.0f;
+        constexpr float kBtnSpacing = 6.0f;
         constexpr float kPlayPauseRightMargin = 16.0f;
-        float rightAlignedPos = menuBarWidth - kPlayPauseBtnWidth - kPlayPauseRightMargin;
+        float rightAlignedPos = menuBarWidth - kPlayPauseBtnWidth - kLockBtnWidth - kBtnSpacing - kPlayPauseRightMargin;
 
         if (rightAlignedPos > ImGui::GetCursorPosX()) {
             ImGui::SameLine(rightAlignedPos);
         } else {
             ImGui::SameLine();
         }
+
+        // 南京錠（レイアウト固定）トグルボタン
+        RenderLockToggleButton(isLayoutLocked_);
+        ImGui::SameLine();
 
         if (isPaused_) {
             if (ImGui::Button("再生 ▶", ImVec2(kPlayPauseBtnWidth, 0.0f))) {
@@ -2102,9 +2503,22 @@ void DebugEditor::DrawShortcutsWindow() {
     constexpr ImVec4 kAccentWarnColor = { 1.0f, 0.8f, 0.3f, 1.0f };  // アンバー（注意・重要）
     constexpr ImVec4 kAccentApiColor = { 0.85f, 0.65f, 1.0f, 1.0f };  // パープル（API・クラス）
 
-    ImGui::SetNextWindowSize(ImVec2(kDefaultWindowWidth, kDefaultWindowHeight), ImGuiCond_FirstUseEver);
+    // メインビューポートの作業領域全体を取得して全画面固定フィット
+    const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(mainViewport->WorkPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(mainViewport->WorkSize, ImGuiCond_Always);
 
-    if (ImGui::Begin("ZuizuiEngine 総合ヘルプ＆操作マニュアル###HelpWindow", &showShortcutsWindow_, ImGuiWindowFlags_NoCollapse)) {
+    constexpr ImGuiWindowFlags kHelpWindowFlags = 
+        ImGuiWindowFlags_NoMove | 
+        ImGuiWindowFlags_NoResize | 
+        ImGuiWindowFlags_NoCollapse;
+
+    if (ImGui::Begin("ZuizuiEngine 総合ヘルプ＆操作マニュアル###HelpWindow", &showShortcutsWindow_, kHelpWindowFlags)) {
+        // Escキーでも瞬時に閉じられる親切設計
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            showShortcutsWindow_ = false;
+        }
+
         ImGui::TextDisabled("ZuizuiEngine の基本操作、各種エディタ機能、プレハブシステム、スクリプト開発ガイドの総合マニュアルです。");
         ImGui::Separator();
         ImGui::Spacing();
@@ -2143,11 +2557,104 @@ void DebugEditor::DrawShortcutsWindow() {
             }
         };
 
+        // =============================================================
+        // 検索ツールバー（完全一致チェックボックス ＆ 右寄せ閉じるボタン）
+        // =============================================================
+        constexpr float kSearchInputWidth = 380.0f;
+        constexpr float kClearBtnWidth = 24.0f;
+        constexpr float kCloseBtnWidth = 140.0f;
+        constexpr ImVec4 kAccentTitleMatchCol   = { 0.3f, 0.85f, 1.0f, 1.0f }; // シアン
+        constexpr ImVec4 kAccentHeadingMatchCol = { 0.4f, 0.95f, 0.6f, 1.0f }; // グリーン
+        constexpr ImVec4 kAccentBodyMatchCol    = { 1.0f, 0.8f, 0.3f, 1.0f };  // オレンジ
+
+        ImGui::SetNextItemWidth(kSearchInputWidth);
+        ImGui::InputTextWithHint("##HelpSearchInput", "ヘルプ内を検索 (例: パーティクル, Fov, Radius, Center, 保存)...",
+                                 helpSearchBuffer_, kHelpSearchBufferSize);
+        ImGui::SameLine();
+        if (helpSearchBuffer_[0] != '\0') {
+            if (ImGui::Button("x##ClearHelpSearch", ImVec2(kClearBtnWidth, 0.0f))) {
+                helpSearchBuffer_[0] = '\0';
+            }
+            ImGui::SameLine();
+        }
+        ImGui::Checkbox("完全一致 (Exact Match)", &helpSearchExactMatch_);
+
+        // 右寄せで「[x] 閉じる (Close)」ボタンを配置
+        float availX = ImGui::GetContentRegionAvail().x;
+        if (availX > kCloseBtnWidth + 10.0f) {
+            ImGui::SameLine(ImGui::GetWindowWidth() - kCloseBtnWidth - ImGui::GetStyle().WindowPadding.x);
+            if (ImGui::Button("[x] 閉じる (Close)", ImVec2(kCloseBtnWidth, 0.0f))) {
+                showShortcutsWindow_ = false;
+            }
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        const bool isSearching = (helpSearchBuffer_[0] != '\0');
+        if (isSearching) {
+            auto searchResults = EngineHelpDatabase::Search(helpSearchBuffer_, helpSearchExactMatch_);
+            ImGui::TextColored(kAccentTipColor, "【検索結果】 %zu 件の候補が見つかりました（優先順位: タイトル ＞ 見出し ＞ 本文）", searchResults.size());
+            ImGui::Spacing();
+
+            if (searchResults.empty()) {
+                ImGui::TextDisabled("一致するヘルプ項目が見つかりませんでした。別のキーワードでお試しください。");
+                if (helpSearchExactMatch_) {
+                    ImGui::TextDisabled("※ 「完全一致」のチェックを外すと、部分一致でヒットする場合があります。");
+                }
+            } else {
+                if (ImGui::BeginChild("HelpSearchResultsScroll", ImVec2(0.0f, 0.0f), false)) {
+                    for (size_t i = 0; i < searchResults.size(); ++i) {
+                        const auto& res = searchResults[i];
+                        ImGui::PushID(static_cast<int>(i));
+
+                        // マッチ種別バッジ
+                        if (res.matchType == HelpMatchType::Title) {
+                            ImGui::TextColored(kAccentTitleMatchCol, "[タイトル一致]");
+                        } else if (res.matchType == HelpMatchType::Heading) {
+                            ImGui::TextColored(kAccentHeadingMatchCol, "[見出し一致]");
+                        } else {
+                            ImGui::TextColored(kAccentBodyMatchCol, "[本文一致]");
+                        }
+                        ImGui::SameLine();
+
+                        // 所属カテゴリバッジ
+                        ImGui::TextDisabled("[%s]", res.article->category.c_str());
+                        ImGui::SameLine();
+
+                        // タイトル表示
+                        ImGui::TextColored(kAccentKeyColor, "%s", res.article->title.c_str());
+                        ImGui::SameLine();
+
+                        // ジャンプボタン
+                        if (ImGui::SmallButton("このタブを開く ▶")) {
+                            helpWindowTargetTab_ = res.article->targetTabIndex;
+                            helpSearchBuffer_[0] = '\0'; // 検索クリアして該当タブを開く
+                        }
+
+                        // 見出し・スニペット抜粋表示
+                        ImGui::Indent(20.0f);
+                        if (res.section) {
+                            ImGui::TextColored(kAccentHeadingMatchCol, "◆ %s", res.section->heading.c_str());
+                        }
+                        ImGui::TextWrapped("%s", res.matchedSnippet.c_str());
+                        ImGui::Unindent(20.0f);
+
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                        ImGui::PopID();
+                    }
+                    ImGui::EndChild();
+                }
+            }
+        } else {
         if (ImGui::BeginTabBar("HelpTabBar", ImGuiTabBarFlags_None)) {
             // -------------------------------------------------------------
             // Tab 1: ○ ショートカット (Shortcuts)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab1Flags = (helpWindowTargetTab_ == 0) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab1Flags = (helpWindowTargetTab_ == HelpTabIndex::kShortcuts) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ ショートカット一覧", nullptr, tab1Flags)) {
                 ImGui::Spacing();
 
@@ -2198,7 +2705,7 @@ void DebugEditor::DrawShortcutsWindow() {
             // -------------------------------------------------------------
             // Tab 2: ○ シーン＆ヒエラルキー (Scene & Hierarchy)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab2Flags = (helpWindowTargetTab_ == 1) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab2Flags = (helpWindowTargetTab_ == HelpTabIndex::kScene) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ シーン＆ヒエラルキー", nullptr, tab2Flags)) {
                 ImGui::Spacing();
 
@@ -2263,7 +2770,7 @@ void DebugEditor::DrawShortcutsWindow() {
             // -------------------------------------------------------------
             // Tab 3: ○ プレハブ＆アセット管理 (Prefab & Assets)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab3Flags = (helpWindowTargetTab_ == 2) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab3Flags = (helpWindowTargetTab_ == HelpTabIndex::kPrefab) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ プレハブ＆アセット管理", nullptr, tab3Flags)) {
                 ImGui::Spacing();
 
@@ -2298,7 +2805,7 @@ void DebugEditor::DrawShortcutsWindow() {
             // -------------------------------------------------------------
             // Tab 4: ○ コンポーネント機能一覧 (Components)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab4Flags = (helpWindowTargetTab_ == 3) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab4Flags = (helpWindowTargetTab_ == HelpTabIndex::kComponents) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ コンポーネント機能一覧", nullptr, tab4Flags)) {
                 ImGui::Spacing();
 
@@ -2323,6 +2830,8 @@ void DebugEditor::DrawShortcutsWindow() {
 
                 ImGui::Spacing();
 
+                ImGui::Spacing();
+
                 if (ImGui::CollapsingHeader("標準コンポーネント一覧 (Built-in)", ImGuiTreeNodeFlags_DefaultOpen)) {
                     const std::vector<std::pair<std::string, std::string>> builtInComps = {
                         { "MeshRenderer", "3Dモデル (.obj, .gltf) を描画。マテリアル色やテクスチャの変更、ライティング受光設定が可能です。" },
@@ -2330,12 +2839,38 @@ void DebugEditor::DrawShortcutsWindow() {
                         { "BoxCollider / SphereCollider", "直方体・球の当たり判定。SceneViewWindowでデバッグワイヤーフレーム（緑・黄）がリアルタイム描画されます。" },
                         { "AudioSource", "効果音やBGMの再生。音量、ピッチ、ループ再生のトグル、再生トリガーをインスペクターからテスト可能です。" },
                         { "LightComponent", "ポイントライトやディレクショナルライトなどの光源をオブジェクトに付与します。" },
-                        { "Rotator", "毎フレーム設定された軸方向に自動回転する演出用コンポーネントです。" },
-                        { "SinOscillator", "サイン波に基づいて位置を上下・前後に浮遊・往復運動させる演出用コンポーネントです。" },
-                        { "Blink", "オブジェクトのアルファ値や色を明滅・点滅させる演出用コンポーネントです。" },
-                        { "CameraOrbit", "対象オブジェクトの周囲を滑らかに自動旋回する演出用カメラコンポーネントです。" }
+                        { "ParticleEffect", "パーティクル演出をオブジェクトに付与し、追従・ループ・自動再生を制御します。" },
+                        { "演出系コンポーネント (Rotator / SinOscillator / Blink / CameraOrbit)", "自動回転(Rotator)、浮遊往復(SinOscillator)、明滅(Blink)、対象周囲旋回(CameraOrbit)などの標準演出コンポーネントです。" }
                     };
                     DrawHelpTable("BuiltInTable", "コンポーネント", "役割・主な機能", 0.30f, builtInComps, kAccentKeyColor);
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("インスペクター内部変数・プロパティ完全リファレンス", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::TextColored(kAccentTipColor, "各コンポーネントのインスペクターに表示される具体的な設定変数と調整項目の一覧です。");
+                    ImGui::Spacing();
+
+                    const std::vector<std::pair<std::string, std::string>> inspectorVariables = {
+                        { "Transform : Position / translate", "ワールド空間での座標(X, Y, Z)。2Dは画面中央(640, 360)、3Dは原点(0, 0, 0)基準。" },
+                        { "Transform : Rotation / rotate", "各軸まわりの回転角度(Degree)。オブジェクトの向きを決定。" },
+                        { "Transform : Scale / scale", "各軸の拡大縮小倍率(X, Y, Z)。1.0が等倍。" },
+                        { "MeshRenderer : Mesh Type", "Cube, Sphere, Cylinder, Cone, Pyramid, Ring, Custom Model 等の幾何学形状切り替え。" },
+                        { "MeshRenderer : Model / Texture Key", "外部モデル(.gltf/.obj)やテクスチャ(.png)のアセットパス。DND対応。" },
+                        { "MeshRenderer : Material Color / Lighting", "ベースマテリアル乗算色(RGBA)と、光源の光を受けるかのトグル(Receive Lighting)。" },
+                        { "SpriteRenderer : Size / Anchor Point", "幅と高さ(pixels)、および描画基準点(0.5, 0.5で中心、0, 0で左上)。" },
+                        { "SpriteRenderer : Flip X / Flip Y", "スプライト画像の水平（左右）・垂直（上下）反転トグル。" },
+                        { "BoxCollider : Center / Size", "オブジェクト中心からの相対中心オフセット(X,Y,Z)と、直方体の各軸大きさ。" },
+                        { "SphereCollider : Center / Radius", "球体当たり判定の中心オフセット(X,Y,Z)と、球の半径(Radius)。" },
+                        { "Collider : Is Trigger / Show Gizmo", "物理衝突するか、すり抜け検知(Trigger)にするか、およびワイヤーフレーム表示。" },
+                        { "Light : Light Type / Intensity / Color", "Directional(太陽光)/Point(点光源)の切替、光の色、照度の強さ、減衰(Decay)。" },
+                        { "Camera : Fov / Near / Far / ClearColor", "視野角(画角/Fov)、描画手前/奥の限界距離、背景クリアカラー、主カメラ化(Is Main)。" },
+                        { "AudioSource : Sound Key / Volume / Pitch", "再生音声ファイル、音量(Volume: 0.0〜1.0)、音程・再生速度(Pitch: 0.5〜2.0)、ループ。" },
+                        { "ParticleEffect : Effect Name / Offset", "再生エフェクト識別名、親からの相対発生オフセット、Loop、AutoPlay、テスト再生。" },
+                        { "TextRenderer : Text / Font Size / Billboard", "表示文字列、フォントサイズ、文字色、カメラ正対トグル(Billboard)。" },
+                        { "演出系 : RotationSpeed / Axis / Amplitude", "Rotatorの毎秒回転速度、SinOscillatorの振動軸・揺れ幅・周波数、Blinkの明滅速度。" }
+                    };
+                    DrawHelpTable("InspectorVarsTable", "コンポーネント : 変数名 (プロパティ)", "型・単位・役割と調整効果", 0.34f, inspectorVariables, kAccentWarnColor);
                 }
 
                 ImGui::EndTabItem();
@@ -2344,7 +2879,7 @@ void DebugEditor::DrawShortcutsWindow() {
             // -------------------------------------------------------------
             // Tab 5: ○ スクリプト開発ガイド (Scripting Guide)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab5Flags = (helpWindowTargetTab_ == 4) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab5Flags = (helpWindowTargetTab_ == HelpTabIndex::kScripting) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ スクリプト開発ガイド", nullptr, tab5Flags)) {
                 ImGui::Spacing();
 
@@ -2408,7 +2943,7 @@ void DebugEditor::DrawShortcutsWindow() {
             // -------------------------------------------------------------
             // Tab 6: ○ アニメーション＆3D形状 (Animation & 3D Shapes)
             // -------------------------------------------------------------
-            ImGuiTabItemFlags tab6Flags = (helpWindowTargetTab_ == 5) ? ImGuiTabItemFlags_SetSelected : 0;
+            ImGuiTabItemFlags tab6Flags = (helpWindowTargetTab_ == HelpTabIndex::kAnimation) ? ImGuiTabItemFlags_SetSelected : 0;
             if (ImGui::BeginTabItem("○ アニメーション＆3D形状", nullptr, tab6Flags)) {
                 ImGui::Spacing();
 
@@ -2487,9 +3022,139 @@ void DebugEditor::DrawShortcutsWindow() {
                 ImGui::EndTabItem();
             }
 
+            // -------------------------------------------------------------
+            // Tab 7: ○ エフェクト＆パーティクル (Effects & Particles)
+            // -------------------------------------------------------------
+            ImGuiTabItemFlags tab7Flags = (helpWindowTargetTab_ == HelpTabIndex::kParticles) ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem("○ エフェクト＆パーティクル", nullptr, tab7Flags)) {
+                ImGui::Spacing();
+
+                DrawIcon("sys_icon_model", 20.0f);
+                ImGui::TextColored(kAccentTipColor, "GPUパーティクルスタジオ & エフェクトシステム統合ガイド");
+                ImGui::TextDisabled("パーティクルのリアルタイム制作、GameObjectへのアタッチ、スクリプトからの再生APIの解説です。");
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("GPUパーティクルスタジオの使い方 (ParticleStudioWindow)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> studioFeatures = {
+                        { "ワークスペース切り替え", "エディタ上部「Studio」タブを選択すると、パーティクル制作専用レイアウトが全画面で展開されます。" },
+                        { "プレビューカメラ操作", "プレビュー画面上で、右ドラッグ(オービット回転)、中ドラッグ(パン)、ホイール(ズーム)が可能です。" },
+                        { "放射形状 (Shape)", "Sphere(球状爆散)、Cone(扇状コーン)、Box(空間散布)、Circle(平面リング)から選択可能です。" },
+                        { "物理パラメータ調整", "粒子発生数、寿命、初速、重力、空気抵抗、拡散角度をリアルタイムスライダーで調整できます。" },
+                        { "カラー＆スケールアニメ", "発生時カラーから消滅時カラーへの滑らかなグラデーション、寿命に応じたサイズ拡縮変化を設定可能です。" },
+                        { "JSONプリセット保存", "作成したパーティクル設定は resources/Config/Particles/ にJSON形式でワンクリック保存・読み込みできます。" }
+                    };
+                    DrawHelpTable("StudioTable", "機能・項目", "説明・操作手順", 0.30f, studioFeatures, kAccentTipColor);
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("パーティクルコンポーネント運用 (ParticleEffectComponent)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> compFeatures = {
+                        { "+ Add Component", "GameObjectを選択し、インスペクターから「ParticleEffect」を追加します。" },
+                        { "EffectName", "再生するエフェクトの識別名（Hit, FireworksBurst等）を指定します。" },
+                        { "Offset", "親オブジェクトの位置からの相対オフセット座標(X, Y, Z)を設定します。" },
+                        { "Loop / AutoPlay", "Loop: 継続ループ再生(松明・煙など)。AutoPlay: シーンロード時の自動再生トリガー。" },
+                        { "Play ▶ / Stop ⏹", "インスペクター上で即座にテスト再生・停止して挙動を確認できます。" },
+                        { "スクリプト制御", "GetComponent<ParticleEffectComponent>()->Play(); で着弾やイベント時に呼び出します。" }
+                    };
+                    DrawHelpTable("ParticleCompTable", "プロパティ・操作", "機能・使い方", 0.30f, compFeatures, kAccentKeyColor);
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("エフェクトマネージャ API (EffectManager)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> mgrFeatures = {
+                        { "PlayEffect3D(name, pos)", "指定した3Dワールド座標に登録済みエフェクトを一発再生します。" },
+                        { "PlayEffect2D(name, pos)", "指定した2Dスクリーン座標にスプライトエフェクトを一発再生します。" },
+                        { "PlayGPUEffect(pos, count)", "Compute Shaderを用いた数千〜数万粒子のGPUパーティクルを低負荷で即時発生させます。" },
+                        { "エフェクト一覧ウィンドウ", "メニュー「ウィンドウ」→「エフェクト一覧」から登録済み全エフェクトのテスト再生が可能です。" }
+                    };
+                    DrawHelpTable("EffectMgrTable", "API・機能", "説明・用途", 0.35f, mgrFeatures, kAccentApiColor);
+                }
+
+                ImGui::EndTabItem();
+            }
+
+            // -------------------------------------------------------------
+            // Tab 8: ○ エンジン設計＆アーキテクチャ (Engine Architecture)
+            // -------------------------------------------------------------
+            ImGuiTabItemFlags tab8Flags = (helpWindowTargetTab_ == HelpTabIndex::kArchitecture) ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem("○ エンジン設計＆構造", nullptr, tab8Flags)) {
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("DirectX 12 高速レンダリング基盤", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> dxFeatures = {
+                        { "DxCommon", "ID3D12Device, CommandQueue, SwapChain, DescriptorHeap(RTV/SRV/DSV)を一元管理する最基盤クラスです。" },
+                        { "PSOManager", "グラフィックス＆コンピュートパイプラインステート(PSO)とシェーダーをキャッシュ管理し、描画切替を高速化します。" },
+                        { "TextureManager", "テクスチャの非同期ロードとSRVヒープインデックスの自動管理を提供します。" }
+                    };
+                    DrawHelpTable("DxArchTable", "基盤クラス", "役割・設計概要", 0.30f, dxFeatures, kAccentKeyColor);
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("メインゲームループ (Main Loop)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::TextColored(kAccentTipColor, "【毎フレームの確定実行サイクル】");
+                    ImGui::BulletText("1. ProcessMessage() : Windows メッセージ（ウィンドウ移動、キー入力等）の処理");
+                    ImGui::BulletText("2. BeginFrame()      : DirectX 12 バックバッファのクリアと描画準備");
+                    ImGui::BulletText("3. Update()          : Input入力更新 → SceneManager更新 → GameObjectツリー更新 → 物理・当たり判定");
+                    ImGui::BulletText("4. ImGui/Editor      : DebugEditor ウィンドウ描画、ギズモ処理、UIロジック実行");
+                    ImGui::BulletText("5. Render()          : 3D/2Dオブジェクト、エフェクト、ポストプロセスのGPUコマンド発行");
+                    ImGui::BulletText("6. Present() / End() : スワップチェーンの画面フリップとフレーム同期");
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("シーンシリアライズとコンポーネント指向", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> compArchFeatures = {
+                        { "SceneSerializer", "シーン内のすべてのGameObjectツリー、Transform、コンポーネント固有設定をJSON形式で完全永続化・復元します。" },
+                        { "UUID システム", "各オブジェクトに一意のUUIDを割り当て、シーン再読み込み後もターゲット参照関係を壊さず自動解決します。" },
+                        { "REGISTER_SCRIPT", "マクロを介してユーザー定義スクリプトの型情報をScriptRegistryへ自動登録し、エディタでの動的追加を実現します。" }
+                    };
+                    DrawHelpTable("CompArchTable", "アーキテクチャ", "機能・詳細", 0.30f, compArchFeatures, kAccentTipColor);
+                }
+
+                ImGui::EndTabItem();
+            }
+
+            // -------------------------------------------------------------
+            // Tab 9: ○ 全ウィンドウ操作マニュアル (Windows & Tools)
+            // -------------------------------------------------------------
+            ImGuiTabItemFlags tab9Flags = (helpWindowTargetTab_ == HelpTabIndex::kWindows) ? ImGuiTabItemFlags_SetSelected : 0;
+            if (ImGui::BeginTabItem("○ 全ウィンドウ操作マニュアル", nullptr, tab9Flags)) {
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("主要エディタウィンドウ (Main Windows)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> mainWinFeatures = {
+                        { "SceneView", "3D空間ビューポート。右ドラッグFPS視点、3Dギズモ(移動/回転/拡縮)、Fキーフォーカス、グリッドやコライダーワイヤーを描画。" },
+                        { "GameView", "実際のゲーム実行画面。アスペクト比選択(16:9低解像度/高解像度)、解像度スケール、フルスクリーン表示に対応。" },
+                        { "Hierarchy", "シーン内の全GameObject階層。右クリック生成メニュー、DND親子付け、削除[x](Undo対応)、リアルタイム名前検索バー。" },
+                        { "Inspector", "選択中オブジェクトのTransform、コンポーネント設定、スクリプト公開変数、2D/3D座標補正ボタン、プレハブ保存ボタン。" }
+                    };
+                    DrawHelpTable("MainWinTable", "ウィンドウ名", "主な機能と操作方法", 0.28f, mainWinFeatures, kAccentKeyColor);
+                }
+
+                ImGui::Spacing();
+
+                if (ImGui::CollapsingHeader("アセット＆デバッグツール (Tools & Diagnostics)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    const std::vector<std::pair<std::string, std::string>> toolFeatures = {
+                        { "ContentBrowser", "resources/ と Scripts/ のフォルダ階層ブラウザ。アイコン表示、履歴移動、DNDによるプレハブ配置やスクリプトアタッチ。" },
+                        { "DebugConsole", "エンジンの全ログをリアルタイム表示。Info, Warning, Errorのレベル別トグルフィルタ、ログクリア機能。" },
+                        { "PerformanceMonitor", "リアルタイムFPS、フレーム時間(ms)グラフ、CPU/GPU処理時間、メモリ使用量を視覚的に常時監視。" },
+                        { "PostProcess", "ブルーム(光あふれ)、トーンマッピング、ヴィネット、被写界深度などの画面効果パラメータをリアルタイム微調整。" },
+                        { "Workspaces", "上部タブから Layout(標準編集レイアウト) と Studio(パーティクル制作レイアウト) を瞬時に切り替え。" }
+                    };
+                    DrawHelpTable("ToolsTable", "ツール名", "主な機能と操作方法", 0.28f, toolFeatures, kAccentTipColor);
+                }
+
+                ImGui::EndTabItem();
+            }
+
             ImGui::EndTabBar();
             helpWindowTargetTab_ = -1; // 指定タブの選択完了後にリセット
         }
+        } // isSearching の else 節の閉じ
     }
     ImGui::End();
 }

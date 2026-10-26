@@ -61,6 +61,10 @@ public:
     void SetPause(bool paused) { isPaused_ = paused; }
     void ToggleFullscreen(HWND hwnd);
 
+    // レイアウト固定（ウィンドウ境界リサイズのロック）
+    bool IsLayoutLocked() const { return isLayoutLocked_; }
+    void SetLayoutLocked(bool locked) { isLayoutLocked_ = locked; }
+
     // ワークスペース管理 (Blender風切り替え・独自ページ追加対応)
     EditorWorkspace GetWorkspace() const { return currentWorkspace_; }
     void SetWorkspace(EditorWorkspace ws);
@@ -98,6 +102,9 @@ private:
     bool showContentBrowser_ = true;
     bool showShortcutsWindow_ = false;
     int helpWindowTargetTab_ = -1; // ヘルプウィンドウでフォーカスするタブインデックス (-1: 切り替えなし)
+    static constexpr size_t kHelpSearchBufferSize = 128;
+    char helpSearchBuffer_[kHelpSearchBufferSize] = "";
+    bool helpSearchExactMatch_ = false;
     bool isGameViewVisible_ = false;
     bool showInternalObjects_ = false; // 内部オブジェクト（柱など）をヒエラルキーに表示するかどうか
 
@@ -110,5 +117,6 @@ private:
     AspectType currentAspect_ = AspectType::Aspect16_9_Low;
     bool isPaused_ = false;
     bool isSceneSelected_ = false;
+    bool isLayoutLocked_ = false; // ウィンドウ間の境界リサイズを固定・ロックするかどうか
 };
 #endif

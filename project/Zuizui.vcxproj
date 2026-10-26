@@ -324,6 +324,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Debug\SceneViewWindow.cpp" />
     <ClCompile Include="Engine\Debug\PerformanceMonitorWindow.cpp" />
     <ClCompile Include="Engine\Debug\SceneManagerWindow.cpp" />
+    <ClCompile Include="Engine\Debug\EditorNotification.cpp" />
     <ClCompile Include="Engine\Debug\IGameObject.cpp" />
     <ClCompile Include="Engine\Debug\SceneHierarchy.cpp" />
     <ClCompile Include="Engine\Debug\Command\CommandHistory.cpp" />
@@ -567,6 +568,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\Debug\SceneViewWindow.h" />
     <ClInclude Include="Engine\Debug\PerformanceMonitorWindow.h" />
     <ClInclude Include="Engine\Debug\SceneManagerWindow.h" />
+    <ClInclude Include="Engine\Debug\EditorNotification.h" />
     <ClInclude Include="Engine\Debug\PopAnimation.h" />
     <ClInclude Include="Engine\Debug\IGameObject.h" />
     <ClInclude Include="Engine\Debug\SceneHierarchy.h" />
@@ -593,6 +595,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Scripts\Sample\SamplePlayerScript.h" />
     <ClInclude Include="Scripts\Sample\SampleFollowerScript.h" />
     <ClInclude Include="Engine\Debug\ContentBrowserWindow.h" />
+    <ClInclude Include="Engine\Debug\EngineHelpData.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="externals\imgui\LICENSE.txt" />

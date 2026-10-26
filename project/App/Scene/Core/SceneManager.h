@@ -44,6 +44,18 @@ public:
      */
     void ChangeSceneImmediate(const std::string& sceneName);
 
+    /// @brief デバッグビルド時の起動シーン名を取得（設定ファイルから読み込み、未設定時はデフォルト）
+    std::string GetDebugStartupSceneName();
+
+    /// @brief デバッグビルド時の起動シーン名を設定ファイルに保存
+    void SetDebugStartupSceneName(const std::string& sceneName);
+
+    /// @brief リリースビルド時の本番開始シーン名を取得（設定ファイルから読み込み、未設定時はデフォルト）
+    std::string GetReleaseStartupSceneName();
+
+    /// @brief リリースビルド時の本番開始シーン名を設定ファイルに保存
+    void SetReleaseStartupSceneName(const std::string& sceneName);
+
     /**
      * @brief 使用する工場（Factory）を設定する
      * アプリ起動時に一回呼ぶ必要がある

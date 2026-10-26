@@ -1,5 +1,6 @@
 {
   "activeWorkspaceIndex": 0,
+  "isLayoutLocked": true,
   "workspaces": [
     {
       "id": "layout",
@@ -16,7 +17,7 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": true,
-        "showContentBrowser": true
+        "showContentBrowser": false
       }
     },
     {
@@ -29,12 +30,12 @@
         "showGameView": false,
         "showHierarchy": false,
         "showInspector": false,
-        "showConsole": true,
+        "showConsole": false,
         "showParticleStudio": true,
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": false,
-        "showContentBrowser": false
+        "showContentBrowser": true
       }
     }
   ]

@@ -29,8 +29,8 @@ struct GPUParticleEmitterSetting {
     float gravity           = 3.5f;   // 重力加速度
     float killAtY           = -999.0f;// 落下消滅高度 (-900.0f以下で無効)
 
-    float spawnRatePerSec   = 1000.0f;// 1秒あたりの自動発生パーティクル数
-    bool  isAutoSpawning    = true;   // 自動連続発生を行うか
+    float spawnRatePerSec   = 0.0f;   // 1秒あたりの自動発生パーティクル数（初期状態は停止）
+    bool  isAutoSpawning    = false;  // 自動連続発生を行うか（コンポーネント等からの明示設定までOFF）
 };
 
 /// <summary>

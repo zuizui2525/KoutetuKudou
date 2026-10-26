@@ -61,9 +61,6 @@ namespace {
         float     padding;
     };
 
-    // GPUパーティクル専用デスクリプタインデックス管理 (グローバルSRVヒープ内)
-    static UINT sGpuParticleDescriptorCounter = 600; // 600番以降を使用
-    constexpr UINT kMaxGpuParticleDescriptorIndex = 1200;
 }
 
 GPUParticleObject::GPUParticleObject() = default;
@@ -73,6 +70,18 @@ GPUParticleObject::~GPUParticleObject() {
     if (auto engine = EngineResource::GetEngine()) {
         if (auto dxCommon = engine->GetDxCommon()) {
             dxCommon->FlushGPU();
+        }
+    }
+
+    // デスクリプタインデックスの返却（再利用可能化）
+    if (auto texMgr = TextureResource::GetTextureManager()) {
+        if (uavDescriptorIndex_ > 0) {
+            texMgr->FreeDescriptorIndex(uavDescriptorIndex_);
+            uavDescriptorIndex_ = 0;
+        }
+        if (srvDescriptorIndex_ > 0) {
+            texMgr->FreeDescriptorIndex(srvDescriptorIndex_);
+            srvDescriptorIndex_ = 0;
         }
     }
 }
@@ -99,10 +108,11 @@ bool GPUParticleObject::CreateBuffersAndDescriptors(ID3D12Device* device) {
     ID3D12DescriptorHeap* srvHeap = dxCommon->GetSrvHeap();
     UINT descriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // デスクリプタ割り当て (UAV用とSRV用で2スロット連続確保)
-    assert(sGpuParticleDescriptorCounter + 2 < kMaxGpuParticleDescriptorIndex);
-    uavDescriptorIndex_ = sGpuParticleDescriptorCounter++;
-    srvDescriptorIndex_ = sGpuParticleDescriptorCounter++;
+    // デスクリプタ割り当て (TextureManager の一元アロケータを使用)
+    auto texMgr = TextureResource::GetTextureManager();
+    assert(texMgr != nullptr);
+    uavDescriptorIndex_ = texMgr->AllocateDescriptorIndex();
+    srvDescriptorIndex_ = texMgr->AllocateDescriptorIndex();
 
     uavCpuHandle_ = DxUtils::GetCPUDescriptorHandle(srvHeap, descriptorSize, uavDescriptorIndex_);
     uavGpuHandle_ = DxUtils::GetGPUDescriptorHandle(srvHeap, descriptorSize, uavDescriptorIndex_);

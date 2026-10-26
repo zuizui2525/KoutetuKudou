@@ -15,11 +15,6 @@ namespace {
         transform.rotate = { 0.0f, 0.0f, 0.0f };
         transform.translate = { 0.0f, 0.0f, 0.0f };
     }
-
-    // SRVインデックス再利用のための静的キューとインデックス追跡変数
-    std::queue<UINT> sAvailableSrvIndices;
-    UINT sNextIndex = 50;                     // インデックス開始値
-    constexpr UINT kMaxSrvIndex = 127;        // DescriptorHeapサイズ限界 (128未満)
 }
 
 /**
@@ -27,10 +22,8 @@ namespace {
  * パーティクルオブジェクト消滅時に、使用していたSRVインデックスをプールに戻して再利用可能にします。
  */
 BaseParticleObject::~BaseParticleObject() {
-    // 破棄される際に使用していたインデックスをキューに戻す
-    static constexpr UINT kMinValidSrvIndex = 50;
-    if (mySrvIndex_ >= kMinValidSrvIndex) {
-        sAvailableSrvIndices.push(mySrvIndex_);
+    if (auto texMgr = TextureResource::GetTextureManager()) {
+        texMgr->FreeDescriptorIndex(mySrvIndex_);
     }
 }
 
@@ -53,15 +46,10 @@ void BaseParticleObject::Initialize(int lightingMode) {
 
     randomEngine_ = std::mt19937(seedGenerator_());
 
-    // SRVインデックスの割り当て（プールに空きがあれば再利用し、なければ新規インクリメント）
-    if (!sAvailableSrvIndices.empty()) {
-        mySrvIndex_ = sAvailableSrvIndices.front();
-        sAvailableSrvIndices.pop();
-    } else {
-        // DescriptorHeapの限界（128未満）に達していないことを確認するアサート
-        assert(sNextIndex <= kMaxSrvIndex && "SRV DescriptorHeap index out of bounds! Too many particle objects.");
-        mySrvIndex_ = sNextIndex++;
-    }
+    // SRVインデックスの割り当て（TextureManager の一元アロケータを使用）
+    auto texMgr = TextureResource::GetTextureManager();
+    assert(texMgr != nullptr);
+    mySrvIndex_ = texMgr->AllocateDescriptorIndex();
     
     numMaxInstance_ = setting_.maxParticles;
     particles_.reserve(numMaxInstance_);

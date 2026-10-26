@@ -49,3 +49,18 @@ void Update(Skeleton& skeleton);
 /// アニメーションデータをSkeletonの各Jointに反映する
 /// </summary>
 void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animationTime);
+
+/// <summary>
+/// 2つのアニメーションを指定時刻とブレンド率(0.0〜1.0)で滑らかに合成して反映する
+/// </summary>
+void ApplyAnimationBlend(
+    Skeleton& skeleton,
+    const Animation& animA, float timeA,
+    const Animation& animB, float timeB,
+    float blendFactor
+);
+
+/// <summary>
+/// 指定した名前のJointのスケルトン空間変換行列を取得する
+/// </summary>
+std::optional<Matrix4x4> GetJointSkeletonMatrix(const Skeleton& skeleton, const std::string& jointName);

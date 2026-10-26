@@ -57,3 +57,55 @@ void ApplyAnimation(Skeleton& skeleton, const Animation& animation, float animat
         }
     }
 }
+
+void ApplyAnimationBlend(
+    Skeleton& skeleton,
+    const Animation& animA, float timeA,
+    const Animation& animB, float timeB,
+    float blendFactor
+) {
+    constexpr float kMinFactor = 0.0f;
+    constexpr float kMaxFactor = 1.0f;
+    float clampedFactor = (std::max)(kMinFactor, (std::min)(blendFactor, kMaxFactor));
+
+    for (Joint& joint : skeleton.joints) {
+        auto itA = animA.nodeAnimations.find(joint.name);
+        auto itB = animB.nodeAnimations.find(joint.name);
+
+        bool hasA = (itA != animA.nodeAnimations.end());
+        bool hasB = (itB != animB.nodeAnimations.end());
+
+        if (hasA && hasB) {
+            Vector3 transA = AnimationHelper::CalculateValue(itA->second.translate, timeA);
+            Quaternion rotA = AnimationHelper::CalculateValue(itA->second.rotate, timeA);
+            Vector3 sclA = AnimationHelper::CalculateValue(itA->second.scale, timeA);
+
+            Vector3 transB = AnimationHelper::CalculateValue(itB->second.translate, timeB);
+            Quaternion rotB = AnimationHelper::CalculateValue(itB->second.rotate, timeB);
+            Vector3 sclB = AnimationHelper::CalculateValue(itB->second.scale, timeB);
+
+            joint.transform.translate = Math::Lerp(transA, transB, clampedFactor);
+            joint.transform.rotate = Math::Slerp(rotA, rotB, clampedFactor);
+            joint.transform.scale = Math::Lerp(sclA, sclB, clampedFactor);
+        } else if (hasA) {
+            joint.transform.translate = AnimationHelper::CalculateValue(itA->second.translate, timeA);
+            joint.transform.rotate = AnimationHelper::CalculateValue(itA->second.rotate, timeA);
+            joint.transform.scale = AnimationHelper::CalculateValue(itA->second.scale, timeA);
+        } else if (hasB) {
+            joint.transform.translate = AnimationHelper::CalculateValue(itB->second.translate, timeB);
+            joint.transform.rotate = AnimationHelper::CalculateValue(itB->second.rotate, timeB);
+            joint.transform.scale = AnimationHelper::CalculateValue(itB->second.scale, timeB);
+        }
+    }
+}
+
+std::optional<Matrix4x4> GetJointSkeletonMatrix(const Skeleton& skeleton, const std::string& jointName) {
+    auto it = skeleton.jointMap.find(jointName);
+    if (it != skeleton.jointMap.end()) {
+        int32_t index = it->second;
+        if (index >= 0 && index < static_cast<int32_t>(skeleton.joints.size())) {
+            return skeleton.joints[index].skeletonSpaceMatrix;
+        }
+    }
+    return std::nullopt;
+}

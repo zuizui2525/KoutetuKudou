@@ -23,9 +23,74 @@
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include <format>
 #include <unordered_map>
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
+
+namespace {
+    constexpr const char* kProjectSettingsFilePath = "resources/Config/ProjectSettings.json";
+    constexpr const char* kDebugStartupSceneKey = "startupScene";
+    constexpr const char* kReleaseStartupSceneKey = "releaseStartupScene";
+    constexpr const char* kDefaultDebugStartupScene = "Debug";
+    constexpr const char* kDefaultReleaseStartupScene = "Title";
+
+    std::string ExtractJsonString(const std::string& block, const std::string& key, const std::string& defaultVal = "") {
+        std::string searchKey = "\"" + key + "\":";
+        size_t pos = block.find(searchKey);
+        if (pos == std::string::npos) return defaultVal;
+
+        size_t quoteStart = block.find('\"', pos + searchKey.length());
+        if (quoteStart == std::string::npos) return defaultVal;
+
+        size_t quoteEnd = block.find('\"', quoteStart + 1);
+        if (quoteEnd == std::string::npos) return defaultVal;
+
+        return block.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+    }
+
+    void SaveSettingString(const std::string& key, const std::string& value) {
+        std::filesystem::path configPath(kProjectSettingsFilePath);
+        if (configPath.has_parent_path()) {
+            std::filesystem::create_directories(configPath.parent_path());
+        }
+
+        std::string content;
+        if (std::ifstream ifs(kProjectSettingsFilePath); ifs.is_open()) {
+            std::stringstream buffer;
+            buffer << ifs.rdbuf();
+            content = buffer.str();
+        }
+
+        std::string searchKey = "\"" + key + "\":";
+        size_t keyPos = content.find(searchKey);
+        if (keyPos != std::string::npos) {
+            size_t quoteStart = content.find('\"', keyPos + searchKey.length());
+            if (quoteStart != std::string::npos) {
+                size_t quoteEnd = content.find('\"', quoteStart + 1);
+                if (quoteEnd != std::string::npos) {
+                    content.replace(quoteStart + 1, quoteEnd - quoteStart - 1, value);
+                }
+            }
+        } else {
+            size_t closeBrace = content.rfind('}');
+            if (closeBrace != std::string::npos) {
+                bool hasProperty = (content.find(':') != std::string::npos && content.find(':') < closeBrace);
+                std::string toInsert = (hasProperty ? ",\n  \"" : "\n  \"") + key + "\": \"" + value + "\"\n";
+                content.insert(closeBrace, toInsert);
+            } else {
+                content = "{\n  \"" + key + "\": \"" + value + "\"\n}\n";
+            }
+        }
+
+        std::ofstream ofs(kProjectSettingsFilePath);
+        if (ofs.is_open()) {
+            ofs << content;
+        }
+    }
+}
 
 SceneManager* SceneManager::GetInstance() {
     static SceneManager instance;
@@ -312,4 +377,36 @@ GameObject* SceneManager::Instantiate(
 void SceneManager::Destroy(GameObject* obj) {
     if (!obj || !currentScene_) return;
     currentScene_->DestroyGameObject(obj);
+}
+
+std::string SceneManager::GetDebugStartupSceneName() {
+    std::ifstream ifs(kProjectSettingsFilePath);
+    if (!ifs.is_open()) {
+        return kDefaultDebugStartupScene;
+    }
+    std::stringstream buffer;
+    buffer << ifs.rdbuf();
+    std::string content = buffer.str();
+    std::string scene = ExtractJsonString(content, kDebugStartupSceneKey, kDefaultDebugStartupScene);
+    return scene.empty() ? kDefaultDebugStartupScene : scene;
+}
+
+void SceneManager::SetDebugStartupSceneName(const std::string& sceneName) {
+    SaveSettingString(kDebugStartupSceneKey, sceneName);
+}
+
+std::string SceneManager::GetReleaseStartupSceneName() {
+    std::ifstream ifs(kProjectSettingsFilePath);
+    if (!ifs.is_open()) {
+        return kDefaultReleaseStartupScene;
+    }
+    std::stringstream buffer;
+    buffer << ifs.rdbuf();
+    std::string content = buffer.str();
+    std::string scene = ExtractJsonString(content, kReleaseStartupSceneKey, kDefaultReleaseStartupScene);
+    return scene.empty() ? kDefaultReleaseStartupScene : scene;
+}
+
+void SceneManager::SetReleaseStartupSceneName(const std::string& sceneName) {
+    SaveSettingString(kReleaseStartupSceneKey, sceneName);
 }

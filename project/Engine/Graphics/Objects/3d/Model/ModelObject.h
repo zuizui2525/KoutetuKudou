@@ -34,10 +34,17 @@ public:
     bool IsShowSkeleton() const { return showSkeleton_; }
     void SetShowSkeleton(bool show) { showSkeleton_ = show; }
 
+    /// @brief 特定のボーンの現在のワールド変換行列を取得（武器や防具の追従・アタッチ用）
+    std::optional<Matrix4x4> GetJointWorldMatrix(const std::string& jointName) const;
+
+    /// @brief 特定のボーンの現在のワールド座標を取得
+    std::optional<Vector3> GetJointWorldPosition(const std::string& jointName) const;
+
 private:
     void UpdateSkeleton(const std::string& modelKey);
     void DrawSkeletonDebug();
     void EnsureSkeletonLines();
+    void ClearSkeletonAndSkin();
 
 private:
     bool isAnimationPlaying_ = false;

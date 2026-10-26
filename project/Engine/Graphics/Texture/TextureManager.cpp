@@ -27,10 +27,10 @@ void TextureManager::LoadTexture(const std::string& name, const std::string& fil
     Log::Write(std::format(L" ├─ 【テクスチャロード開始】 キー:「{}」 | パス:「{}」", ConvertString(name), ConvertString(filePath)));
     auto startTime = std::chrono::steady_clock::now();
 
+    uint32_t descriptorIndex = AllocateDescriptorIndex();
     auto texture = std::make_unique<Texture>();
-    texture->Initialize(device_, commandList_, srvHeap_, descriptorCount_, filePath);
+    texture->Initialize(device_, commandList_, srvHeap_, descriptorIndex, filePath);
     textures_[name] = std::move(texture);
-    descriptorCount_++;
 
     auto endTime = std::chrono::steady_clock::now();
     float elapsed = std::chrono::duration<float>(endTime - startTime).count();
@@ -128,9 +128,21 @@ D3D12_GPU_DESCRIPTOR_HANDLE TextureManager::GetGpuHandle(const std::string& name
 }
 
 uint32_t TextureManager::AllocateDescriptorIndex() {
+    if (!freeDescriptorIndices_.empty()) {
+        uint32_t recycledIndex = freeDescriptorIndices_.front();
+        freeDescriptorIndices_.pop();
+        return recycledIndex;
+    }
+    assert(descriptorCount_ < kMaxSrvDescriptorCount && "SRV DescriptorHeap index out of bounds! Too many descriptors allocated.");
     uint32_t allocated = descriptorCount_;
     descriptorCount_++;
     return allocated;
+}
+
+void TextureManager::FreeDescriptorIndex(uint32_t index) {
+    if (index >= kDynamicStartDescriptorIndex) {
+        freeDescriptorIndices_.push(index);
+    }
 }
 
 TextureManager::~TextureManager() {
