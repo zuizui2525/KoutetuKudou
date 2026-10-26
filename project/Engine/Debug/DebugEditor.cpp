@@ -50,6 +50,8 @@ namespace {
     constexpr const char* kDedicatedSceneGame = "Game";
     constexpr const char* kTransitionsConfigFileName = "Transitions";
     constexpr const char* kWorkspacesConfigFilePath = "resources/Config/Workspaces.json";
+    constexpr const char* kLayoutsDirectoryPath     = "resources/Config/Layouts";
+    constexpr const char* kLayoutFileExtension      = ".ini";
     constexpr const char* kDockSpacePrefix = "Zuizui_WS_v2_";
 
     // JSONからキーの真偽値を安全に抽出
@@ -959,6 +961,14 @@ DebugEditor::DebugEditor()
     studioWs.windowState.showContentBrowser = false;
     workspaces_.push_back(studioWs);
 
+    // デフォルトワークスペースのレイアウト ini を読み込む（存在する場合）
+    for (auto& ws : workspaces_) {
+        LoadWorkspaceLayoutIni(ws);
+    }
+    if (!workspaces_.empty() && !workspaces_[0].layoutData.empty()) {
+        ImGui::LoadIniSettingsFromMemory(workspaces_[0].layoutData.c_str(), workspaces_[0].layoutData.size());
+    }
+
     // 初期ワークスペースのウィンドウ状態を適用
     ApplyWorkspaceWindowState(0);
 }
@@ -1025,7 +1035,16 @@ void DebugEditor::SyncCurrentWorkspaceWindowState() {
 
 void DebugEditor::SwitchToWorkspace(size_t index) {
     if (index >= workspaces_.size()) return;
-    // 1. 直前のワークスペースの状態を最新保存
+
+    // 1. 直前のページのレイアウト（ウィンドウ位置・サイズ・ドッキング等）をメモリから退避保存
+    if (activeWorkspaceIndex_ < workspaces_.size()) {
+        size_t iniSize = 0;
+        const char* iniStr = ImGui::SaveIniSettingsToMemory(&iniSize);
+        if (iniStr && iniSize > 0) {
+            workspaces_[activeWorkspaceIndex_].layoutData = std::string(iniStr, iniSize);
+            SaveWorkspaceLayoutIni(workspaces_[activeWorkspaceIndex_]);
+        }
+    }
     SyncCurrentWorkspaceWindowState();
 
     // 2. 切り替え先のワークスペースを選択
@@ -1039,7 +1058,16 @@ void DebugEditor::SwitchToWorkspace(size_t index) {
         currentWorkspace_ = EditorWorkspace::Layout;
     }
 
-    // 3. 切り替え先のウィンドウ開閉状態を復元
+    // 3. 切り替え先ページの専用レイアウトがあれば即時復元
+    auto& targetWs = workspaces_[index];
+    if (targetWs.layoutData.empty()) {
+        LoadWorkspaceLayoutIni(targetWs);
+    }
+    if (!targetWs.layoutData.empty()) {
+        ImGui::LoadIniSettingsFromMemory(targetWs.layoutData.c_str(), targetWs.layoutData.size());
+    }
+
+    // 4. 切り替え先のウィンドウ開閉状態を復元
     ApplyWorkspaceWindowState(index);
 }
 
@@ -1085,6 +1113,14 @@ void DebugEditor::RemoveCustomWorkspace(size_t index) {
     // 削除前に現在の正しいアクティブページのウィンドウ状態を確実に保存
     SyncCurrentWorkspaceWindowState();
 
+    // 削除対象ページの ini ファイルを消去
+    try {
+        std::filesystem::path iniPath = std::filesystem::path(kLayoutsDirectoryPath) / (workspaces_[index].id + kLayoutFileExtension);
+        if (std::filesystem::exists(iniPath)) {
+            std::filesystem::remove(iniPath);
+        }
+    } catch (...) {}
+
     // 削除対象ページを消去
     workspaces_.erase(workspaces_.begin() + index);
 
@@ -1100,8 +1136,52 @@ void DebugEditor::RemoveCustomWorkspace(size_t index) {
     SaveWorkspacesConfig();
 }
 
+void DebugEditor::SaveWorkspaceLayoutIni(const WorkspaceDefinition& ws) {
+    if (ws.layoutData.empty()) return;
+    try {
+        std::filesystem::path dir(kLayoutsDirectoryPath);
+        std::filesystem::create_directories(dir);
+        std::string filePath = (dir / (ws.id + kLayoutFileExtension)).string();
+        std::ofstream ofs(filePath);
+        if (ofs.is_open()) {
+            ofs << ws.layoutData;
+        }
+    } catch (...) {
+    }
+}
+
+void DebugEditor::LoadWorkspaceLayoutIni(WorkspaceDefinition& ws) {
+    try {
+        std::filesystem::path dir(kLayoutsDirectoryPath);
+        std::string filePath = (dir / (ws.id + kLayoutFileExtension)).string();
+        if (std::filesystem::exists(filePath)) {
+            std::ifstream ifs(filePath);
+            if (ifs.is_open()) {
+                std::stringstream buffer;
+                buffer << ifs.rdbuf();
+                ws.layoutData = buffer.str();
+            }
+        }
+    } catch (...) {
+    }
+}
+
 void DebugEditor::SaveWorkspacesConfig() {
     SyncCurrentWorkspaceWindowState();
+
+    // 現在のアクティブページのレイアウトを最新状態で保存
+    if (activeWorkspaceIndex_ < workspaces_.size()) {
+        size_t iniSize = 0;
+        const char* iniStr = ImGui::SaveIniSettingsToMemory(&iniSize);
+        if (iniStr && iniSize > 0) {
+            workspaces_[activeWorkspaceIndex_].layoutData = std::string(iniStr, iniSize);
+        }
+    }
+
+    // 全ワークスペースのレイアウト ini をディスクに保存
+    for (const auto& ws : workspaces_) {
+        SaveWorkspaceLayoutIni(ws);
+    }
 
     std::filesystem::path configPath(kWorkspacesConfigFilePath);
     if (configPath.has_parent_path()) {
@@ -1223,6 +1303,18 @@ void DebugEditor::LoadWorkspacesConfig() {
 
             workspaces_ = std::move(loadedWorkspaces);
             activeWorkspaceIndex_ = (std::min)(static_cast<size_t>((std::max)(0, loadedActiveIndex)), workspaces_.size() - 1);
+
+            // 各ページの専用レイアウト ini を読み込む
+            for (auto& ws : workspaces_) {
+                LoadWorkspaceLayoutIni(ws);
+            }
+
+            // 現在アクティブなワークスペースのレイアウトを ImGui に適用
+            if (activeWorkspaceIndex_ < workspaces_.size() && !workspaces_[activeWorkspaceIndex_].layoutData.empty()) {
+                const auto& curWs = workspaces_[activeWorkspaceIndex_];
+                ImGui::LoadIniSettingsFromMemory(curWs.layoutData.c_str(), curWs.layoutData.size());
+            }
+
             ApplyWorkspaceWindowState(activeWorkspaceIndex_);
         }
     } catch (...) {
@@ -1234,6 +1326,14 @@ void DebugEditor::ResetWorkspaceLayout(size_t index) {
     if (index >= workspaces_.size()) return;
 
     auto& ws = workspaces_[index];
+    ws.layoutData.clear();
+    try {
+        std::filesystem::path iniPath = std::filesystem::path(kLayoutsDirectoryPath) / (ws.id + kLayoutFileExtension);
+        if (std::filesystem::exists(iniPath)) {
+            std::filesystem::remove(iniPath);
+        }
+    } catch (...) {}
+
     if (ws.isParticleStudio) {
         ws.windowState = WorkspaceWindowState{};
         ws.windowState.showParticleStudio = true;

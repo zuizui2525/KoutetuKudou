@@ -39,6 +39,7 @@ struct WorkspaceDefinition {
     bool isParticleStudio = false;   // パーティクルスタジオ専用か
     bool isCustom = false;           // ユーザー定義のカスタムページか
     WorkspaceWindowState windowState{}; // そのページで表示されているウィンドウの開閉状態
+    std::string layoutData;          // そのページ専用のウィンドウ配置・サイズ・ドッキング情報 (ini)
 };
 
 enum class EditorWorkspace {
@@ -76,10 +77,12 @@ public:
     void ApplyWorkspaceWindowState(size_t index);
     void SyncCurrentWorkspaceWindowState();
 
-    // ワークスペース永続化（JSON保存・復元・リセット）
+    // ワークスペース永続化（JSON保存・復元・リセット・ページ別ini保存読込）
     void SaveWorkspacesConfig();
     void LoadWorkspacesConfig();
     void ResetWorkspaceLayout(size_t index);
+    void SaveWorkspaceLayoutIni(const WorkspaceDefinition& ws);
+    void LoadWorkspaceLayoutIni(WorkspaceDefinition& ws);
 
 private:
     void DrawMenuBar(HWND hwnd);

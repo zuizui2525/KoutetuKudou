@@ -206,6 +206,11 @@ void ContentBrowserWindow::Draw(bool* pOpen) {
 
     EnsureIconsLoaded();
 
+    // 未ドッキング（フローティング）時に画面を埋め尽くさないよう安全なデフォルトサイズを設定
+    constexpr float kDefaultFloatingWidth  = 750.0f;
+    constexpr float kDefaultFloatingHeight = 350.0f;
+    ImGui::SetNextWindowSize(ImVec2(kDefaultFloatingWidth, kDefaultFloatingHeight), ImGuiCond_FirstUseEver);
+
     if (ImGui::Begin("コンテンツブラウザ###ContentBrowser", pOpen)) {
         DrawNavigationBar();
         ImGui::Separator();
