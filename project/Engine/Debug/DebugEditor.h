@@ -56,6 +56,10 @@ public:
     void Initialize();
     void Draw(ID3D12GraphicsCommandList* commandList);
 
+    static DebugEditor* GetInstance() { return sInstance_; }
+    const std::string& GetCurrentWorkspaceId() const;
+    static std::string FormatWorkspaceWindowName(const char* baseTitle, const char* baseId, const char* wsSuffix);
+
     // GameView または SceneView が表示されているかどうかを取得（App.cppのバッチング制御用）
     bool IsGameViewVisible() const { return isGameViewVisible_ || showSceneView_; }
     bool IsPaused() const { return isPaused_; }
@@ -121,5 +125,7 @@ private:
     bool isPaused_ = false;
     bool isSceneSelected_ = false;
     bool isLayoutLocked_ = false; // ウィンドウ間の境界リサイズを固定・ロックするかどうか
+
+    static inline DebugEditor* sInstance_ = nullptr;
 };
 #endif

@@ -16,6 +16,7 @@
 #include "../Settings/RingSlashEffectSetting.h"
 #include "../Settings/CylinderAuraEffectSetting.h"
 #include "../Settings/RippleEffectSetting.h"
+#include "../Settings/BulletTrailEffectSetting.h"
 
 EffectFactory* EffectFactory::GetInstance() {
     static EffectFactory instance;
@@ -48,4 +49,6 @@ void EffectFactory::RegisterAllEffects() {
     effectMgr->RegisterEffect(DropletTrailEffectSetting());
     effectMgr->RegisterEffect(SmallRippleEffectSetting());
     effectMgr->RegisterEffect(WaterDropEffectSetting());
+    effectMgr->RegisterEffect(BulletTrailEffectSetting());
 }
+

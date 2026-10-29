@@ -144,6 +144,20 @@ void ParticleStudioWindow::Update(float deltaTime) {
         float effectiveDelta = requestStepFrame_ ? (1.0f / 60.0f) : (deltaTime * timeScale_);
         previewParticle_->Update(effectiveDelta);
         requestStepFrame_ = false;
+
+        // 単発（自動発生OFF）エフェクトの場合、自動ループ再生
+        if (isPlaying_ && !currentSetting_.isAutoSpawning && isAutoRepeatBurst_ && currentSetting_.burstCount > 0) {
+            uint32_t activeCount = previewParticle_->GetEstimatedActiveCount();
+            if (activeCount == 0) {
+                burstRepeatTimer_ += effectiveDelta;
+                if (burstRepeatTimer_ >= kDefaultBurstRepeatInterval) {
+                    burstRepeatTimer_ = 0.0f;
+                    previewParticle_->EmitBurst(currentSetting_.burstCount);
+                }
+            } else {
+                burstRepeatTimer_ = 0.0f;
+            }
+        }
     }
 }
 
@@ -404,6 +418,12 @@ void ParticleStudioWindow::DrawControlBar() {
     ImGui::SetNextItemWidth(140.0f);
     ImGui::Combo("背景色", &selectedBgColorIndex_, kBgColorNames, IM_ARRAYSIZE(kBgColorNames));
 
+    ImGui::SameLine();
+    ImGui::Checkbox("自動ループ (Loop)", &isAutoRepeatBurst_);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("単発（バースト）系エフェクトが消滅した際、一定間隔で自動再発射します");
+    }
+
     // バースト発射テストボタン群
     ImGui::Text("バースト発射テスト:");
     ImGui::SameLine();
@@ -541,6 +561,7 @@ void ParticleStudioWindow::ApplyPreset(const std::string& presetName) {
     // カメラ注視点をエミッターの高さへ自動調整
     cameraTarget_ = currentSetting_.emitterPosition;
     isPlaying_ = true;
+    burstRepeatTimer_ = 0.0f;
 }
 
 #endif

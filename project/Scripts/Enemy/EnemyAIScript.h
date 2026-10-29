@@ -12,7 +12,8 @@ public:
         TargetLock,        // ロックオンチャージ
         MoveToCenter,      // 正面へ回り込み
         AttackCharge,      // 攻撃チャージ
-        UnavoidableAttack  // 攻撃発射
+        UnavoidableAttack, // 攻撃発射
+        Cooldown           // 攻撃後クールタイム（距離維持＆待機）
     };
 
     EnemyAIScript();
@@ -52,8 +53,8 @@ public:
 
 private:
     /// <summary>
-    /// プレイヤー追従、カリング（60m後方置き去り判定）、ヨー・ピッチ旋回、
-    /// および5段階のAIステートマシンを更新します。
+    /// プレイヤー追従、カリング（60m後方置き去り判定）、停止距離維持、ヨー・ピッチ旋回、
+    /// および6段階のAIステートマシンを更新します。
     /// </summary>
     void UpdateAI();
 
@@ -73,11 +74,16 @@ private:
     static constexpr int kDefaultBossHp = 30;
     static constexpr float kApproachSpeedZ = 0.12f;
     static constexpr float kApproachTransitionOffset = 10.0f; // 視界内に入るZ距離
-    static constexpr float kToCenterGaugeSpeed = 0.02f;       // ロックオン蓄積速度
-    static constexpr float kMoveToCenterSpeedX = 0.15f;      // 正面移動速度
-    static constexpr float kAttackGaugeSpeed = 0.025f;       // 攻撃チャージ速度
-    static constexpr float kCullDistanceBack = 60.0f;        // 後方取り残され時のカリング距離
-    static constexpr int kHitFlashDuration = 5;              // 被弾点滅持続フレーム数
+    static constexpr float kPreferredDistanceZ = 12.0f;       // 自機前方の理想維持距離 (m)
+    static constexpr float kMinDistanceZ = 7.0f;              // 自機への絶対接近限界距離 (m) 重なり防止
+    static constexpr float kDistanceAdjustSpeed = 0.08f;      // 停止距離調整速度
+    static constexpr float kMoveLerpFactorX = 0.05f;          // 正面回り込みの滑らかなLerp係数
+    static constexpr float kToCenterGaugeSpeed = 0.015f;      // ロックオン蓄積速度
+    static constexpr float kAttackGaugeSpeed = 0.02f;         // 攻撃チャージ速度
+    static constexpr int kDefaultCooldownDuration = 90;       // 攻撃後のクールタイムフレーム数（約1.5秒）
+    static constexpr int kEnemyBulletDamage = 10;             // 敵弾ダメージ（検証用に10に設定）
+    static constexpr float kCullDistanceBack = 60.0f;         // 後方取り残され時のカリング距離
+    static constexpr int kHitFlashDuration = 5;               // 被弾点滅持続フレーム数
     static constexpr float kBulletSpawnOffsetZ = -1.0f;       // 弾発射オフセット
     static constexpr float kEnemyBulletSpeed = 0.35f;
 
@@ -90,6 +96,10 @@ private:
     AiState aiState_ = AiState::Approach;
     float toCenterGauge_ = 0.0f;
     float attackGauge_ = 0.0f;
+    int cooldownTimer_ = 0;
+    int cooldownDuration_ = kDefaultCooldownDuration;
+    float preferredDistanceZ_ = kPreferredDistanceZ;
+    int bulletDamage_ = kEnemyBulletDamage;
     int hitFlashTimer_ = 0;
 
     Vector4 originalColor_ = { 1.0f, 0.1f, 0.1f, 1.0f }; // 敵基本色（赤）

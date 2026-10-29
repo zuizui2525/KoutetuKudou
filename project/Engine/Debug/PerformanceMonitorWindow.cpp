@@ -12,8 +12,14 @@ PerformanceMonitorWindow::PerformanceMonitorWindow() {
     lastFrameTime_ = std::chrono::steady_clock::now();
 }
 
-void PerformanceMonitorWindow::Draw(bool* show) {
-    if (!ImGui::Begin("パフォーマンス監視###Performance Monitor", show)) {
+void PerformanceMonitorWindow::Draw(bool* show, const char* windowIdSuffix) {
+    std::string windowTitle = "パフォーマンス監視###Performance Monitor";
+    if (windowIdSuffix && windowIdSuffix[0] != '\0') {
+        windowTitle += "_";
+        windowTitle += windowIdSuffix;
+    }
+
+    if (!ImGui::Begin(windowTitle.c_str(), show)) {
         ImGui::End();
         return;
     }

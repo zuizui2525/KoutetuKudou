@@ -39,7 +39,7 @@ public:
     static void ClearLog();
 
     // ImGui用描画関数
-    static void DrawConsoleWindow(float maxTimestamp = -1.0f);
+    static void DrawConsoleWindow(float maxTimestamp = -1.0f, const char* windowIdSuffix = nullptr);
 
     // システム環境情報の出力
     static void LogSystemInfo();

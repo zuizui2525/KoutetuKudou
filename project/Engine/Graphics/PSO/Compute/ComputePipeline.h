@@ -32,6 +32,14 @@ public:
     ID3D12PipelineState* GetPSO() const { return pipelineState_.Get(); }
     ID3D12RootSignature* GetRootSignature() const { return rootSignature_.Get(); }
 
+    /// <summary>
+    /// パイプライン状態とルートシグネチャを解放します。
+    /// </summary>
+    void Reset() {
+        pipelineState_.Reset();
+        rootSignature_.Reset();
+    }
+
 private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> rootSignature_;

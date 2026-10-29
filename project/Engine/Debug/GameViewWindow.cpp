@@ -22,12 +22,18 @@ namespace {
 
 GameViewWindow::GameViewWindow() = default;
 
-void GameViewWindow::Draw(bool* show, bool* isVisible) {
+void GameViewWindow::Draw(bool* show, bool* isVisible, const char* windowIdSuffix) {
     *isVisible = false;
     sIsGameViewVisible_ = false;
     sIsGameViewFocused_ = false;
     
-    if (ImGui::Begin("ゲーム画面###Game View", show)) {
+    std::string windowTitle = "ゲーム画面###Game View";
+    if (windowIdSuffix && windowIdSuffix[0] != '\0') {
+        windowTitle += "_";
+        windowTitle += windowIdSuffix;
+    }
+
+    if (ImGui::Begin(windowTitle.c_str(), show)) {
         *isVisible = true;
         sIsGameViewVisible_ = true;
         sIsGameViewFocused_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);

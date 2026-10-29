@@ -923,6 +923,7 @@ DebugEditor::DebugEditor()
       isFullscreen_(false),
       currentAspect_(AspectType::Aspect16_9_Low),
       isPaused_(true) {
+    sInstance_ = this;
     wpPrev_.length = sizeof(wpPrev_);
 
     // 1. メイン ワークスペース (通常のシーン・ゲーム編集)
@@ -1329,7 +1330,7 @@ void DebugEditor::ResetWorkspaceLayout(size_t index) {
     ws.layoutData.clear();
     try {
         std::filesystem::path iniPath = std::filesystem::path(kLayoutsDirectoryPath) / (ws.id + kLayoutFileExtension);
-        if (std::filesystem::exists(iniPath)) {
+        if (ws.isCustom && std::filesystem::exists(iniPath)) {
             std::filesystem::remove(iniPath);
         }
     } catch (...) {}
@@ -1362,6 +1363,24 @@ void DebugEditor::ResetWorkspaceLayout(size_t index) {
 DebugEditor::~DebugEditor() {
     SaveWorkspacesConfig();
     sFallbackObjects.clear();
+    if (sInstance_ == this) {
+        sInstance_ = nullptr;
+    }
+}
+
+const std::string& DebugEditor::GetCurrentWorkspaceId() const {
+    if (activeWorkspaceIndex_ < workspaces_.size()) {
+        return workspaces_[activeWorkspaceIndex_].id;
+    }
+    static const std::string kDefaultId = "layout";
+    return kDefaultId;
+}
+
+std::string DebugEditor::FormatWorkspaceWindowName(const char* baseTitle, const char* baseId, const char* wsSuffix) {
+    if (!wsSuffix || wsSuffix[0] == '\0') {
+        return std::string(baseTitle) + "###" + baseId;
+    }
+    return std::string(baseTitle) + "###" + baseId + "_" + wsSuffix;
 }
 
 void DebugEditor::Initialize() {
@@ -1445,6 +1464,7 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // ワークスペースごとに独立した DockSpace ID を使用（過去の壊れた ini キャッシュと完全分離・キメラ化防止）
     std::string wsId = (activeWorkspaceIndex_ < workspaces_.size()) ? workspaces_[activeWorkspaceIndex_].id : "layout";
+    const char* wsSuffix = (wsId.empty() || wsId == "layout") ? nullptr : wsId.c_str();
     std::string dockspaceName = std::string(kDockSpacePrefix) + wsId;
     ImGuiID dockspaceId = ImGui::GetID(dockspaceName.c_str());
 
@@ -1466,27 +1486,27 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // Scene View (編集画面)
     if (showSceneView_ && sceneViewWindow_) {
-        sceneViewWindow_->Draw(&showSceneView_);
+        sceneViewWindow_->Draw(&showSceneView_, wsSuffix);
     }
 
     // Game View (ゲーム画面)
     if (showGameView_ && gameViewWindow_) {
-        gameViewWindow_->Draw(&showGameView_, &isGameViewVisible_);
+        gameViewWindow_->Draw(&showGameView_, &isGameViewVisible_, wsSuffix);
     } else {
         isGameViewVisible_ = false;
     }
 
     // Console
-    Log::DrawConsoleWindow(-1.0f);
+    Log::DrawConsoleWindow(-1.0f, wsSuffix);
 
     // Performance Monitor
     if (showPerfMonitor_ && perfMonitorWindow_) {
-        perfMonitorWindow_->Draw(&showPerfMonitor_);
+        perfMonitorWindow_->Draw(&showPerfMonitor_, wsSuffix);
     }
 
     // Content Browser
     if (showContentBrowser_ && contentBrowserWindow_) {
-        contentBrowserWindow_->Draw(&showContentBrowser_);
+        contentBrowserWindow_->Draw(&showContentBrowser_, wsSuffix);
     }
 
     // エフェクト一覧 & GPUパーティクル設定ウィンドウ
@@ -1496,7 +1516,8 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // Hierarchy (左側)
     if (showHierarchy_) {
-        if (ImGui::Begin("ヒエラルキー###Hierarchy", &showHierarchy_)) {
+        std::string hierarchyTitle = FormatWorkspaceWindowName("ヒエラルキー", "Hierarchy", wsSuffix);
+        if (ImGui::Begin(hierarchyTitle.c_str(), &showHierarchy_)) {
             // [+ Create GameObject] ボタン
             constexpr float kCreateBtnHeight = 24.0f;
             if (ImGui::Button("+ Create GameObject", ImVec2(-1.0f, kCreateBtnHeight))) {
@@ -1790,7 +1811,8 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
 
     // Inspector (右側)
     if (showInspector_) {
-        if (ImGui::Begin("インスペクター###Inspector", &showInspector_)) {
+        std::string inspectorTitle = FormatWorkspaceWindowName("インスペクター", "Inspector", wsSuffix);
+        if (ImGui::Begin(inspectorTitle.c_str(), &showInspector_)) {
             IGameObject* selected = SceneHierarchy::GetInstance()->GetSelected();
             auto* currentSceneObj = dynamic_cast<Scene*>(SceneManager::GetInstance()->GetCurrentScene());
 

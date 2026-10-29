@@ -187,6 +187,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Graphics\Objects\3d\Ring\RingObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\FlatRing\FlatRingObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Skybox\Skybox.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\3d\Skydome\Skydome.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Square\SquareObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Frustum\CameraFrustumObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\LightGizmo\LightGizmoObject.cpp" />
@@ -257,6 +258,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Engine\Component\Components\SphereColliderComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\AudioSourceComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\ParticleEffectComponent.cpp" />
+    <ClCompile Include="Engine\Component\Components\GPUParticleComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\CameraComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\LightComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\TextRenderer2DComponent.cpp" />
@@ -282,6 +284,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Scripts\Route\RouteManagerScript.cpp" />
     <ClCompile Include="Scripts\Route\RouteRendererScript.cpp" />
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp" />
+    <ClCompile Include="Scripts\Stage\SkydomeScript.cpp" />
     <ClCompile Include="Scripts\Sample\SamplePlayerScript.cpp" />
     <ClCompile Include="Scripts\Sample\SampleFollowerScript.cpp" />
     <ClCompile Include="Engine\Graphics\Text\TextTextureGenerator.cpp" />
@@ -435,6 +438,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\Graphics\Objects\3d\Ring\RingObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\FlatRing\FlatRingObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Skybox\Skybox.h" />
+    <ClInclude Include="Engine\Graphics\Objects\3d\Skydome\Skydome.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Square\SquareObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Frustum\CameraFrustumObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\LightGizmo\LightGizmoObject.h" />
@@ -512,6 +516,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Engine\Component\Components\SphereColliderComponent.h" />
     <ClInclude Include="Engine\Component\Components\AudioSourceComponent.h" />
     <ClInclude Include="Engine\Component\Components\ParticleEffectComponent.h" />
+    <ClInclude Include="Engine\Component\Components\GPUParticleComponent.h" />
     <ClInclude Include="Engine\Component\Components\CameraComponent.h" />
     <ClInclude Include="Engine\Component\Components\LightComponent.h" />
     <ClInclude Include="Engine\Component\Components\TextRenderer2DComponent.h" />
@@ -592,6 +597,7 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Scripts\Route\RouteManagerScript.h" />
     <ClInclude Include="Scripts\Route\RouteRendererScript.h" />
     <ClInclude Include="Scripts\Stage\StageManagerScript.h" />
+    <ClInclude Include="Scripts\Stage\SkydomeScript.h" />
     <ClInclude Include="Scripts\Sample\SamplePlayerScript.h" />
     <ClInclude Include="Scripts\Sample\SampleFollowerScript.h" />
     <ClInclude Include="Engine\Debug\ContentBrowserWindow.h" />

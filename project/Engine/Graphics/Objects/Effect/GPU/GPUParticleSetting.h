@@ -41,6 +41,7 @@ struct GPUParticleSetting {
     float spawnRatePerSec   = 0.0f;     // 1秒あたりの自動発生数（初期状態は停止）
     bool  isAutoSpawning    = false;    // 自動連続発生を行うか（コンポーネントや明示呼び出しがあるまでOFF）
     uint32_t burstCount     = 1000;     // 手動バースト発生時の個数
+    int   blendMode         = 1;        // 0: Normal(半透明), 1: Add(加算), 2: Subtract(減算), 3: Multiply(乗算)
 };
 
 /// <summary>
@@ -57,6 +58,7 @@ public:
     // -------------------------------------------------------------
 
     /// <summary>
+    /// <summary>
     /// 炎 (Fire): 鮮やかな橙から黄色、上昇気流で縮小しながら消滅
     /// </summary>
     static GPUParticleSetting CreateFire() {
@@ -64,43 +66,43 @@ public:
         s.name = "Fire";
         s.textureKey = "white";
         s.emitterPosition = { 0.0f, 0.0f, 0.0f };
-        s.startScale = { 0.45f, 0.45f, 0.45f };
-        s.endScale = { 0.08f, 0.08f, 0.08f };
+        s.startScale = { 0.35f, 0.35f, 0.35f };
+        s.endScale = { 0.05f, 0.05f, 0.05f };
         s.startColor = { 1.0f, 0.7f, 0.1f, 1.0f };
         s.endColor = { 0.9f, 0.15f, 0.0f, 0.0f };
-        s.minVelocity = { -0.8f, 2.0f, -0.8f };
-        s.maxVelocity = {  0.8f, 5.5f,  0.8f };
-        s.minLifeTime = 0.6f;
-        s.maxLifeTime = 1.4f;
+        s.minVelocity = { -0.5f, 1.0f, -0.5f };
+        s.maxVelocity = {  0.5f, 3.0f,  0.5f };
+        s.minLifeTime = 0.4f;
+        s.maxLifeTime = 0.8f;
         s.gravity = -0.5f; // 浮力
         s.killAtY = -999.0f;
-        s.spawnRatePerSec = 1500.0f;
-        s.isAutoSpawning = true;
-        s.burstCount = 500;
+        s.spawnRatePerSec = 40.0f;
+        s.isAutoSpawning = true; // デフォルトで自動連続発生ON
+        s.burstCount = 30;
         return s;
     }
 
     /// <summary>
-    /// 爆発 (Explosion): 球状に猛烈な初速で拡散し、減速しながらフェードアウト
+    /// 爆発 (Explosion): 球状に初速で拡散し、減速しながらフェードアウト
     /// </summary>
     static GPUParticleSetting CreateExplosion() {
         GPUParticleSetting s;
         s.name = "Explosion";
         s.textureKey = "white";
         s.emitterPosition = { 0.0f, 0.5f, 0.0f };
-        s.startScale = { 0.5f, 0.5f, 0.5f };
+        s.startScale = { 0.4f, 0.4f, 0.4f };
         s.endScale = { 0.02f, 0.02f, 0.02f };
         s.startColor = { 1.0f, 0.9f, 0.3f, 1.0f };
         s.endColor = { 0.8f, 0.1f, 0.0f, 0.0f };
-        s.minVelocity = { -8.0f, -2.0f, -8.0f };
-        s.maxVelocity = {  8.0f, 10.0f,  8.0f };
-        s.minLifeTime = 0.5f;
-        s.maxLifeTime = 1.2f;
+        s.minVelocity = { -5.0f, -1.5f, -5.0f };
+        s.maxVelocity = {  5.0f,  6.0f,  5.0f };
+        s.minLifeTime = 0.3f;
+        s.maxLifeTime = 0.7f;
         s.gravity = 4.0f;
         s.killAtY = 0.0f;
         s.spawnRatePerSec = 0.0f;
         s.isAutoSpawning = false; // バースト専用
-        s.burstCount = 5000;
+        s.burstCount = 60;
         return s;
     }
 
@@ -113,18 +115,19 @@ public:
         s.textureKey = "white";
         s.emitterPosition = { 0.0f, 0.0f, 0.0f };
         s.startScale = { 0.2f, 0.2f, 0.2f };
-        s.endScale = { 0.8f, 0.8f, 0.8f }; // 広がる
-        s.startColor = { 0.4f, 0.4f, 0.45f, 0.6f };
+        s.endScale = { 0.6f, 0.6f, 0.6f };
+        s.startColor = { 0.4f, 0.4f, 0.45f, 0.5f };
         s.endColor = { 0.15f, 0.15f, 0.18f, 0.0f };
-        s.minVelocity = { -0.5f, 0.8f, -0.5f };
-        s.maxVelocity = {  0.5f, 2.2f,  0.5f };
-        s.minLifeTime = 1.5f;
-        s.maxLifeTime = 3.0f;
+        s.minVelocity = { -0.3f, 0.5f, -0.3f };
+        s.maxVelocity = {  0.3f, 1.5f,  0.3f };
+        s.minLifeTime = 1.0f;
+        s.maxLifeTime = 2.0f;
         s.gravity = -0.2f;
         s.killAtY = -999.0f;
-        s.spawnRatePerSec = 300.0f;
+        s.spawnRatePerSec = 20.0f;
         s.isAutoSpawning = true;
-        s.burstCount = 200;
+        s.burstCount = 20;
+        s.blendMode = 0; // Normal(半透明)
         return s;
     }
 
@@ -136,19 +139,19 @@ public:
         s.name = "Sparks";
         s.textureKey = "white";
         s.emitterPosition = { 0.0f, 0.2f, 0.0f };
-        s.startScale = { 0.1f, 0.1f, 0.1f };
+        s.startScale = { 0.08f, 0.08f, 0.08f };
         s.endScale = { 0.02f, 0.02f, 0.02f };
         s.startColor = { 1.0f, 0.95f, 0.8f, 1.0f };
         s.endColor = { 1.0f, 0.4f, 0.0f, 0.0f };
-        s.minVelocity = { -6.0f, 3.0f, -6.0f };
-        s.maxVelocity = {  6.0f, 9.0f,  6.0f };
-        s.minLifeTime = 0.3f;
-        s.maxLifeTime = 0.8f;
-        s.gravity = 12.0f; // 強い重力
+        s.minVelocity = { -4.0f, 2.0f, -4.0f };
+        s.maxVelocity = {  4.0f, 6.0f,  4.0f };
+        s.minLifeTime = 0.2f;
+        s.maxLifeTime = 0.5f;
+        s.gravity = 10.0f;
         s.killAtY = 0.0f;
-        s.spawnRatePerSec = 800.0f;
+        s.spawnRatePerSec = 30.0f;
         s.isAutoSpawning = true;
-        s.burstCount = 1000;
+        s.burstCount = 30;
         return s;
     }
 
@@ -164,15 +167,16 @@ public:
         s.endScale = { 0.08f, 0.08f, 0.08f };
         s.startColor = { 0.9f, 0.95f, 1.0f, 0.9f };
         s.endColor = { 0.8f, 0.9f, 1.0f, 0.0f };
-        s.minVelocity = { -1.0f, -2.5f, -1.0f };
-        s.maxVelocity = {  1.0f, -1.0f,  1.0f };
-        s.minLifeTime = 3.0f;
-        s.maxLifeTime = 6.0f;
-        s.gravity = 0.3f;
+        s.minVelocity = { -0.5f, -1.5f, -0.5f };
+        s.maxVelocity = {  0.5f, -0.5f,  0.5f };
+        s.minLifeTime = 1.5f;
+        s.maxLifeTime = 3.0f;
+        s.gravity = 0.2f;
         s.killAtY = 0.0f;
-        s.spawnRatePerSec = 400.0f;
+        s.spawnRatePerSec = 30.0f;
         s.isAutoSpawning = true;
-        s.burstCount = 500;
+        s.burstCount = 30;
+        s.blendMode = 0; // Normal(半透明)
         return s;
     }
 
@@ -188,15 +192,15 @@ public:
         s.endScale = { 0.04f, 0.04f, 0.04f };
         s.startColor = { 0.2f, 0.8f, 1.0f, 1.0f }; // シアン
         s.endColor = { 0.8f, 0.2f, 1.0f, 0.0f };   // 紫フェード
-        s.minVelocity = { -1.5f, 1.5f, -1.5f };
-        s.maxVelocity = {  1.5f, 4.0f,  1.5f };
-        s.minLifeTime = 0.8f;
-        s.maxLifeTime = 1.8f;
-        s.gravity = -1.0f;
+        s.minVelocity = { -1.0f, 1.0f, -1.0f };
+        s.maxVelocity = {  1.0f, 2.5f,  1.0f };
+        s.minLifeTime = 0.5f;
+        s.maxLifeTime = 1.0f;
+        s.gravity = -0.5f;
         s.killAtY = -999.0f;
-        s.spawnRatePerSec = 1200.0f;
+        s.spawnRatePerSec = 30.0f;
         s.isAutoSpawning = true;
-        s.burstCount = 800;
+        s.burstCount = 30;
         return s;
     }
 
@@ -212,15 +216,39 @@ public:
         s.endScale = { 0.03f, 0.03f, 0.03f };
         s.startColor = { 1.0f, 0.3f, 0.7f, 1.0f }; // マゼンタ
         s.endColor = { 0.2f, 1.0f, 0.8f, 0.0f };   // エメラルドグリーン
-        s.minVelocity = { -5.0f, -4.0f, -5.0f };
-        s.maxVelocity = {  5.0f,  6.0f,  5.0f };
-        s.minLifeTime = 1.0f;
-        s.maxLifeTime = 2.0f;
-        s.gravity = 2.5f;
+        s.minVelocity = { -3.0f, -2.0f, -3.0f };
+        s.maxVelocity = {  3.0f,  4.0f,  3.0f };
+        s.minLifeTime = 0.6f;
+        s.maxLifeTime = 1.2f;
+        s.gravity = 2.0f;
         s.killAtY = 0.0f;
         s.spawnRatePerSec = 0.0f;
         s.isAutoSpawning = false;
-        s.burstCount = 3000;
+        s.burstCount = 60;
+        return s;
+    }
+
+    /// <summary>
+    /// 弾丸軌道 (BulletTrail): 弾丸の後方に微細な粒子が短時間漂う軌跡エフェクト
+    /// </summary>
+    static GPUParticleSetting CreateBulletTrail() {
+        GPUParticleSetting s;
+        s.name = "BulletTrail";
+        s.textureKey = "circle";
+        s.emitterPosition = { 0.0f, 0.0f, 0.0f };
+        s.startScale = { 0.16f, 0.16f, 0.16f };
+        s.endScale = { 0.02f, 0.02f, 0.02f };
+        s.startColor = { 0.35f, 0.85f, 1.0f, 0.95f }; // 発光シアンブルー
+        s.endColor = { 0.10f, 0.30f, 0.95f, 0.0f };   // ディープブルー消滅
+        s.minVelocity = { -0.05f, -0.05f, -0.05f };
+        s.maxVelocity = {  0.05f,  0.05f,  0.05f };
+        s.minLifeTime = 0.08f;
+        s.maxLifeTime = 0.16f;
+        s.gravity = 0.0f;
+        s.killAtY = -999.0f;
+        s.spawnRatePerSec = 50.0f;
+        s.isAutoSpawning = true;
+        s.burstCount = 1;
         return s;
     }
 
@@ -228,13 +256,14 @@ public:
     /// 全ビルトインプリセット名一覧の取得
     /// </summary>
     static std::vector<std::string> GetPresetNames() {
-        return { "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks" };
+        return { "BulletTrail", "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks" };
     }
 
     /// <summary>
     /// 名前からビルトインプリセットを取得
     /// </summary>
     static GPUParticleSetting GetPresetByName(const std::string& name) {
+        if (name == "BulletTrail") return CreateBulletTrail();
         if (name == "Fire") return CreateFire();
         if (name == "Explosion") return CreateExplosion();
         if (name == "Smoke") return CreateSmoke();
@@ -242,7 +271,7 @@ public:
         if (name == "Snow") return CreateSnow();
         if (name == "MagicAura") return CreateMagicAura();
         if (name == "Fireworks") return CreateFireworks();
-        return CreateFire(); // デフォルト
+        return CreateBulletTrail(); // デフォルト
     }
 
     // -------------------------------------------------------------
@@ -277,7 +306,8 @@ public:
         ofs << "  \"killAtY\": " << setting.killAtY << ",\n";
         ofs << "  \"spawnRatePerSec\": " << setting.spawnRatePerSec << ",\n";
         ofs << "  \"isAutoSpawning\": " << (setting.isAutoSpawning ? "true" : "false") << ",\n";
-        ofs << "  \"burstCount\": " << setting.burstCount << "\n";
+        ofs << "  \"burstCount\": " << setting.burstCount << ",\n";
+        ofs << "  \"blendMode\": " << setting.blendMode << "\n";
         ofs << "}\n";
 
         return true;
@@ -393,6 +423,7 @@ public:
         outSetting.spawnRatePerSec = extractFloat(json, "spawnRatePerSec", outSetting.spawnRatePerSec);
         outSetting.isAutoSpawning = extractBool(json, "isAutoSpawning", outSetting.isAutoSpawning);
         outSetting.burstCount = static_cast<uint32_t>(extractFloat(json, "burstCount", static_cast<float>(outSetting.burstCount)));
+        outSetting.blendMode = static_cast<int>(extractFloat(json, "blendMode", static_cast<float>(outSetting.blendMode)));
 
         return true;
     }

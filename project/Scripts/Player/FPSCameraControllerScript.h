@@ -40,9 +40,19 @@ private:
     static constexpr float kShakeIntensity = 0.2f;        // シェイク強度
     static constexpr float kLookSmoothFactor = 0.15f;     // 平滑化係数
 
+    // 死亡シネマティック演出用の定数
+    static constexpr float kDeathCameraFrontDist = 5.2f;      // 正面カメラの前方距離（自機全体を綺麗に収める距離に拡大）
+    static constexpr float kDeathCameraFrontHeight = 1.6f;    // 正面カメラの高さ（見下ろし感を保つ自然な高さ）
+    static constexpr float kDeathCameraSideSwing = 1.4f;      // 正面へ回り込む横膨らみ量（距離に応じた優雅なアーク軌道）
+    static constexpr float kDeathCameraLerpSpeed = 0.08f;     // 正面回り込みのスムーズ補間係数
+    static constexpr float kDeathTargetCenterHeight = 0.8f;   // 注視対象の自機中心高さ
+
     // メンバ変数
     float cameraYawOffset_ = 0.0f;
     int shakeTimer_ = 0;
     Vector3 prevLookTangent_ = { 0.0f, 0.0f, 1.0f };
     bool enableLean_ = true;
+
+    // 死亡シネマティック正面カメラワーク進行度 (0.0f: 通常一人称 -> 1.0f: 正面到達)
+    float deathCinematicProgress_ = 0.0f;
 };

@@ -31,6 +31,7 @@ void EnemyAIScript::Awake() {
     aiState_ = AiState::Approach;
     toCenterGauge_ = 0.0f;
     attackGauge_ = 0.0f;
+    cooldownTimer_ = 0;
     hitFlashTimer_ = 0;
     isDead_ = false;
 }
@@ -109,18 +110,36 @@ void EnemyAIScript::UpdateAI() {
     float pitch = -std::atan2(toPlayer.y, distXZ > kEpsilon ? distXZ : kEpsilon);
     owner_->SetRotate({ pitch, yaw, 0.0f });
 
-    // 3. ステートマシン
+    // 3. ステートマシンと移動制御
+    // 自機前方の理想位置（停止距離）を追従し、自機に近づきすぎないよう重なりを防止
+    float targetZ = playerPos.z + preferredDistanceZ_;
+    float minLimitZ = playerPos.z + kMinDistanceZ;
+
+    // 自機との絶対接近限界による重なり防止
+    if (pos.z < minLimitZ) {
+        pos.z = minLimitZ;
+    }
+
     switch (aiState_) {
     case AiState::Approach: {
-        pos.z += kApproachSpeedZ;
-        if (pos.z > playerPos.z + kApproachTransitionOffset) {
+        // 自機前方の適正距離へ接近
+        if (pos.z < targetZ) {
+            pos.z += kApproachSpeedZ;
+        } else {
+            pos.z -= kDistanceAdjustSpeed;
+        }
+
+        if (pos.z >= playerPos.z + kApproachTransitionOffset) {
             aiState_ = AiState::TargetLock;
             toCenterGauge_ = 0.0f;
         }
         break;
     }
     case AiState::TargetLock: {
-        // 並走しながら中央移動チャージ
+        // 並走しながら距離をキープし、中央移動チャージ
+        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
+        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
+
         toCenterGauge_ += kToCenterGaugeSpeed;
         if (toCenterGauge_ >= 1.0f) {
             aiState_ = AiState::MoveToCenter;
@@ -128,17 +147,24 @@ void EnemyAIScript::UpdateAI() {
         break;
     }
     case AiState::MoveToCenter: {
-        // プレイヤーのX正面へ移動
+        // 並走距離をキープしつつ、滑らかなLerpで自機のX正面へ回り込む
+        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
+        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
+
         float diffX = playerPos.x - pos.x;
-        if (std::abs(diffX) > kCenterXThreshold) {
-            pos.x += (diffX > 0.0f ? 1.0f : -1.0f) * kMoveToCenterSpeedX;
-        } else {
+        pos.x += diffX * kMoveLerpFactorX;
+
+        if (std::abs(diffX) <= kCenterXThreshold) {
             aiState_ = AiState::AttackCharge;
             attackGauge_ = 0.0f;
         }
         break;
     }
     case AiState::AttackCharge: {
+        // 攻撃発射前のチャージ蓄積
+        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
+        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
+
         attackGauge_ += kAttackGaugeSpeed;
         if (attackGauge_ >= 1.0f) {
             aiState_ = AiState::UnavoidableAttack;
@@ -146,8 +172,26 @@ void EnemyAIScript::UpdateAI() {
         break;
     }
     case AiState::UnavoidableAttack: {
+        // 弾丸発射
         FireBullet();
-        aiState_ = AiState::Approach;
+        aiState_ = AiState::Cooldown;
+        cooldownTimer_ = cooldownDuration_;
+        break;
+    }
+    case AiState::Cooldown: {
+        // 攻撃後のクールタイム（距離を保って様子見・威嚇）
+        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
+        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
+
+        if (cooldownTimer_ > 0) {
+            cooldownTimer_--;
+            if (cooldownTimer_ == 0) {
+                // クールタイム満了で次の攻撃サイクルへ
+                aiState_ = AiState::Approach;
+                toCenterGauge_ = 0.0f;
+                attackGauge_ = 0.0f;
+            }
+        }
         break;
     }
     }
@@ -179,6 +223,7 @@ void EnemyAIScript::FireBullet() {
         if (bulletScript) {
             bulletScript->SetDirection(dir);
             bulletScript->SetSpeed(kEnemyBulletSpeed);
+            bulletScript->SetDamage(bulletDamage_);
             bulletScript->SetIsPlayerBullet(false); // 敵弾
         }
     }
@@ -239,10 +284,19 @@ void EnemyAIScript::OnInspectorGUI() {
     ImGui::ProgressBar(static_cast<float>(hp_) / static_cast<float>(maxHp_), ImVec2(0.0f, 0.0f),
         std::to_string(hp_).append(" / ").append(std::to_string(maxHp_)).c_str());
 
-    const char* stateNames[] = { "Approach", "TargetLock", "MoveToCenter", "AttackCharge", "UnavoidableAttack" };
+    const char* stateNames[] = { "Approach", "TargetLock", "MoveToCenter", "AttackCharge", "UnavoidableAttack", "Cooldown" };
     int currentStateIndex = static_cast<int>(aiState_);
-    ImGui::Text("AIステート: %s", (currentStateIndex >= 0 && currentStateIndex < 5) ? stateNames[currentStateIndex] : "Unknown");
+    ImGui::Text("AIステート: %s", (currentStateIndex >= 0 && currentStateIndex < 6) ? stateNames[currentStateIndex] : "Unknown");
     ImGui::ProgressBar(toCenterGauge_, ImVec2(0.0f, 0.0f), "LockOn Gauge");
     ImGui::ProgressBar(attackGauge_, ImVec2(0.0f, 0.0f), "Attack Gauge");
+    if (aiState_ == AiState::Cooldown) {
+        float cdProgress = static_cast<float>(cooldownTimer_) / static_cast<float>(cooldownDuration_);
+        ImGui::ProgressBar(cdProgress, ImVec2(0.0f, 0.0f), ("Cooldown: " + std::to_string(cooldownTimer_)).c_str());
+    }
+
+    ImGui::Separator();
+    ImGui::DragFloat("理想維持距離(Z)##PreferredDistZ", &preferredDistanceZ_, 0.5f, 5.0f, 30.0f, "%.1f m");
+    ImGui::DragInt("クールタイム(F)##CooldownDuration", &cooldownDuration_, 5, 10, 300);
+    ImGui::DragInt("敵弾攻撃力##EnemyDamage", &bulletDamage_, 1, 1, 10);
 #endif
 }

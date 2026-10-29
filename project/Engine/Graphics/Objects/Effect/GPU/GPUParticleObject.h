@@ -34,6 +34,17 @@ struct GPUParticleEmitterSetting {
 };
 
 /// <summary>
+/// GPUパーティクルのブレンドモード列挙型
+/// </summary>
+enum class ParticleBlendMode {
+    Normal = 0,    // 通常半透明合成 (SrcAlpha + InvSrcAlpha)
+    Add = 1,       // 加算合成 (SrcAlpha + One) - 鮮やかな発光
+    Subtract = 2,  // 減算合成 (Dest - Src) - 暗黒・煙
+    Multiply = 3,  // 乗算合成 (DestColor * SrcColor) - 影・汚れ
+    Count = 4
+};
+
+/// <summary>
 /// DirectX 12 Compute Shader による完全GPU駆動パーティクルオブジェクト
 /// 数万〜数十万個のパーティクルをCPU負荷ほぼゼロで超高速並列シミュレーション・描画します。
 /// </summary>
@@ -74,7 +85,16 @@ public:
     /// </summary>
     /// <param name="cmdList">DirectX 12 コマンドリスト</param>
     /// <param name="textureKey">貼り付けるテクスチャ名 (例: "white", "circle")</param>
-    void Draw(ID3D12GraphicsCommandList* cmdList, const std::string& textureKey = "white");
+    /// <param name="blendMode">ブレンドモード (Normal / Add / Subtract / Multiply)</param>
+    void Draw(ID3D12GraphicsCommandList* cmdList, const std::string& textureKey = "white", ParticleBlendMode blendMode = ParticleBlendMode::Add);
+
+    /// <summary>
+    /// エンジン終了時に全静的パイプラインリソースを安全に解放
+    /// </summary>
+    static void DestroyPipelines();
+
+    ParticleBlendMode GetBlendMode() const { return blendMode_; }
+    void SetBlendMode(ParticleBlendMode mode) { blendMode_ = mode; }
 
     /// <summary>
     /// ImGui によるリアルタイムパラメータ調整ウィンドウを描画します。
@@ -131,6 +151,9 @@ public:
     /// </summary>
     void Reset();
 
+    uint32_t GetRandomSeed() const { return randomSeedCounter_; }
+    void SetRandomSeed(uint32_t seed) { randomSeedCounter_ = seed; }
+
 private:
     // 内部初期化ヘルパー
     bool CreatePipelines(ID3D12Device* device);
@@ -166,10 +189,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> emitterConstantBuffer_;   // Uploadヒープ: エミッターパラメータCBV
     Microsoft::WRL::ComPtr<ID3D12Resource> cameraConstantBuffer_;    // Uploadヒープ: カメラCBV
 
-    // パイプライン
-    ComputePipeline computePipeline_;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> renderRootSignature_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> renderPipelineState_;
+    ParticleBlendMode blendMode_ = ParticleBlendMode::Add;
+
+    // 全インスタンス共通の静的パイプライン（シェーダー再コンパイルをゼロにしてFPSを維持）
+    static inline bool sPipelinesInitialized_ = false;
+    static inline ComputePipeline sComputePipeline_;
+    static inline Microsoft::WRL::ComPtr<ID3D12RootSignature> sRenderRootSignature_;
+    static inline Microsoft::WRL::ComPtr<ID3D12PipelineState> sRenderPipelineStates_[static_cast<size_t>(ParticleBlendMode::Count)];
 
     // デスクリプタインデックス管理 (グローバルSRVヒープ内)
     UINT uavDescriptorIndex_ = 0;

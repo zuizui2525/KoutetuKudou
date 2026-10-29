@@ -8,7 +8,7 @@ public:
     SceneViewWindow();
     ~SceneViewWindow() = default;
 
-    void Draw(bool* show);
+    void Draw(bool* show, const char* windowIdSuffix = nullptr);
 
     // ギズモ操作モード定数（マジックナンバー排除）
     static constexpr int kGizmoOpTranslate = 7;

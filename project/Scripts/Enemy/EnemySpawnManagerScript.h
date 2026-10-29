@@ -48,6 +48,11 @@ public:
     void RefreshSpawnPoints();
 
     /// <summary>
+    /// キャッシュされているスポーンポイント一覧を取得します。
+    /// </summary>
+    const std::vector<EnemySpawnPointScript*>& GetCachedSpawnPoints() const { return cachedSpawnPoints_; }
+
+    /// <summary>
     /// 指定エリア・座標に新しい敵スポーン地点 GameObject を生成し、シーンへ登録して選択状態にします。
     /// </summary>
     /// <param name="spawnPos">出現ワールド座標</param>
@@ -66,11 +71,22 @@ public:
     /// </summary>
     void ClearPreviewEnemies();
 
+    /// <summary>
+    /// ステージ1（Area 1: 0m〜120m）用の仮敵配置プリセット（4箇所のスポーン地点）を一括構築します。
+    /// </summary>
+    void SetupStage1Preset();
+
+    /// <summary>
+    /// 全スポーン地点のハザードゾーン可視化を一括で有効/無効化します。
+    /// </summary>
+    void SetAllHazardZonesVisible(bool visible);
+    bool IsAllHazardZonesVisible() const { return showAllHazardZones_; }
+
 private:
     /// <summary>
-    /// 自機の現在Z座標に基づき、配置済みスポーン地点の通過判定を実行します。
+    /// 自機の現在座標に基づき、配置済みスポーン地点の通過・侵入判定を実行します。
     /// </summary>
-    void CheckSpawnPoints(float playerPosZ);
+    void CheckSpawnPoints(const Vector3& playerPos);
 
     /// <summary>
     /// スポーン地点が未配置のエリア用のフォールバック定期湧き判定を実行します。
@@ -113,6 +129,7 @@ private:
     bool enableSpawning_ = true;
     bool enablePeriodicFallback_ = false; // スポーンポイント未配置時の自動定期湧き（デフォルトOFF）
     bool isEditorWindowOpen_ = true;      // 独立した敵配置パレットの開閉状態（デフォルトON）
+    bool showAllHazardZones_ = true;      // 全スポーン地点のゾーン可視化一括トグル
 
     // シーンから収集したスポーンポイント参照キャッシュ
     std::vector<EnemySpawnPointScript*> cachedSpawnPoints_;

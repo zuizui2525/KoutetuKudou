@@ -10,6 +10,8 @@
 #include "App/Scene/Generic/GenericScene.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
+#include "Engine/Component/Components/GPUParticleComponent.h"
+#include "Engine/Graphics/Objects/Effect/GPU/GPUParticleObject.h"
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
@@ -25,9 +27,50 @@ BulletScript::BulletScript()
 void BulletScript::Awake() {
     currentLifeTimer_ = 0;
     isDead_ = false;
+    hasPreviousPos_ = false;
 }
 
 void BulletScript::Start() {
+    if (owner_) {
+        auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>();
+        if (!gpuParticle) {
+            gpuParticle = owner_->AddComponent<GPUParticleComponent>();
+        }
+        if (gpuParticle) {
+            gpuParticle->ApplyPreset("BulletTrail");
+            if (auto* obj = gpuParticle->GetParticleObject()) {
+                auto& s = obj->GetSetting();
+
+                // 連射時の同一形状化を打破するための微小ジッター付与 (マジックナンバー排除)
+                // 弾丸ごとに速度拡散と寿命をばらつかせ、1発ごとに有機的で異なる軌跡を生成
+                float randJitter = static_cast<float>(rand() % 100) / 100.0f; // 0.0f 〜 1.0f
+                constexpr float kBaseVelocityRange = 0.05f;
+                constexpr float kJitterVelocityScale = 0.04f;
+                constexpr float kBaseLifeTimeMin = 0.07f;
+                constexpr float kBaseLifeTimeMax = 0.15f;
+                constexpr float kJitterLifeScale = 0.05f;
+
+                float velRange = kBaseVelocityRange + kJitterVelocityScale * randJitter;
+                s.minVelocity = { -velRange, -velRange, -velRange };
+                s.maxVelocity = {  velRange,  velRange,  velRange };
+                s.minLifeTime = kBaseLifeTimeMin + kJitterLifeScale * randJitter;
+                s.maxLifeTime = kBaseLifeTimeMax + kJitterLifeScale * randJitter;
+
+                // 自機弾: スタイリッシュな黒煙・ダークグレートレイル / 敵弾: 赤紫系
+                if (isPlayerBullet_) {
+                    constexpr Vector4 kPlayerTrailStartColor = { 0.15f, 0.15f, 0.18f, 0.70f };
+                    constexpr Vector4 kPlayerTrailEndColor = { 0.04f, 0.04f, 0.05f, 0.00f };
+                    s.startColor = kPlayerTrailStartColor;
+                    s.endColor = kPlayerTrailEndColor;
+                } else {
+                    constexpr Vector4 kEnemyTrailStartColor = { 1.0f, 0.2f, 0.4f, 1.0f };
+                    constexpr Vector4 kEnemyTrailEndColor = { 0.8f, 0.0f, 0.2f, 0.0f };
+                    s.startColor = kEnemyTrailStartColor;
+                    s.endColor = kEnemyTrailEndColor;
+                }
+            }
+        }
+    }
 }
 
 void BulletScript::SetDirection(const Vector3& direction) {
@@ -72,26 +115,19 @@ void BulletScript::OnUpdate() {
 
     // 2. 弾の移動処理
     Vector3 currentPos = owner_->GetPosition();
+    if (!hasPreviousPos_) {
+        previousPos_ = currentPos;
+        hasPreviousPos_ = true;
+    }
+
     currentPos.x += direction_.x * speed_;
     currentPos.y += direction_.y * speed_;
     currentPos.z += direction_.z * speed_;
     owner_->SetPosition(currentPos);
 
-    // 自機弾の火炎（Fire）エフェクト発生（弾頭・軌跡）
-    if (isPlayerBullet_) {
-        EffectPlayParam fireParam{};
-        fireParam.position = currentPos;
-        fireParam.scale = { kBulletFireScale, kBulletFireScale, kBulletFireScale };
-        fireParam.velocityOverride = {
-            -direction_.x * speed_ * kTrailVelocityRatio,
-            -direction_.y * speed_ * kTrailVelocityRatio,
-            -direction_.z * speed_ * kTrailVelocityRatio
-        };
-        fireParam.isLoop = false;
-        if (auto* effectMgr = EffectManager::GetInstance()) {
-            effectMgr->PlayEffect3D(kEffectBulletFire, fireParam);
-        }
-    }
+    // 弾丸の軌跡（BulletTrail）は owner_ にアタッチされた GPUParticleComponent が
+    // 各弾丸の座標に追従して完全独立したGPUパーティクルシミュレーションおよび描画を実行します。
+    previousPos_ = currentPos;
 
     // 3. 衝突判定の確認
     CheckCollisions();

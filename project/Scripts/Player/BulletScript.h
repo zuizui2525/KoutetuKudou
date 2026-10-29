@@ -84,17 +84,19 @@ private:
     static constexpr int kMaxLifeTimeLimit = 600;
 
     // エフェクト演出定数
-    static inline const std::string kEffectBulletFire = "Fire";
+    static inline const std::string kEffectBulletTrail = "BulletTrail";
     static inline const std::string kEffectBulletHit = "Explosion";
-    static constexpr float kBulletFireScale = 0.4f;
+    static constexpr float kBulletTrailScale = 0.25f;  // 控えめな極小サイズ
     static constexpr float kBulletHitScale = 1.2f;
-    static constexpr float kTrailVelocityRatio = 0.25f; // 弾道後方へのトレイル速度比率
+    static constexpr float kTrailStepDistance = 0.5f; // 1フレームあたり1個に抑える間隔 (m)
 
     // メンバ変数
     float speed_ = kDefaultSpeed;
     int maxLifeTime_ = kDefaultMaxLifeTime;
     int currentLifeTimer_ = 0;
     Vector3 direction_ = { 0.0f, 0.0f, 1.0f };
+    Vector3 previousPos_ = { 0.0f, 0.0f, 0.0f };
+    bool hasPreviousPos_ = false;
     float collisionRadius_ = kDefaultCollisionRadius;
     int damage_ = kDefaultDamage;
     bool isPlayerBullet_ = true;

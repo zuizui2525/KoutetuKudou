@@ -3,6 +3,7 @@
 #include "Engine/Graphics/Objects/Effect/GPU/GPUParticleObject.h"
 #include "Engine/Graphics/Objects/Effect/GPU/GPUParticleSetting.h"
 #include "Engine/Graphics/Texture/RenderTexture.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <d3d12.h>
 #include <wrl.h>
 #include <memory>
@@ -18,7 +19,7 @@ public:
     // マジックナンバー排除のための定数
     static constexpr uint32_t kDefaultPreviewWidth = 1280;
     static constexpr uint32_t kDefaultPreviewHeight = 720;
-    static constexpr UINT kStudioSrvHeapIndex = 1500; // SRVヒープの予約スロット
+    static constexpr UINT kStudioSrvHeapIndex = TextureManager::kReservedParticleStudioIndex; // SRVヒープの予約スロット (システム予約領域スロット4)
     static constexpr float kMinCameraDistance = 1.0f;
     static constexpr float kMaxCameraDistance = 100.0f;
     static constexpr float kDefaultCameraDistance = 8.0f;
@@ -30,6 +31,7 @@ public:
     static constexpr float kMinViewportWidth      = 220.0f;
     static constexpr float kSplitterWidth         = 6.0f;
     static constexpr float kInspectorLabelReservedWidth = 170.0f;
+    static constexpr float kDefaultBurstRepeatInterval = 1.2f; // 単発エフェクトのスタジオ用自動ループ再生インターバル（秒）
 
 #ifdef _USEIMGUI
     ParticleStudioWindow();
@@ -106,6 +108,8 @@ private:
     bool isPlaying_ = true;
     float timeScale_ = 1.0f;
     bool requestStepFrame_ = false;
+    bool isAutoRepeatBurst_ = true; // 単発エフェクトのスタジオ用自動ループ再生
+    float burstRepeatTimer_ = 0.0f; // バースト再発射タイマー
 
     // ビューポート状態
     bool isViewportHovered_ = false;

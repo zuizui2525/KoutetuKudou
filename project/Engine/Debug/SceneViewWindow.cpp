@@ -153,10 +153,17 @@ SceneViewWindow::SceneViewWindow()
 #endif
 }
 
-void SceneViewWindow::Draw(bool* show) {
+void SceneViewWindow::Draw(bool* show, const char* windowIdSuffix) {
     sIsSceneViewVisible_ = false;
     sIsSceneViewFocused_ = false;
-    if (ImGui::Begin("シーン (編集)###Scene View", show)) {
+
+    std::string windowTitle = "シーン (編集)###Scene View";
+    if (windowIdSuffix && windowIdSuffix[0] != '\0') {
+        windowTitle += "_";
+        windowTitle += windowIdSuffix;
+    }
+
+    if (ImGui::Begin(windowTitle.c_str(), show)) {
         sIsSceneViewVisible_ = true;
         sIsSceneViewFocused_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         // ゲーム画面描画エリア（内部のみWindowPaddingを0にする）

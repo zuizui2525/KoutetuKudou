@@ -40,6 +40,9 @@ void EnemySpawnManagerScript::Awake() {
 
 void EnemySpawnManagerScript::Start() {
     RefreshSpawnPoints();
+    if (cachedSpawnPoints_.empty()) {
+        SetupStage1Preset();
+    }
 }
 
 void EnemySpawnManagerScript::ResetSpawns(float startZ) {
@@ -106,7 +109,7 @@ void EnemySpawnManagerScript::OnUpdate() {
     Vector3 playerPos = targetObject_->GetPosition();
 
     // 1. シーン上に配置された個別スポーン地点（EnemySpawnPointScript）の判定
-    CheckSpawnPoints(playerPos.z);
+    CheckSpawnPoints(playerPos);
 
     // 2. フォールバック定期スポーン（スポーンポイントが未配置の場合のオプション）
     if (enablePeriodicFallback_) {
@@ -115,16 +118,16 @@ void EnemySpawnManagerScript::OnUpdate() {
 }
 
 /// <summary>
-/// シーン上の全スポーンポイントに対して自機通過判定を実行します。
+/// シーン上の全スポーンポイントに対して自機の侵入・通過判定を実行します。
 /// </summary>
-void EnemySpawnManagerScript::CheckSpawnPoints(float playerPosZ) {
+void EnemySpawnManagerScript::CheckSpawnPoints(const Vector3& playerPos) {
     if (cachedSpawnPoints_.empty()) {
         RefreshSpawnPoints();
     }
 
     for (auto* sp : cachedSpawnPoints_) {
         if (sp && !sp->HasTriggered()) {
-            sp->CheckAndTrigger(playerPosZ, currentArea_);
+            sp->CheckAndTrigger(playerPos, currentArea_);
         }
     }
 }
@@ -217,6 +220,75 @@ void EnemySpawnManagerScript::ClearPreviewEnemies() {
     }
 }
 
+/// <summary>
+/// ステージ1（Area 1: 0m〜120m）用の仮敵配置プリセット（4箇所のスポーン地点）を一括構築します。
+/// </summary>
+void EnemySpawnManagerScript::SetupStage1Preset() {
+    auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene());
+    if (!scene) return;
+
+    // 既にArea 1にスポーン地点が存在するかチェック
+    RefreshSpawnPoints();
+    for (auto* sp : cachedSpawnPoints_) {
+        if (sp && sp->GetTargetArea() == 0) {
+            return; // 既に配置済みなら重複生成しない
+        }
+    }
+
+    // Wave 1: 序盤の偵察敵 (Z: 25.0m, X: 3.5m, 1体)
+    {
+        Vector3 pos = { 3.5f, 0.0f, 25.0f };
+        GameObject* go = CreateSpawnPoint(pos, 0, false);
+        if (go) {
+            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                sp->SetTriggerZ(0.0f); // スタート直後に出現
+                sp->SetCount(1);
+            }
+        }
+    }
+
+    // Wave 2: 左右挟撃の2体 (Z: 50.0m, 2体, 拡散半径 4.0m)
+    {
+        Vector3 pos = { 0.0f, 0.0f, 50.0f };
+        GameObject* go = CreateSpawnPoint(pos, 0, false);
+        if (go) {
+            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                sp->SetTriggerZ(25.0f);
+                sp->SetCount(2);
+                sp->SetSpreadRadius(4.0f);
+            }
+        }
+    }
+
+    // Wave 3: 中央小隊の3体 (Z: 80.0m, 3体, 拡散半径 5.0m)
+    {
+        Vector3 pos = { 0.0f, 0.0f, 80.0f };
+        GameObject* go = CreateSpawnPoint(pos, 0, false);
+        if (go) {
+            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                sp->SetTriggerZ(55.0f);
+                sp->SetCount(3);
+                sp->SetSpreadRadius(5.0f);
+            }
+        }
+    }
+
+    // Wave 4: エリア1終端ゲート前の門番 (Z: 105.0m, 2体)
+    {
+        Vector3 pos = { -2.0f, 0.0f, 105.0f };
+        GameObject* go = CreateSpawnPoint(pos, 0, false);
+        if (go) {
+            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                sp->SetTriggerZ(80.0f);
+                sp->SetCount(2);
+                sp->SetSpreadRadius(3.5f);
+            }
+        }
+    }
+
+    RefreshSpawnPoints();
+}
+
 void EnemySpawnManagerScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
     constexpr ImVec4 kHeaderColor = { 0.8f, 0.4f, 1.0f, 1.0f };
@@ -303,6 +375,19 @@ void EnemySpawnManagerScript::DrawPaletteUI() {
         ClearPreviewEnemies();
     }
 
+    // プリセット自動配置
+    constexpr ImVec4 kPresetBtnColor = { 0.2f, 0.6f, 0.8f, 1.0f };
+    ImGui::PushStyleColor(ImGuiCol_Button, kPresetBtnColor);
+    if (ImGui::Button("★ ステージ1仮配置を生成 (Setup Stage 1)##SetupStage1Btn")) {
+        SetupStage1Preset();
+    }
+    ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    if (ImGui::Checkbox("ゾーン・トリガー線を表示##ShowZonesToggle", &showAllHazardZones_)) {
+        SetAllHazardZonesVisible(showAllHazardZones_);
+    }
+
     // 3. エリア別タブ表示
     ImGui::Spacing();
     const char* areaTabs[] = { "Area 1", "Area 2", "Area 3", "Area 4 [Boss]" };
@@ -338,7 +423,7 @@ void EnemySpawnManagerScript::DrawPaletteUI() {
                     ImGui::Text("| トリガーZ: %.1f", sp->GetTriggerZ());
 
                     ImGui::SameLine();
-                    ImGui::Text("| %s x%d", sp->GetPrefabName().c_str(), sp->GetCount());
+                    ImGui::Text("| %s", sp->GetSpawnCountLevelText().c_str());
 
                     // 削除ボタン
                     ImGui::SameLine();
@@ -395,4 +480,15 @@ void EnemySpawnManagerScript::FocusCameraOnObject(GameObject* targetObj) {
     SceneHierarchy::GetInstance()->SetSelected(targetObj);
 #endif
 }
+
+void EnemySpawnManagerScript::SetAllHazardZonesVisible(bool visible) {
+    showAllHazardZones_ = visible;
+    RefreshSpawnPoints();
+    for (auto* sp : cachedSpawnPoints_) {
+        if (sp) {
+            sp->SetShowHazardZone(visible);
+        }
+    }
+}
+
 

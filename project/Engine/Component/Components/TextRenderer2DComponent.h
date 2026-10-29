@@ -63,6 +63,13 @@ public:
     float GetHeight() const;
 
     // ==========================================
+    // スクリーン絶対座標モード
+    // (trueの場合、親の3D Transformを加算せずOffsetを純粋な2Dピクセル平面として描画)
+    // ==========================================
+    bool IsScreenSpace() const { return isScreenSpace_; }
+    void SetScreenSpace(bool screenSpace) { isScreenSpace_ = screenSpace; }
+
+    // ==========================================
     // ローカルオフセット (個別Transform)
     // ==========================================
     Transform& GetOffset() { return offset_; }
@@ -77,6 +84,7 @@ private:
     std::unique_ptr<TextTextureGenerator> textureGenerator_;
 
     Transform offset_{ {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f} };
+    bool isScreenSpace_ = false;
 
     std::string text_ = "Text";
     std::string fontName_ = "Yu Gothic UI";

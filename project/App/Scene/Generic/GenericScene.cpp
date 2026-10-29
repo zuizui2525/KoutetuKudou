@@ -8,6 +8,7 @@
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
+#include "Scripts/Stage/SkydomeScript.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
@@ -101,6 +102,26 @@ void Scene::Initialize() {
             gameObjects_.push_back(std::move(lightObj));
         }
         Log::Write(L"[GenericScene] デフォルトの DirectionalLight GameObject を追加しました。");
+    }
+
+    // シーン内に Skydome が存在するかチェック（無ければデフォルト天球を自動生成）
+    bool hasSkydome = false;
+    for (const auto& obj : gameObjects_) {
+        if (obj && (obj->GetName() == "Skydome" || obj->GetComponent<SkydomeScript>())) {
+            hasSkydome = true;
+            break;
+        }
+    }
+    if (!hasSkydome) {
+        auto skydomeObj = std::make_unique<GameObject>("Skydome");
+        skydomeObj->AddComponent<SkydomeScript>();
+        constexpr size_t kSkydomeInsertIndex = 2;
+        if (gameObjects_.size() > kSkydomeInsertIndex) {
+            gameObjects_.insert(gameObjects_.begin() + kSkydomeInsertIndex, std::move(skydomeObj));
+        } else {
+            gameObjects_.push_back(std::move(skydomeObj));
+        }
+        Log::Write(L"[GenericScene] デフォルトの Skydome GameObject を追加しました。");
     }
 
     // シーン専属ディレクター（SceneDirector）の自動生成と各シーン標準スクリプトの設定

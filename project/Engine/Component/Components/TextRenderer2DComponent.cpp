@@ -187,10 +187,15 @@ void TextRenderer2DComponent::Update() {
 
     if (textObject_) {
         Transform combinedTr{};
-        const auto& ownerTr = owner_->GetTransform();
-        combinedTr.translate = { ownerTr.translate.x + offset_.translate.x, ownerTr.translate.y + offset_.translate.y, ownerTr.translate.z + offset_.translate.z };
-        combinedTr.rotate = { ownerTr.rotate.x + offset_.rotate.x, ownerTr.rotate.y + offset_.rotate.y, ownerTr.rotate.z + offset_.rotate.z };
-        combinedTr.scale = { ownerTr.scale.x * offset_.scale.x, ownerTr.scale.y * offset_.scale.y, ownerTr.scale.z * offset_.scale.z };
+        if (isScreenSpace_) {
+            combinedTr = offset_;
+            combinedTr.translate.z = 0.0f; // 2D平行投影でのファークリップや深度不整合を完全に防止
+        } else {
+            const auto& ownerTr = owner_->GetTransform();
+            combinedTr.translate = { ownerTr.translate.x + offset_.translate.x, ownerTr.translate.y + offset_.translate.y, ownerTr.translate.z + offset_.translate.z };
+            combinedTr.rotate = { ownerTr.rotate.x + offset_.rotate.x, ownerTr.rotate.y + offset_.rotate.y, ownerTr.rotate.z + offset_.rotate.z };
+            combinedTr.scale = { ownerTr.scale.x * offset_.scale.x, ownerTr.scale.y * offset_.scale.y, ownerTr.scale.z * offset_.scale.z };
+        }
 
         textObject_->SetTransform(combinedTr);
         textObject_->SetVisible(owner_->IsVisible() && isActive_);
@@ -202,10 +207,15 @@ void TextRenderer2DComponent::Draw2D() {
     if (!isActive_ || !owner_ || !owner_->IsVisible() || !textObject_ || !textureGenerator_) return;
 
     Transform combinedTr{};
-    const auto& ownerTr = owner_->GetTransform();
-    combinedTr.translate = { ownerTr.translate.x + offset_.translate.x, ownerTr.translate.y + offset_.translate.y, ownerTr.translate.z + offset_.translate.z };
-    combinedTr.rotate = { ownerTr.rotate.x + offset_.rotate.x, ownerTr.rotate.y + offset_.rotate.y, ownerTr.rotate.z + offset_.rotate.z };
-    combinedTr.scale = { ownerTr.scale.x * offset_.scale.x, ownerTr.scale.y * offset_.scale.y, ownerTr.scale.z * offset_.scale.z };
+    if (isScreenSpace_) {
+        combinedTr = offset_;
+        combinedTr.translate.z = 0.0f; // 2D平行投影でのファークリップや深度不整合を完全に防止
+    } else {
+        const auto& ownerTr = owner_->GetTransform();
+        combinedTr.translate = { ownerTr.translate.x + offset_.translate.x, ownerTr.translate.y + offset_.translate.y, ownerTr.translate.z + offset_.translate.z };
+        combinedTr.rotate = { ownerTr.rotate.x + offset_.rotate.x, ownerTr.rotate.y + offset_.rotate.y, ownerTr.rotate.z + offset_.rotate.z };
+        combinedTr.scale = { ownerTr.scale.x * offset_.scale.x, ownerTr.scale.y * offset_.scale.y, ownerTr.scale.z * offset_.scale.z };
+    }
 
     textObject_->SetTransform(combinedTr);
     textObject_->SetVisible(true);
@@ -216,6 +226,8 @@ void TextRenderer2DComponent::Draw2D() {
 void TextRenderer2DComponent::DrawInspector() {
 #ifdef _USEIMGUI
     std::string idPrefix = "##Text2D_" + std::to_string(reinterpret_cast<uintptr_t>(this));
+
+    ImGui::Checkbox(("Screen Space (スクリーン絶対配置)" + idPrefix).c_str(), &isScreenSpace_);
 
     // ローカルオフセット (個別Transform)
     if (ImGui::TreeNodeEx(("Offset Transform (個別の配置)" + idPrefix).c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {

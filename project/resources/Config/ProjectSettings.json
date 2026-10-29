@@ -1,5 +1,5 @@
 {
-  "startupScene": "Debug"
+  "startupScene": "Title"
 ,
   "releaseStartupScene": "Title"
 }

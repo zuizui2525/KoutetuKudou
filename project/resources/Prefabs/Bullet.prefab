@@ -11,22 +11,22 @@
     "components": [
       {
         "type": "MeshRenderer",
-        "mesh_type": 0,
+        "mesh_type": 1,
         "texture_key": "white",
-        "model_key": "cube",
+        "model_key": "",
         "env_map_key": "",
-        "color": [1.0, 0.95, 0.4, 1.0],
+        "color": [0.08, 0.08, 0.10, 1.0],
         "lighting_mode": 0,
         "shininess": 30,
         "environment_coefficient": 0,
         "offset_position": [0, 0, 0],
         "offset_rotation": [0, 0, 0],
-        "offset_scale": [0.2, 0.2, 1.2]
+        "offset_scale": [0.06, 0.06, 0.06]
       },
       {
         "type": "SphereCollider",
         "center": [0, 0, 0],
-        "radius": 0.4,
+        "radius": 0.15,
         "is_trigger": true,
         "show_gizmo": false
       },

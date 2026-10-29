@@ -4,6 +4,7 @@
 #include "Engine/Base/Utils/DxUtils.h"
 #include "Engine/Base/Log/Log.h"
 #include "Engine/Base/Utils/StringUtility.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <shellapi.h>
 #pragma comment(lib, "shell32.lib")
 #include <iostream>
@@ -355,7 +356,7 @@ void DxCommon::CreateSwapChain(HWND hwnd, int32_t width, int32_t height) {
 
 void DxCommon::CreateRenderTargets() {
 	rtvDescriptorHeap_ = DxUtils::CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, kMaxRtvCount, false);
-	srvDescriptorHeap_ = DxUtils::CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2200, true);
+	srvDescriptorHeap_ = DxUtils::CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, TextureManager::kTotalSrvDescriptorCount, true);
 
 
 	HRESULT hr = swapChain_->GetBuffer(0, IID_PPV_ARGS(&swapChainResources_[0]));

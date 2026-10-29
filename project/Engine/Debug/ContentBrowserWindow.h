@@ -14,7 +14,7 @@ public:
     /// Content Browser ウィンドウの描画
     /// </summary>
     /// <param name="pOpen">ウィンドウ表示フラグ</param>
-    void Draw(bool* pOpen);
+    void Draw(bool* pOpen, const char* windowIdSuffix = nullptr);
 
 private:
     void EnsureIconsLoaded();

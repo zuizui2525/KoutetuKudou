@@ -35,24 +35,36 @@ void EffectManager::Finalize() {
 }
 
 void EffectManager::Update() {
-    // 【GPUパーティクル完全移行】CPUパーティクルのループ更新を停止し、GPUシミュレーションのみを実行
+    for (auto& pair : effectMap_) {
+        if (pair.second) {
+            pair.second->Update();
+        }
+    }
     if (gpuParticle_) {
         gpuParticle_->Update();
     }
 }
 
 void EffectManager::UpdateMatrices() {
-    // GPUパーティクルではGPU側で自動計算されるためCPU行列更新は不要
+    for (auto& pair : effectMap_) {
+        if (pair.second) {
+            pair.second->UpdateMatrices();
+        }
+    }
 }
 
 void EffectManager::Draw() {
-    // 【GPUパーティクル完全移行】CPUパーティクル描画を停止し、GPUパーティクルのDispatchとDrawのみを実行
+    for (auto& pair : effectMap_) {
+        if (pair.second) {
+            pair.second->Draw();
+        }
+    }
     if (gpuParticle_) {
         if (auto engine = EngineResource::GetEngine()) {
             if (auto dxCommon = engine->GetDxCommon()) {
                 auto* cmdList = dxCommon->GetCommandList();
                 gpuParticle_->DispatchCompute(cmdList);
-                gpuParticle_->Draw(cmdList, "white");
+                gpuParticle_->Draw(cmdList, "white", gpuParticle_->GetBlendMode());
             }
         }
     }
@@ -100,16 +112,33 @@ void EffectManager::PlayEffect2D(const std::string& name, const EffectPlayParam&
 }
 
 void EffectManager::PlayEffect3D(const std::string& name, const EffectPlayParam& param) {
+    // 1. effectMap_ に登録されたエフェクト（BulletTrail等）があれば各弾丸の個別位置で独立放出
+    auto it = effectMap_.find(name);
+    if (it != effectMap_.end() && it->second) {
+        constexpr uint32_t kCpuEmitCountPerPlay = 1;
+        it->second->EmitAt(kCpuEmitCountPerPlay, param);
+        return;
+    }
+
+    // 2. なければGPUパーティクルで再生
     if (gpuParticle_) {
         GPUParticleSetting setting;
         std::string jsonPath = GPUParticlePresets::kParticleDirectory + "/" + name + GPUParticlePresets::kFileExtension;
         if (!GPUParticlePresets::LoadFromJson(jsonPath, setting)) {
             setting = GPUParticlePresets::GetPresetByName(name);
         }
+
+        // ループ指定がないワンショット再生の場合は、自動連続発生を無効化してバーストのみ実行
+        if (!param.isLoop) {
+            setting.isAutoSpawning = false;
+            setting.spawnRatePerSec = 0.0f;
+        }
+
         gpuParticle_->ApplySetting(setting);
         gpuParticle_->SetPosition(param.position);
-        constexpr uint32_t kDefaultGpuBurstCount3D = 800;
-        uint32_t burst = (setting.burstCount > 0) ? setting.burstCount : kDefaultGpuBurstCount3D;
+        constexpr uint32_t kDefaultGpuBurstCount3D = 30; // 控えめでシンプルな発生数
+        constexpr uint32_t kMaxGpuBurstCount3D = 50;
+        uint32_t burst = (setting.burstCount > 0) ? (std::min)(setting.burstCount, kMaxGpuBurstCount3D) : kDefaultGpuBurstCount3D;
         gpuParticle_->EmitBurst(burst);
     }
 }

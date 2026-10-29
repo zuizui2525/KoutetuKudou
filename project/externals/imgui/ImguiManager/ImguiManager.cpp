@@ -1,16 +1,17 @@
 #ifdef _USEIMGUI
 #include "ImguiManager.h"
+#include "Engine/Graphics/Texture/TextureManager.h"
 #include <cassert>
 #include <cstdint>
 #include <filesystem>
 
 namespace {
-    // ImGui用のSRVスペース管理（インデックス100から20個確保：競合防止）
-    static constexpr UINT kImGuiSrvStartIndex = 100;
-    static constexpr UINT kImGuiSrvCount = 20;
+    // ImGui用のSRVスペース管理（テクスチャ領域との競合を完全排除するためTextureManagerで一元定義された予約領域を使用）
+    static constexpr UINT kImGuiSrvStartIndex = TextureManager::kImGuiSrvStartIndex;
+    static constexpr UINT kImGuiSrvCount = TextureManager::kImGuiSrvCount;
 
     // 使用状況をビットマスクで管理（0:空き, 1:使用中）
-    static uint32_t s_srvUsedMask = 0;
+    static uint64_t s_srvUsedMask = 0;
     static ID3D12DescriptorHeap* s_srvHeap = nullptr;
     static ID3D12Device* s_device = nullptr;
 
@@ -22,9 +23,9 @@ namespace {
 
         int freeIndex = -1;
         for (int i = 0; i < static_cast<int>(kImGuiSrvCount); ++i) {
-            if ((s_srvUsedMask & (1 << i)) == 0) {
+            if ((s_srvUsedMask & (1ULL << i)) == 0) {
                 freeIndex = i;
-                s_srvUsedMask |= (1 << i); // 使用中にマーク
+                s_srvUsedMask |= (1ULL << i); // 使用中にマーク
                 break;
             }
         }
@@ -58,7 +59,7 @@ namespace {
 
         if (srvIndex >= kImGuiSrvStartIndex && srvIndex < kImGuiSrvStartIndex + kImGuiSrvCount) {
             UINT indexInPool = srvIndex - kImGuiSrvStartIndex;
-            s_srvUsedMask &= ~(1 << indexInPool); // 空きにリセット
+            s_srvUsedMask &= ~(1ULL << indexInPool); // 空きにリセット
         }
     }
 }

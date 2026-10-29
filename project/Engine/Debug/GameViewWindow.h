@@ -12,7 +12,7 @@ public:
     GameViewWindow();
     ~GameViewWindow() = default;
 
-    void Draw(bool* show, bool* isVisible);
+    void Draw(bool* show, bool* isVisible, const char* windowIdSuffix = nullptr);
 
     // ポップ演出（再生・一時停止マーク等）の発火
     void TriggerPopAnimation(PopAnimation::Type type) { popAnim_.Trigger(type); }

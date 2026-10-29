@@ -5,6 +5,7 @@
 #include "Engine/Component/Components/SphereColliderComponent.h"
 #include "Engine/Component/Components/AudioSourceComponent.h"
 #include "Engine/Component/Components/ParticleEffectComponent.h"
+#include "Engine/Component/Components/GPUParticleComponent.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Component/Components/TextRenderer2DComponent.h"
@@ -625,6 +626,9 @@ void GameObject::DrawInspector() {
         if (ImGui::BeginMenu("Effects")) {
             if (ImGui::MenuItem("ParticleEffect (エフェクト発生)")) {
                 AddComponent<ParticleEffectComponent>();
+            }
+            if (ImGui::MenuItem("GPUParticle (GPUパーティクル発生)")) {
+                AddComponent<GPUParticleComponent>();
             }
             ImGui::EndMenu();
         }

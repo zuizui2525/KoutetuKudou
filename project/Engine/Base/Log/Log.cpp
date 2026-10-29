@@ -160,11 +160,17 @@ void Log::ClearLog() {
     logEntries_.clear();
 }
 
-void Log::DrawConsoleWindow(float maxTimestamp) {
+void Log::DrawConsoleWindow(float maxTimestamp, const char* windowIdSuffix) {
 #ifdef _USEIMGUI
     if (!showConsole_) return;
 
-    if (ImGui::Begin("コンソール###Console", &showConsole_)) {
+    std::string windowTitle = "コンソール###Console";
+    if (windowIdSuffix && windowIdSuffix[0] != '\0') {
+        windowTitle += "_";
+        windowTitle += windowIdSuffix;
+    }
+
+    if (ImGui::Begin(windowTitle.c_str(), &showConsole_)) {
         static bool filterReplayRangeOnly = false;
 
         // リプレイ範囲フィルター UI（ReplaySystem削除に伴い常に無効化表示）

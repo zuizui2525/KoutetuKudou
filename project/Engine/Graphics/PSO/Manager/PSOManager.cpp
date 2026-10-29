@@ -54,6 +54,13 @@ HRESULT PSOManager::Initialize(
     // 登録処理
     RegisterPreset("Skybox", skyboxPreset);
 
+    // Skydome用プリセット作成
+    PSOPreset skydomePreset = PSOPreset::CreateSkydomePreset(
+        device_, dxcUtils, dxcCompiler, includeHandler);
+
+    // 登録処理
+    RegisterPreset("Skydome", skydomePreset);
+
     // Object2D用プリセット作成
     PSOPreset object2DPreset = PSOPreset::CreateObject2DPreset(
         device_, dxcUtils, dxcCompiler, includeHandler);

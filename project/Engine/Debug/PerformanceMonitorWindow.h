@@ -7,7 +7,7 @@ public:
     PerformanceMonitorWindow();
     ~PerformanceMonitorWindow() = default;
 
-    void Draw(bool* show);
+    void Draw(bool* show, const char* windowIdSuffix = nullptr);
 
 private:
     // 履歴サイズ（マジックナンバー排除）

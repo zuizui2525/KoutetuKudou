@@ -22,6 +22,7 @@ void FPSCameraControllerScript::Awake() {
     cameraYawOffset_ = 0.0f;
     shakeTimer_ = 0;
     prevLookTangent_ = { 0.0f, 0.0f, 1.0f };
+    deathCinematicProgress_ = 0.0f;
 }
 
 void FPSCameraControllerScript::Start() {
@@ -58,25 +59,33 @@ void FPSCameraControllerScript::OnUpdate() {
 
 namespace {
     constexpr float kEpsilon = 0.0001f;
-    constexpr float kRandCenterOffset = 0.5f; // 乱数の中心化オフセット
+    constexpr float kRandCenterOffset = 0.5f;     // 乱数の中心化オフセット
+    constexpr float kPi = 3.1415926535f;
 }
 
 /// <summary>
 /// 自機の位置と進行ベクトルに同期してFPSカメラの位置と注視回転を更新します。
-/// 
-/// 【制御アルゴリズム】
-/// 1. 首振り制御: A/Dキーまたは左右矢印キーでカメラの水平回転オフセット（cameraYawOffset_）を増減。
-///    キー入力がない場合は正面へ復帰（kCameraYawReturnSpeed）。
-/// 2. カメラ位置: 自機座標から目の高さ（kCameraUpHeight）だけ上方にオフセット。
-/// 3. シェイク演出: shakeTimer_ 継続中はランダムな微小変位をカメラ座標に加算。
-/// 4. 視線平滑化: 急激な視線変化を抑えるため、進行方向ベクトルを線形補間（kLookSmoothFactor）で平滑化。
-/// 5. 姿勢回転: 平滑化接線と首振りオフセットから Yaw・Pitch 角を求めてカメラ回転を更新。
+/// 通常時は完全な一人称視点、死亡時は自機の側方を回り込んで正面から機体を捉えるシネマティックカメラワークを実行します。
 /// </summary>
 void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vector3& tangent) {
     auto* input = InputResource::GetInput();
 
-    // 1. A/Dキーによる首振り制御
-    if (enableLean_ && input) {
+    // 1. 死亡溶解状態の確認とシネマティック進行度の補間
+    bool isMelting = false;
+    if (targetObject_) {
+        if (auto* playerScript = targetObject_->GetComponent<PlayerControllerScript>()) {
+            isMelting = playerScript->IsMelting();
+        }
+    }
+
+    if (isMelting) {
+        deathCinematicProgress_ += (1.0f - deathCinematicProgress_) * kDeathCameraLerpSpeed;
+    } else {
+        deathCinematicProgress_ = 0.0f;
+    }
+
+    // 2. A/Dキーによる首振り制御（通常時のみ）
+    if (!isMelting && enableLean_ && input) {
         if (input->Press(DIK_A) || input->Press(DIK_LEFT)) {
             cameraYawOffset_ -= kCameraYawSpeed;
             if (cameraYawOffset_ < -kCameraYawLimit) cameraYawOffset_ = -kCameraYawLimit;
@@ -93,16 +102,71 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
                 if (cameraYawOffset_ > 0.0f) cameraYawOffset_ = 0.0f;
             }
         }
+    } else if (isMelting) {
+        cameraYawOffset_ += (0.0f - cameraYawOffset_) * kDeathCameraLerpSpeed;
     }
 
-    // 2. カメラ位置の設定（目の高さ）
-    Vector3 camPos = {
-        targetPos.x,
-        targetPos.y + kCameraUpHeight,
-        targetPos.z
+    // 3. 注視方向ベクトルのスムージング
+    prevLookTangent_.x += (tangent.x - prevLookTangent_.x) * kLookSmoothFactor;
+    prevLookTangent_.y += (tangent.y - prevLookTangent_.y) * kLookSmoothFactor;
+    prevLookTangent_.z += (tangent.z - prevLookTangent_.z) * kLookSmoothFactor;
+
+    // 4. 通常時の一人称カメラ座標および注視点
+    Vector3 normalCamPos = { targetPos.x, targetPos.y + kCameraUpHeight, targetPos.z };
+    Vector3 normalLookAt = {
+        normalCamPos.x + prevLookTangent_.x * kCameraLookAhead,
+        normalCamPos.y + prevLookTangent_.y * kCameraLookAhead,
+        normalCamPos.z + prevLookTangent_.z * kCameraLookAhead
     };
 
-    // 3. 被弾シェイク演出
+    Vector3 camPos = normalCamPos;
+    Vector3 lookAtTarget = normalLookAt;
+
+    // 5. 死亡シネマティックカメラの算出（円弧状に回り込んで正面から自機を注視）
+    if (deathCinematicProgress_ > 0.001f) {
+        float t = deathCinematicProgress_;
+
+        // 進行方向の右方向ベクトル (XZ平面)
+        Vector3 rightVec = { tangent.z, 0.0f, -tangent.x };
+        float rightLen = std::sqrt(rightVec.x * rightVec.x + rightVec.z * rightVec.z);
+        if (rightLen > kEpsilon) {
+            rightVec.x /= rightLen;
+            rightVec.z /= rightLen;
+        } else {
+            rightVec = { 1.0f, 0.0f, 0.0f };
+        }
+
+        // 正面カメラの目標座標 (自機前方 + 目線の高さ)
+        Vector3 frontCamPos = {
+            targetPos.x + tangent.x * kDeathCameraFrontDist,
+            targetPos.y + kDeathCameraFrontHeight,
+            targetPos.z + tangent.z * kDeathCameraFrontDist
+        };
+
+        // 自機の側方を円弧状に回り込むアーク膨らみ
+        float sideArc = std::sin(t * kPi) * kDeathCameraSideSwing;
+
+        camPos = {
+            normalCamPos.x + (frontCamPos.x - normalCamPos.x) * t + rightVec.x * sideArc,
+            normalCamPos.y + (frontCamPos.y - normalCamPos.y) * t,
+            normalCamPos.z + (frontCamPos.z - normalCamPos.z) * t + rightVec.z * sideArc
+        };
+
+        // 死亡シネマティック時の注視目標点（自機中心）
+        Vector3 deathLookAt = {
+            targetPos.x,
+            targetPos.y + kDeathTargetCenterHeight,
+            targetPos.z
+        };
+
+        lookAtTarget = {
+            normalLookAt.x + (deathLookAt.x - normalLookAt.x) * t,
+            normalLookAt.y + (deathLookAt.y - normalLookAt.y) * t,
+            normalLookAt.z + (deathLookAt.z - normalLookAt.z) * t
+        };
+    }
+
+    // 6. 被弾シェイク演出
     if (shakeTimer_ > 0) {
         shakeTimer_--;
         float rx = (static_cast<float>(rand()) / RAND_MAX - kRandCenterOffset) * kShakeIntensity;
@@ -113,14 +177,15 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
 
     owner_->SetPosition(camPos);
 
-    // 4. 注視方向のスムージングと回転算出
-    prevLookTangent_.x += (tangent.x - prevLookTangent_.x) * kLookSmoothFactor;
-    prevLookTangent_.y += (tangent.y - prevLookTangent_.y) * kLookSmoothFactor;
-    prevLookTangent_.z += (tangent.z - prevLookTangent_.z) * kLookSmoothFactor;
-
-    float yaw = std::atan2(prevLookTangent_.x, prevLookTangent_.z) + cameraYawOffset_;
-    float distXZ = std::sqrt(prevLookTangent_.x * prevLookTangent_.x + prevLookTangent_.z * prevLookTangent_.z);
-    float pitch = -std::atan2(prevLookTangent_.y, distXZ > kEpsilon ? distXZ : kEpsilon);
+    // 7. 注視目標点への視線ベクトルから回転角 (Yaw, Pitch) を算出
+    Vector3 lookDir = {
+        lookAtTarget.x - camPos.x,
+        lookAtTarget.y - camPos.y,
+        lookAtTarget.z - camPos.z
+    };
+    float distXZ = std::sqrt(lookDir.x * lookDir.x + lookDir.z * lookDir.z);
+    float yaw = std::atan2(lookDir.x, lookDir.z) + cameraYawOffset_ * (1.0f - deathCinematicProgress_);
+    float pitch = -std::atan2(lookDir.y, distXZ > kEpsilon ? distXZ : kEpsilon);
 
     owner_->SetRotate({ pitch, yaw, 0.0f });
 }

@@ -17,7 +17,7 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": true,
-        "showContentBrowser": false
+        "showContentBrowser": true
       }
     },
     {
@@ -35,7 +35,7 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": false,
-        "showContentBrowser": true
+        "showContentBrowser": false
       }
     }
   ]

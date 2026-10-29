@@ -133,7 +133,7 @@ uint32_t TextureManager::AllocateDescriptorIndex() {
         freeDescriptorIndices_.pop();
         return recycledIndex;
     }
-    assert(descriptorCount_ < kMaxSrvDescriptorCount && "SRV DescriptorHeap index out of bounds! Too many descriptors allocated.");
+    assert(descriptorCount_ < kMaxTextureDescriptorCount && "SRV DescriptorHeap index out of bounds! Too many descriptors allocated.");
     uint32_t allocated = descriptorCount_;
     descriptorCount_++;
     return allocated;

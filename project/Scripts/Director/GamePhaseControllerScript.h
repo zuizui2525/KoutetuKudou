@@ -231,6 +231,8 @@ private:
     std::unique_ptr<Ring2DObject> goalPulseRing_;
     std::unique_ptr<Circle2DObject> playerIconCircle_;
     std::vector<std::unique_ptr<Line2DObject>> routeLinePool_;
+    std::vector<std::unique_ptr<Circle2DObject>> mapEnemyCircles_;
+    std::vector<std::unique_ptr<Ring2DObject>> mapEnemyRings_;
 
     // ミニリセットボタン用パーツ
     std::unique_ptr<SpriteObject> mapResetBtnSprite_;

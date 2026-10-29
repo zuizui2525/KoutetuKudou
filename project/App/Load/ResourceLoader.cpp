@@ -17,8 +17,14 @@ namespace {
 	constexpr const char* kCubeModelPath = "resources/obj/cube/cube.obj";
 	constexpr const char* kLegacyCubeKey = "cube";
 
+	constexpr const char* kSkydomeModelPath = "resources/obj/skydome/skydome.obj";
+	constexpr const char* kLegacySkydomeKey = "skydome";
+
+	constexpr const char* kGunModelPath = "resources/obj/gun/gun.obj";
+	constexpr const char* kLegacyGunKey = "gun";
+
 	constexpr int kEssentialTextureCount = 2;
-	constexpr int kEssentialModelCount = 1;
+	constexpr int kEssentialModelCount = 3;
 }
 
 void ResourceLoader::LoadAll() {
@@ -54,4 +60,12 @@ void ResourceLoader::LoadModels() {
 	// 基本形状のデフォルトモデルのみ事前ロード
 	modelMgr->LoadModel(kCubeModelPath, kCubeModelPath);
 	modelMgr->LoadModel(kLegacyCubeKey, kCubeModelPath);
+
+	// 天球モデルの事前ロード
+	modelMgr->LoadModel(kSkydomeModelPath, kSkydomeModelPath);
+	modelMgr->LoadModel(kLegacySkydomeKey, kSkydomeModelPath);
+
+	// プレイヤー手持ち武器（Gun）モデルの事前ロード
+	modelMgr->LoadModel(kGunModelPath, kGunModelPath);
+	modelMgr->LoadModel(kLegacyGunKey, kGunModelPath);
 }

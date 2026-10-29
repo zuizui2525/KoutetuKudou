@@ -58,6 +58,13 @@ public:
         IDxcCompiler3* dxcCompiler,
         IDxcIncludeHandler* includeHandler);
 
+    // Skydome用のプリセット作成関数
+    static PSOPreset CreateSkydomePreset(
+        ID3D12Device* device,
+        IDxcUtils* dxcUtils,
+        IDxcCompiler3* dxcCompiler,
+        IDxcIncludeHandler* includeHandler);
+
     // Object2D用のプリセット作成関数
     static PSOPreset CreateObject2DPreset(
         ID3D12Device* device,

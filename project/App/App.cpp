@@ -9,6 +9,8 @@
 #include "Engine/Graphics/Objects/Camera/Debug/DebugCamera.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectFactory.h"
+#include "Engine/Component/Components/GPUParticleComponent.h"
+#include "Engine/Graphics/Objects/Effect/GPU/GPUParticleObject.h"
 #include "Engine/Base/Log/Log.h"
 #include "App/Scene/Core/SceneSerializer.h"
 #include "Engine/Base/DeferredRelease/DeferredReleaseManager.h"
@@ -405,6 +407,8 @@ void App::Finalize() {
 
     // 4. エフェクトシステムの破棄
     EffectManager::GetInstance()->Finalize();
+    GPUParticleComponent::ClearPool();
+    GPUParticleObject::DestroyPipelines();
 
     // 5. GPUパイプラインの完了を同期待機（破棄リソースを参照する描画コマンドの完了を保証）
     if (engine_ && engine_->GetDxCommon()) {

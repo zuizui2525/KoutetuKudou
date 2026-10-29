@@ -6,6 +6,7 @@
 #include "Engine/Component/Components/SphereColliderComponent.h"
 #include "Engine/Component/Components/AudioSourceComponent.h"
 #include "Engine/Component/Components/ParticleEffectComponent.h"
+#include "Engine/Component/Components/GPUParticleComponent.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Component/Components/TextRenderer2DComponent.h"
@@ -17,6 +18,7 @@
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Scripts/Player/PlayerControllerScript.h"
+#include "Scripts/Stage/SkydomeScript.h"
 
 #include <fstream>
 #include <sstream>
@@ -319,6 +321,16 @@ std::string SceneSerializer::SerializeToString(
                     ofs << "          \"loop\": " << (pe->IsLoop() ? "true" : "false") << ",\n";
                     ofs << "          \"auto_play\": " << (pe->IsAutoPlay() ? "true" : "false");
                 }
+            } else if (typeName == "GPUParticle") {
+                if (auto* gpuComp = dynamic_cast<GPUParticleComponent*>(comp.get())) {
+                    ofs << ",\n";
+                    ofs << "          \"preset_name\": \"" << gpuComp->GetPresetName() << "\",\n";
+                    ofs << "          \"texture_key\": \"" << gpuComp->GetTextureKey() << "\",\n";
+                    const auto& off = gpuComp->GetOffset();
+                    ofs << "          \"offset\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
+                    ofs << "          \"auto_spawn\": " << (gpuComp->IsAutoSpawning() ? "true" : "false") << ",\n";
+                    ofs << "          \"spawn_rate\": " << gpuComp->GetSpawnRate();
+                }
             } else if (typeName == "Camera") {
                 if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
                     ofs << ",\n";
@@ -428,6 +440,13 @@ std::string SceneSerializer::SerializeToString(
                     if (auto* pc = dynamic_cast<PlayerControllerScript*>(sc)) {
                         ofs << ",\n";
                         ofs << "          \"move_speed\": " << pc->GetMoveSpeed();
+                    } else if (auto* sky = dynamic_cast<SkydomeScript*>(sc)) {
+                        ofs << ",\n";
+                        ofs << "          \"rotation_speed\": " << sky->GetRotationSpeed() << ",\n";
+                        const auto& col = sky->GetColor();
+                        ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
+                        ofs << "          \"model_key\": \"" << sky->GetModelKey() << "\",\n";
+                        ofs << "          \"texture_key\": \"" << sky->GetTextureKey() << "\"";
                     }
                 }
             }
@@ -605,6 +624,13 @@ bool SceneSerializer::DeserializeFromString(
                 pe->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
                 pe->SetLoop(ExtractBool(compBlock, "loop", false));
                 pe->SetAutoPlay(ExtractBool(compBlock, "auto_play", false));
+            } else if (type == "GPUParticle") {
+                auto* gpuComp = go->AddComponent<GPUParticleComponent>();
+                gpuComp->ApplyPreset(ExtractString(compBlock, "preset_name", "BulletTrail"));
+                gpuComp->SetTextureKey(ExtractString(compBlock, "texture_key", "circle"));
+                gpuComp->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
+                gpuComp->SetAutoSpawning(ExtractBool(compBlock, "auto_spawn", true));
+                gpuComp->SetSpawnRate(ExtractFloat(compBlock, "spawn_rate", 50.0f));
             } else if (type == "Camera") {
                 auto* cam = go->AddComponent<CameraComponent>();
                 cam->SetFov(ExtractFloat(compBlock, "fov", 0.45f));
@@ -699,6 +725,22 @@ bool SceneSerializer::DeserializeFromString(
                         constexpr float kDefaultMoveSpeedFallback = 0.15f;
                         float spd = ExtractFloat(compBlock, "move_speed", kDefaultMoveSpeedFallback);
                         pc->SetMoveSpeed(spd);
+                    } else if (auto* sky = dynamic_cast<SkydomeScript*>(script.get())) {
+                        constexpr float kDefaultRotSpeedFallback = 0.002f;
+                        float rotSpeed = ExtractFloat(compBlock, "rotation_speed", kDefaultRotSpeedFallback);
+                        sky->SetRotationSpeed(rotSpeed);
+
+                        constexpr Vector4 kDefaultColorFallback = { 1.0f, 1.0f, 1.0f, 1.0f };
+                        Vector4 col = ExtractVector4(compBlock, "color", kDefaultColorFallback);
+                        sky->SetColor(col);
+
+                        const std::string kDefaultModelKeyFallback = "skydome";
+                        std::string modelKey = ExtractString(compBlock, "model_key", kDefaultModelKeyFallback);
+                        sky->SetModelKey(modelKey);
+
+                        const std::string kDefaultTextureKeyFallback = "skydome";
+                        std::string texKey = ExtractString(compBlock, "texture_key", kDefaultTextureKeyFallback);
+                        sky->SetTextureKey(texKey);
                     }
                     go->AddComponentInstance(std::move(script));
                 }

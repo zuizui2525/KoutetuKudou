@@ -7,6 +7,7 @@
 #include "Engine/Component/Components/SphereColliderComponent.h"
 #include "Engine/Component/Components/AudioSourceComponent.h"
 #include "Engine/Component/Components/ParticleEffectComponent.h"
+#include "Engine/Component/Components/GPUParticleComponent.h"
 #include "Engine/Component/Components/CameraComponent.h"
 #include "Engine/Component/Components/LightComponent.h"
 #include "Engine/Component/Components/TextRenderer2DComponent.h"
@@ -405,6 +406,16 @@ std::string PrefabManager::SerializeGameObject(GameObject* gameObject) const {
             oss << "        \"loop\": " << (pe->IsLoop() ? "true" : "false") << ",\n";
             oss << "        \"auto_play\": " << (pe->IsAutoPlay() ? "true" : "false") << "\n";
             oss << "      }";
+        } else if (auto* gpuComp = dynamic_cast<GPUParticleComponent*>(comp.get())) {
+            oss << "      {\n";
+            oss << "        \"type\": \"GPUParticle\",\n";
+            oss << "        \"preset_name\": \"" << gpuComp->GetPresetName() << "\",\n";
+            oss << "        \"texture_key\": \"" << gpuComp->GetTextureKey() << "\",\n";
+            const auto& off = gpuComp->GetOffset();
+            oss << "        \"offset\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
+            oss << "        \"auto_spawn\": " << (gpuComp->IsAutoSpawning() ? "true" : "false") << ",\n";
+            oss << "        \"spawn_rate\": " << gpuComp->GetSpawnRate() << "\n";
+            oss << "      }";
         } else if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
             oss << "      {\n";
             oss << "        \"type\": \"Camera\",\n";
@@ -619,6 +630,13 @@ std::unique_ptr<GameObject> PrefabManager::DeserializeGameObject(const std::stri
             pe->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
             pe->SetLoop(ExtractBool(compBlock, "loop", false));
             pe->SetAutoPlay(ExtractBool(compBlock, "auto_play", false));
+        } else if (type == "GPUParticle") {
+            auto* gpuComp = go->AddComponent<GPUParticleComponent>();
+            gpuComp->ApplyPreset(ExtractString(compBlock, "preset_name", "BulletTrail"));
+            gpuComp->SetTextureKey(ExtractString(compBlock, "texture_key", "circle"));
+            gpuComp->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
+            gpuComp->SetAutoSpawning(ExtractBool(compBlock, "auto_spawn", true));
+            gpuComp->SetSpawnRate(ExtractFloat(compBlock, "spawn_rate", 50.0f));
         } else if (type == "Camera") {
             auto* cam = go->AddComponent<CameraComponent>();
             cam->SetFov(ExtractFloat(compBlock, "fov", 0.45f));

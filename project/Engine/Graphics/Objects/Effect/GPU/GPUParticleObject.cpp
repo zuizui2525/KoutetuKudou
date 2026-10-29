@@ -11,8 +11,12 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cassert>
+#include <atomic>
 
 namespace {
+    // 弾丸連射時や複数エミッター間で同一乱数列になるのを防ぐグローバルシードカウンター (マジックナンバー排除)
+    static std::atomic<uint32_t> s_globalSeedCounter{ 12345 };
+    constexpr uint32_t kSeedPrimeMultiplier = 2654435761u; // クヌースの乗数ハッシュ定数
     // HLSL側の GPUParticle と完全に同一のメモリ配置 (64バイト)
     struct HLSLParticle {
         Vector3 position;
@@ -63,7 +67,10 @@ namespace {
 
 }
 
-GPUParticleObject::GPUParticleObject() = default;
+GPUParticleObject::GPUParticleObject() {
+    // 各インスタンス生成時にユニークな初期シードを割り当て
+    randomSeedCounter_ = ++s_globalSeedCounter * kSeedPrimeMultiplier;
+}
 
 GPUParticleObject::~GPUParticleObject() {
     // GPU処理の同期待機
@@ -153,6 +160,10 @@ bool GPUParticleObject::CreateBuffersAndDescriptors(ID3D12Device* device) {
 }
 
 bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
+    if (sPipelinesInitialized_) {
+        return true;
+    }
+
     auto dxCommon = EngineResource::GetEngine()->GetDxCommon();
 
     // -----------------------------------------------------------------
@@ -172,7 +183,7 @@ bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
         dxCommon->GetIncludeHandler());
     assert(csCompiled && "GPUParticleUpdate.CS.hlsl compile failed!");
 
-    if (!computePipeline_.Initialize(device, computeRootSig.Get(), csProgram.GetCS())) {
+    if (!sComputePipeline_.Initialize(device, computeRootSig.Get(), csProgram.GetCS())) {
         return false;
     }
 
@@ -191,8 +202,8 @@ bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
     samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     vsRs.AddSampler(samplerDesc, 0);
 
-    renderRootSignature_ = vsRs.Build(device, D3D12_ROOT_SIGNATURE_FLAG_NONE);
-    assert(renderRootSignature_ != nullptr);
+    sRenderRootSignature_ = vsRs.Build(device, D3D12_ROOT_SIGNATURE_FLAG_NONE);
+    assert(sRenderRootSignature_ != nullptr);
 
     ShaderProgram renderProgram;
     bool vsCompiled = renderProgram.CompileVS(
@@ -208,19 +219,6 @@ bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
         dxCommon->GetDxcCompiler(),
         dxCommon->GetIncludeHandler());
     assert(psCompiled && "GPUParticle.PS.hlsl compile failed!");
-
-    // 加算合成（Additive Blend）
-    D3D12_BLEND_DESC blendDesc{};
-    blendDesc.AlphaToCoverageEnable = FALSE;
-    blendDesc.IndependentBlendEnable = FALSE;
-    blendDesc.RenderTarget[0].BlendEnable = TRUE;
-    blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE; // 加算
-    blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-    blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-    blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
     // カリングなし（ビルボード）
     D3D12_RASTERIZER_DESC rasterizerDesc{};
@@ -243,25 +241,82 @@ bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
     depthDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
     depthDesc.StencilEnable = FALSE;
 
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
-    psoDesc.pRootSignature = renderRootSignature_.Get();
-    psoDesc.VS = renderProgram.GetVS();
-    psoDesc.PS = renderProgram.GetPS();
-    psoDesc.BlendState = blendDesc;
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.RasterizerState = rasterizerDesc;
-    psoDesc.DepthStencilState = depthDesc;
-    psoDesc.InputLayout = { nullptr, 0 }; // 頂点シェーダー内で自動展開するため頂点レイアウト不要
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = dxCommon->GetRtvFormat();
-    psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    psoDesc.SampleDesc.Count = 1;
+    // 各ブレンドモード用PSOの生成 (Normal, Add, Subtract, Multiply)
+    for (size_t i = 0; i < static_cast<size_t>(ParticleBlendMode::Count); ++i) {
+        auto mode = static_cast<ParticleBlendMode>(i);
+        D3D12_BLEND_DESC blendDesc{};
+        blendDesc.AlphaToCoverageEnable = FALSE;
+        blendDesc.IndependentBlendEnable = FALSE;
+        blendDesc.RenderTarget[0].BlendEnable = TRUE;
+        blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
-    HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&renderPipelineState_));
-    assert(SUCCEEDED(hr) && "Failed to create GPU Particle Render PSO!");
+        switch (mode) {
+        case ParticleBlendMode::Normal:
+            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+            break;
+        case ParticleBlendMode::Add:
+            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+            break;
+        case ParticleBlendMode::Subtract:
+            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_REV_SUBTRACT;
+            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+            break;
+        case ParticleBlendMode::Multiply:
+            blendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_ZERO;
+            blendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_SRC_COLOR;
+            blendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+            blendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+            blendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+            blendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+            break;
+        default:
+            break;
+        }
 
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+        psoDesc.pRootSignature = sRenderRootSignature_.Get();
+        psoDesc.VS = renderProgram.GetVS();
+        psoDesc.PS = renderProgram.GetPS();
+        psoDesc.BlendState = blendDesc;
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.RasterizerState = rasterizerDesc;
+        psoDesc.DepthStencilState = depthDesc;
+        psoDesc.InputLayout = { nullptr, 0 };
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = dxCommon->GetRtvFormat();
+        psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        psoDesc.SampleDesc.Count = 1;
+
+        HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&sRenderPipelineStates_[i]));
+        assert(SUCCEEDED(hr) && "Failed to create GPU Particle Render PSO for blend mode!");
+    }
+
+    sPipelinesInitialized_ = true;
     return true;
+}
+
+void GPUParticleObject::DestroyPipelines() {
+    sComputePipeline_.Reset();
+    sRenderRootSignature_.Reset();
+    for (auto& pso : sRenderPipelineStates_) {
+        pso.Reset();
+    }
+    sPipelinesInitialized_ = false;
 }
 
 void GPUParticleObject::Update(float deltaTime) {
@@ -387,7 +442,7 @@ void GPUParticleObject::DispatchCompute(ID3D12GraphicsCommandList* cmdList) {
     cmdList->SetDescriptorHeaps(1, heaps);
 
     // 3. Compute Pipeline とルートシグネチャのバインド
-    computePipeline_.Bind(cmdList);
+    sComputePipeline_.Bind(cmdList);
 
     // 4. パラメータのバインド
     // param 0: Descriptor Table (u0: RWStructuredBuffer)
@@ -400,8 +455,8 @@ void GPUParticleObject::DispatchCompute(ID3D12GraphicsCommandList* cmdList) {
     cmdList->Dispatch(groupCountX, 1, 1);
 }
 
-void GPUParticleObject::Draw(ID3D12GraphicsCommandList* cmdList, const std::string& textureKey) {
-    if (!isInitialized_ || !cmdList) return;
+void GPUParticleObject::Draw(ID3D12GraphicsCommandList* cmdList, const std::string& textureKey, ParticleBlendMode blendMode) {
+    if (!isInitialized_ || !cmdList || !sPipelinesInitialized_) return;
 
     // 1. バッファを 頂点シェーダー読み取り状態 (SRV) へ遷移
     TransitionBuffer(cmdList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -412,8 +467,12 @@ void GPUParticleObject::Draw(ID3D12GraphicsCommandList* cmdList, const std::stri
     cmdList->SetDescriptorHeaps(1, heaps);
 
     // 3. Render Pipeline とルートシグネチャのバインド
-    cmdList->SetGraphicsRootSignature(renderRootSignature_.Get());
-    cmdList->SetPipelineState(renderPipelineState_.Get());
+    cmdList->SetGraphicsRootSignature(sRenderRootSignature_.Get());
+    size_t blendIndex = static_cast<size_t>(blendMode);
+    if (blendIndex >= static_cast<size_t>(ParticleBlendMode::Count)) {
+        blendIndex = static_cast<size_t>(ParticleBlendMode::Add);
+    }
+    cmdList->SetPipelineState(sRenderPipelineStates_[blendIndex].Get());
 
     // 4. プリミティブトポロジーの設定 (TRIANGLELIST)
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -426,8 +485,15 @@ void GPUParticleObject::Draw(ID3D12GraphicsCommandList* cmdList, const std::stri
     // param 2: Descriptor Table (t0, PS: テクスチャ)
     const std::string& actualTextureKey = (!textureKey.empty() && textureKey != "white") ? textureKey : currentTextureKey_;
     auto textureMgr = TextureResource::GetTextureManager();
-    D3D12_GPU_DESCRIPTOR_HANDLE texHandle = textureMgr->GetGpuHandle(actualTextureKey);
-    cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+    D3D12_GPU_DESCRIPTOR_HANDLE texHandle{};
+    if (textureMgr && textureMgr->HasTexture(actualTextureKey)) {
+        texHandle = textureMgr->GetGpuHandle(actualTextureKey);
+    } else if (textureMgr && textureMgr->HasTexture("white")) {
+        texHandle = textureMgr->GetGpuHandle("white");
+    }
+    if (texHandle.ptr != 0) {
+        cmdList->SetGraphicsRootDescriptorTable(2, texHandle);
+    }
 
     // 6. 頂点バッファレス・インスタンシング描画
     // 四角形1枚(6頂点) × maxParticles_ インスタンス
@@ -496,6 +562,13 @@ void GPUParticleObject::ApplySetting(const GPUParticleSetting& s) {
     setting_.killAtY = s.killAtY;
     setting_.spawnRatePerSec = s.spawnRatePerSec;
     setting_.isAutoSpawning = s.isAutoSpawning;
+
+    size_t bmIdx = static_cast<size_t>(s.blendMode);
+    if (bmIdx < static_cast<size_t>(ParticleBlendMode::Count)) {
+        blendMode_ = static_cast<ParticleBlendMode>(bmIdx);
+    } else {
+        blendMode_ = ParticleBlendMode::Add;
+    }
 }
 
 GPUParticleSetting GPUParticleObject::ToParticleSetting() const {
@@ -516,6 +589,7 @@ GPUParticleSetting GPUParticleObject::ToParticleSetting() const {
     s.killAtY = setting_.killAtY;
     s.spawnRatePerSec = setting_.spawnRatePerSec;
     s.isAutoSpawning = setting_.isAutoSpawning;
+    s.blendMode = static_cast<int>(blendMode_);
 
     return s;
 }
@@ -531,6 +605,7 @@ void GPUParticleObject::Reset() {
     currentEmitOffset_ = 0;
     emitCountThisFrame_ = 0;
     spawnAccumulator_ = 0.0f;
-    randomSeedCounter_ = 0;
+    // 弾丸再利用時に毎回0から同じ乱数を辿るのを防ぐため、ユニークな新シードを割り当て
+    randomSeedCounter_ = ++s_globalSeedCounter * kSeedPrimeMultiplier;
     requestClearAll_ = true;
 }

@@ -201,7 +201,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE ContentBrowserWindow::GetIconHandleForEntry(const st
     return texMgr->GetGpuHandle(kIconFileKey);
 }
 
-void ContentBrowserWindow::Draw(bool* pOpen) {
+void ContentBrowserWindow::Draw(bool* pOpen, const char* windowIdSuffix) {
     if (!pOpen || !*pOpen) return;
 
     EnsureIconsLoaded();
@@ -211,7 +211,13 @@ void ContentBrowserWindow::Draw(bool* pOpen) {
     constexpr float kDefaultFloatingHeight = 350.0f;
     ImGui::SetNextWindowSize(ImVec2(kDefaultFloatingWidth, kDefaultFloatingHeight), ImGuiCond_FirstUseEver);
 
-    if (ImGui::Begin("コンテンツブラウザ###ContentBrowser", pOpen)) {
+    std::string windowTitle = "コンテンツブラウザ###ContentBrowser";
+    if (windowIdSuffix && windowIdSuffix[0] != '\0') {
+        windowTitle += "_";
+        windowTitle += windowIdSuffix;
+    }
+
+    if (ImGui::Begin(windowTitle.c_str(), pOpen)) {
         DrawNavigationBar();
         ImGui::Separator();
         DrawFileGrid();

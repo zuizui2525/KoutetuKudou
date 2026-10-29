@@ -4,6 +4,7 @@
 #include "Scripts/Player/BulletScript.h"
 #include "Scripts/Player/ReticleControllerScript.h"
 #include "Scripts/Enemy/EnemySpawnManagerScript.h"
+#include "Scripts/Enemy/EnemySpawnPointScript.h"
 #include "Scripts/Enemy/EnemyAIScript.h"
 #include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
 #include "Engine/Graphics/Objects/2d/Circle/Circle2DObject.h"
@@ -189,13 +190,16 @@ void GamePhaseControllerScript::OnUpdate() {
         return;
     }
 
-    // ゲームオーバー判定（自機死亡）
+    // ゲームオーバー判定（自機死亡時：溶解演出の完了を待ってからシーン遷移）
     if (playerScript_ && playerScript_->IsDead()) {
-        isSceneChanging_ = true;
-        if (playerScript_) {
-            playerScript_->SetAutoMoving(false);
+        playerScript_->SetAutoMoving(false); // 走行を停止してその場で溶解
+
+        if (playerScript_->IsDeathAnimationFinished()) {
+            isSceneChanging_ = true;
+            SceneManager::GetInstance()->ChangeScene(kGameOverSceneName);
+            return;
         }
-        SceneManager::GetInstance()->ChangeScene(kGameOverSceneName);
+        // 溶解演出中は走行等の更新を停止し、自機の溶解アニメーションをじっくり見せる
         return;
     }
 
@@ -517,17 +521,6 @@ void GamePhaseControllerScript::UpdateCountdownPhase() {
             if (auto* audio = Audio::GetInstance()) {
                 audio->PlaySoundW(seCountdownBeep_, 0.8f, false);
             }
-
-            // 2. 自機エンジン周辺に RingAura エフェクトを発生
-            if (playerScript_ && playerScript_->GetOwner()) {
-                Vector3 pPos = playerScript_->GetOwner()->GetPosition();
-                EffectPlayParam param{};
-                param.position = { pPos.x, pPos.y + 0.1f, pPos.z };
-                param.rotation = { 0.0f, 0.0f, 0.0f };
-                param.scale = { 1.0f, 1.0f, 1.0f };
-                param.isLoop = false;
-                EffectManager::GetInstance()->PlayEffect3D(kEffectCountdownAura, param);
-            }
         }
     } else {
         // START!! 突入時（1回だけ発火）
@@ -539,17 +532,6 @@ void GamePhaseControllerScript::UpdateCountdownPhase() {
             // 1. スタートシグナル音（ポーン）再生
             if (auto* audio = Audio::GetInstance()) {
                 audio->PlaySoundW(seStartSignal_, 0.95f, false);
-            }
-
-            // 2. 自機から全方位へ衝撃波リング (RingSlash) & スパークル (FireworksSparkle) を同時放出！
-            if (playerScript_ && playerScript_->GetOwner()) {
-                Vector3 pPos = playerScript_->GetOwner()->GetPosition();
-                EffectPlayParam param{};
-                param.position = { pPos.x, pPos.y + 0.3f, pPos.z };
-                param.scale = { 1.5f, 1.5f, 1.5f };
-                param.isLoop = false;
-                EffectManager::GetInstance()->PlayEffect3D(kEffectStartRing, param);
-                EffectManager::GetInstance()->PlayEffect3D(kEffectStartSparkle, param);
             }
         }
     }
@@ -1091,7 +1073,70 @@ void GamePhaseControllerScript::Render2DMapDirectX() {
         };
     };
 
-    // 9. スタート地点・ゴール地点の描画
+    // 9. ミニマップ上の敵スポーン警戒ゾーン（円＆外枠リング）の描画
+    if (spawnMgr_) {
+        const auto& spawnPoints = spawnMgr_->GetCachedSpawnPoints();
+        size_t enemyCircleIdx = 0;
+        constexpr float kMapEnemyFillAlpha = 0.28f;
+        constexpr float kMapRingThickness = 1.5f;
+        constexpr float kMapEnemyRingAlpha = 0.85f;
+        constexpr float kMinMapCircleRadius = 5.0f;
+
+        for (auto* sp : spawnPoints) {
+            if (!sp || sp->GetTargetArea() != currentArea_) continue;
+            // 走行フェーズ中で敵出現済みの場合はミニマップ上でも非表示（制圧済み）
+            if (currentPhase_ == Phase::Play && sp->HasTriggered()) continue;
+
+            auto* ownerGo = sp->GetOwner();
+            if (!ownerGo) continue;
+
+            Vector3 ownerPos = ownerGo->GetPosition();
+            Vector2 spMapPos = WorldToMap2D(ownerPos);
+
+            // スポーン・感知半径のミニマップ内スケール変換 (XZ比率に基づくピクセル半径)
+            float radiusMeters = sp->GetEffectiveRadius();
+            float radius2D = (radiusMeters / (2.0f * kMapBoundaryX)) * innerW;
+            if (radius2D < kMinMapCircleRadius) radius2D = kMinMapCircleRadius;
+
+            // プール拡張
+            while (mapEnemyCircles_.size() <= enemyCircleIdx) {
+                auto circle = std::make_unique<Circle2DObject>();
+                circle->Initialize();
+                SceneHierarchy::GetInstance()->Unregister(circle.get());
+                mapEnemyCircles_.push_back(std::move(circle));
+            }
+            while (mapEnemyRings_.size() <= enemyCircleIdx) {
+                auto ring = std::make_unique<Ring2DObject>();
+                ring->Initialize();
+                SceneHierarchy::GetInstance()->Unregister(ring.get());
+                mapEnemyRings_.push_back(std::move(ring));
+            }
+
+            auto theme = sp->GetVisualColorTheme();
+
+            // 内側半透明サークル
+            Vector4 fillColor = { theme.ringEditor.x, theme.ringEditor.y, theme.ringEditor.z, kMapEnemyFillAlpha };
+            auto& circleObj = mapEnemyCircles_[enemyCircleIdx];
+            circleObj->SetRadius(radius2D);
+            circleObj->GetMaterialData()->color = fillColor;
+            circleObj->SetPosition({ spMapPos.x - radius2D, spMapPos.y - radius2D, 0.0f });
+            circleObj->Update();
+            circleObj->Draw("white", true);
+
+            // 外枠リング
+            Vector4 ringColor = { theme.ringEditor.x, theme.ringEditor.y, theme.ringEditor.z, kMapEnemyRingAlpha };
+            auto& ringObj = mapEnemyRings_[enemyCircleIdx];
+            ringObj->SetRadii(radius2D, (std::max)(1.0f, radius2D - kMapRingThickness));
+            ringObj->GetMaterialData()->color = ringColor;
+            ringObj->SetPosition({ spMapPos.x - radius2D, spMapPos.y - radius2D, 0.0f });
+            ringObj->Update();
+            ringObj->Draw("white", true);
+
+            enemyCircleIdx++;
+        }
+    }
+
+    // 10. スタート地点・ゴール地点の描画
     Vector2 start2D = WorldToMap2D({ 0.0f, 0.0f, startZ });
     Vector2 goal2D = WorldToMap2D({ 0.0f, 0.0f, goalZ });
 

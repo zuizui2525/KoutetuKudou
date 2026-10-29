@@ -72,6 +72,7 @@
     <ClCompile Include="Engine\Component\Components\SphereColliderComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\AudioSourceComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\ParticleEffectComponent.cpp" />
+    <ClCompile Include="Engine\Component\Components\GPUParticleComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\CameraComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\LightComponent.cpp" />
     <ClCompile Include="Engine\Component\Components\TextRenderer2DComponent.cpp" />
@@ -201,6 +202,9 @@
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp">
       <Filter>Scripts\Stage</Filter>
     </ClCompile>
+    <ClCompile Include="Scripts\Stage\SkydomeScript.cpp">
+      <Filter>Scripts\Stage</Filter>
+    </ClCompile>
     <ClCompile Include="Scripts\Sample\SamplePlayerScript.cpp">
       <Filter>Scripts\Sample</Filter>
     </ClCompile>
@@ -208,6 +212,7 @@
       <Filter>Scripts\Sample</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\Objects\3d\Skybox\Skybox.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\3d\Skydome\Skydome.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Square\SquareObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Cube\CubeObject.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\CylinderEffect\CylinderEffectObject.cpp" />
@@ -299,6 +304,7 @@
     <ClInclude Include="Engine\Component\Components\SphereColliderComponent.h" />
     <ClInclude Include="Engine\Component\Components\AudioSourceComponent.h" />
     <ClInclude Include="Engine\Component\Components\ParticleEffectComponent.h" />
+    <ClInclude Include="Engine\Component\Components\GPUParticleComponent.h" />
     <ClInclude Include="Engine\Component\Components\CameraComponent.h" />
     <ClInclude Include="Engine\Component\Components\LightComponent.h" />
     <ClInclude Include="Engine\Component\Components\TextRenderer2DComponent.h" />
@@ -376,6 +382,7 @@
       <Filter>Engine</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\Objects\3d\Skybox\Skybox.h" />
+    <ClInclude Include="Engine\Graphics\Objects\3d\Skydome\Skydome.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Square\SquareObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Cube\CubeObject.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\CylinderEffect\CylinderEffectObject.h" />
@@ -455,6 +462,9 @@
       <Filter>Scripts\Route</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Stage\StageManagerScript.h">
+      <Filter>Scripts\Stage</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripts\Stage\SkydomeScript.h">
       <Filter>Scripts\Stage</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Sample\SamplePlayerScript.h">
