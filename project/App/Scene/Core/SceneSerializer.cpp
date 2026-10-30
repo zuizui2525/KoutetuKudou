@@ -329,7 +329,21 @@ std::string SceneSerializer::SerializeToString(
                     const auto& off = gpuComp->GetOffset();
                     ofs << "          \"offset\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
                     ofs << "          \"auto_spawn\": " << (gpuComp->IsAutoSpawning() ? "true" : "false") << ",\n";
-                    ofs << "          \"spawn_rate\": " << gpuComp->GetSpawnRate();
+                    ofs << "          \"blend_mode\": " << static_cast<int>(gpuComp->GetBlendMode()) << ",\n";
+                    ofs << "          \"is_loop\": " << (gpuComp->IsLoop() ? "true" : "false") << ",\n";
+                    ofs << "          \"spawn_rate\": " << gpuComp->GetSpawnRate() << ",\n";
+                    ofs << "          \"burst_interval\": " << gpuComp->GetBurstInterval() << ",\n";
+                    ofs << "          \"burst_count\": " << gpuComp->GetBurstCount() << ",\n";
+                    ofs << "          \"min_lifetime\": " << gpuComp->GetMinLifeTime() << ",\n";
+                    ofs << "          \"max_lifetime\": " << gpuComp->GetMaxLifeTime() << ",\n";
+                    ofs << "          \"gravity\": " << gpuComp->GetGravity() << ",\n";
+                    const auto& sc = gpuComp->GetStartColor();
+                    ofs << "          \"start_color\": [" << sc.x << ", " << sc.y << ", " << sc.z << ", " << sc.w << "],\n";
+                    const auto& ec = gpuComp->GetEndColor();
+                    ofs << "          \"end_color\": [" << ec.x << ", " << ec.y << ", " << ec.z << ", " << ec.w << "],\n";
+                    ofs << "          \"firework_text\": \"" << gpuComp->GetFireworkText() << "\",\n";
+                    ofs << "          \"launch_height\": " << gpuComp->GetLaunchHeight() << ",\n";
+                    ofs << "          \"text_scale\": " << gpuComp->GetTextScale();
                 }
             } else if (typeName == "Camera") {
                 if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
@@ -619,7 +633,7 @@ bool SceneSerializer::DeserializeFromString(
                     as->Load(soundPath);
                 }
             } else if (type == "ParticleEffect") {
-                auto* pe = go->AddComponent<ParticleEffectComponent>();
+                auto* pe = go->AddComponent<GPUParticleComponent>();
                 pe->SetEffectName(ExtractString(compBlock, "effect_name", "Hit"));
                 pe->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
                 pe->SetLoop(ExtractBool(compBlock, "loop", false));
@@ -631,6 +645,20 @@ bool SceneSerializer::DeserializeFromString(
                 gpuComp->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
                 gpuComp->SetAutoSpawning(ExtractBool(compBlock, "auto_spawn", true));
                 gpuComp->SetSpawnRate(ExtractFloat(compBlock, "spawn_rate", 50.0f));
+                int bm = ExtractInt(compBlock, "blend_mode", 1);
+                gpuComp->SetBlendMode(static_cast<ParticleBlendMode>(bm));
+                bool loop = ExtractBool(compBlock, "is_loop", ExtractBool(compBlock, "auto_spawn", true));
+                gpuComp->SetLoop(loop);
+                gpuComp->SetBurstInterval(ExtractFloat(compBlock, "burst_interval", 2.0f));
+                gpuComp->SetBurstCount(static_cast<uint32_t>(ExtractInt(compBlock, "burst_count", 30)));
+                gpuComp->SetMinLifeTime(ExtractFloat(compBlock, "min_lifetime", gpuComp->GetMinLifeTime()));
+                gpuComp->SetMaxLifeTime(ExtractFloat(compBlock, "max_lifetime", gpuComp->GetMaxLifeTime()));
+                gpuComp->SetGravity(ExtractFloat(compBlock, "gravity", gpuComp->GetGravity()));
+                gpuComp->SetStartColor(ExtractVector4(compBlock, "start_color", gpuComp->GetStartColor()));
+                gpuComp->SetEndColor(ExtractVector4(compBlock, "end_color", gpuComp->GetEndColor()));
+                gpuComp->SetFireworkText(ExtractString(compBlock, "firework_text", "祝"));
+                gpuComp->SetLaunchHeight(ExtractFloat(compBlock, "launch_height", 30.0f));
+                gpuComp->SetTextScale(ExtractFloat(compBlock, "text_scale", 15.0f));
             } else if (type == "Camera") {
                 auto* cam = go->AddComponent<CameraComponent>();
                 cam->SetFov(ExtractFloat(compBlock, "fov", 0.45f));
@@ -790,7 +818,7 @@ bool SceneSerializer::RunSelfTest() {
     as->SetFilePath("resources/sounds/test.wav");
     as->SetVolume(0.75f);
 
-    auto* pe = go->AddComponent<ParticleEffectComponent>();
+    auto* pe = go->AddComponent<GPUParticleComponent>();
     pe->SetEffectName("Hit");
 
     auto* tr2 = go->AddComponent<TextRenderer2DComponent>();
@@ -832,7 +860,7 @@ bool SceneSerializer::RunSelfTest() {
     if (isPassed && !loadedObjects[0]->HasComponent<MeshRendererComponent>()) isPassed = false;
     if (isPassed && !loadedObjects[0]->HasComponent<BoxColliderComponent>()) isPassed = false;
     if (isPassed && !loadedObjects[0]->HasComponent<AudioSourceComponent>()) isPassed = false;
-    if (isPassed && !loadedObjects[0]->HasComponent<ParticleEffectComponent>()) isPassed = false;
+    if (isPassed && !loadedObjects[0]->HasComponent<GPUParticleComponent>()) isPassed = false;
     if (isPassed && !loadedObjects[0]->HasComponent<TextRenderer2DComponent>()) isPassed = false;
     if (isPassed && !loadedObjects[0]->HasComponent<TextRenderer3DComponent>()) isPassed = false;
 

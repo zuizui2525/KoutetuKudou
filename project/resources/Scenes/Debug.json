@@ -199,9 +199,41 @@
           "script_name": "SkydomeScript",
           "target_uuid": "",
           "rotation_speed": 0.002,
-          "color": [1, 1, 1, 1],
+          "color": [0.0342787, 0.0342124, 0.034749, 1],
           "model_key": "skydome",
           "texture_key": "skydome"
+        }
+      ]
+    },
+    {
+      "uuid": "39ccc29b-5d63-4854-8d92-f2aa06492513",
+      "name": "花火",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "GPUParticle",
+          "preset_name": "TextFirework",
+          "texture_key": "circle",
+          "offset": [0, 0, 0],
+          "auto_spawn": false,
+          "blend_mode": 1,
+          "is_loop": true,
+          "spawn_rate": 0,
+          "burst_interval": 2,
+          "burst_count": 2000,
+          "min_lifetime": 0.6,
+          "max_lifetime": 1.0,
+          "gravity": 2.2,
+          "start_color": [1, 0.85, 0.3, 1],
+          "end_color": [1, 0.2, 0, 0],
+          "firework_text": "祝",
+          "launch_height": 30,
+          "text_scale": 15
         }
       ]
     }

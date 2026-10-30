@@ -46,4 +46,23 @@ struct GPUEmitterConstant
     uint   emitOffset;         // 今フレーム発生させる先頭インデックス
     uint   emitCount;          // 今フレーム新規発生させる個数
     uint   randomSeed;         // 乱数シード (フレーム番号やタイマー値)
+
+    uint   shapeType;          // 0: 通常球状放射, 1: 文字花火 (Text Firework)
+    uint   shapePointCount;    // 文字点群数
+    float  burstSpeed;         // 拡散初速 / 文字サイズスケール
+    float  padding0;
+
+    float3 emitterRight;       // 文字の横軸（カメラ右方向）
+    float  padding1;
+
+    float3 emitterUp;          // 文字の縦軸（カメラ上方向）
+    float  padding2;
+};
+
+/// <summary>
+/// 文字花火用ドット点群バッファ (最大1024点)
+/// </summary>
+cbuffer TextShapeBuffer : register(b1)
+{
+    float4 gShapePoints[1024]; // xy: 正規化オフセット (-1.0f 〜 1.0f)
 };

@@ -53,7 +53,18 @@ namespace {
         uint32_t emitCount;
         uint32_t randomSeed;
 
-        uint32_t padding[16]; // 256バイト安全パディング
+        uint32_t shapeType;       // 0: 通常球状放射, 1: 文字花火
+        uint32_t shapePointCount; // 点群数
+        float    burstSpeed;      // 初速・サイズスケール
+        float    padding0;
+
+        Vector3  emitterRight;    // カメラ右軸
+        float    padding1;
+
+        Vector3  emitterUp;       // カメラ上軸
+        float    padding2;
+
+        uint32_t padding[20];     // 256バイト安全パディング
     };
 
     // カメラ定数バッファ
@@ -156,6 +167,9 @@ bool GPUParticleObject::CreateBuffersAndDescriptors(ID3D12Device* device) {
     // 5. カメラ定数バッファの生成 (Uploadヒープ)
     cameraConstantBuffer_ = DxUtils::CreateBufferResource(device, sizeof(HLSLCameraConstant));
 
+    // 6. 文字花火用形状点群定数バッファの生成 (Uploadヒープ, b1)
+    textShapeConstantBuffer_ = DxUtils::CreateBufferResource(device, kMaxShapeConstantPoints * sizeof(Vector4));
+
     return true;
 }
 
@@ -172,6 +186,7 @@ bool GPUParticleObject::CreatePipelines(ID3D12Device* device) {
     RootSignatureBuilder csRs;
     csRs.AddUAV(0, D3D12_SHADER_VISIBILITY_ALL); // u0: RWStructuredBuffer
     csRs.AddCBV(0, D3D12_SHADER_VISIBILITY_ALL); // b0: ConstantBuffer<GPUEmitterConstant>
+    csRs.AddCBV(1, D3D12_SHADER_VISIBILITY_ALL); // b1: ConstantBuffer<TextShapeBuffer>
     auto computeRootSig = csRs.Build(device, D3D12_ROOT_SIGNATURE_FLAG_NONE);
     assert(computeRootSig != nullptr);
 
@@ -356,6 +371,47 @@ void GPUParticleObject::Update(float deltaTime) {
     cbData.emitCount    = emitCountThisFrame_;
     cbData.randomSeed   = randomSeedCounter_;
 
+    // 文字花火用パラメータ
+    cbData.shapeType       = shapeType_;
+    cbData.shapePointCount = shapePointCount_;
+    cbData.burstSpeed      = burstSpeed_;
+
+    // カメラ定数バッファの更新およびビルボード軸の抽出
+    HLSLCameraConstant camData{};
+    bool hasCam = false;
+
+
+    if (useCustomCamera_) {
+        camData.view = customViewMatrix_;
+        camData.projection = customProjMatrix_;
+        camData.viewProjection = Math::Multiply(camData.view, camData.projection);
+        camData.cameraPos = customCameraPos_;
+        hasCam = true;
+    } else {
+        auto cameraMgr = CameraResource::GetCameraManager();
+        if (cameraMgr && cameraMgr->GetActiveCamera()) {
+            auto* cam = cameraMgr->GetActiveCamera();
+            camData.view = cam->GetViewMatrix();
+            camData.projection = cam->GetProjectionMatrix();
+            camData.viewProjection = Math::Multiply(camData.view, camData.projection);
+            camData.cameraPos = cam->GetPosition();
+            hasCam = true;
+        }
+    }
+
+    if (hasCam) {
+        cbData.emitterRight = { camData.view.m[0][0], camData.view.m[1][0], camData.view.m[2][0] };
+        cbData.emitterUp    = { camData.view.m[0][1], camData.view.m[1][1], camData.view.m[2][1] };
+        void* mappedCam = nullptr;
+        if (SUCCEEDED(cameraConstantBuffer_->Map(0, nullptr, &mappedCam))) {
+            memcpy(mappedCam, &camData, sizeof(HLSLCameraConstant));
+            cameraConstantBuffer_->Unmap(0, nullptr);
+        }
+    } else {
+        cbData.emitterRight = { 1.0f, 0.0f, 0.0f };
+        cbData.emitterUp    = { 0.0f, 1.0f, 0.0f };
+    }
+
     // 全粒子即時消滅リクエストの処理
     if (requestClearAll_) {
         cbData.killAtY = 999999.0f;
@@ -373,8 +429,12 @@ void GPUParticleObject::Update(float deltaTime) {
     if (emitCountThisFrame_ > 0) {
         currentEmitOffset_ = (currentEmitOffset_ + emitCountThisFrame_) % maxParticles_;
     }
+}
 
-    // カメラ定数バッファの更新
+/*
+    }
+
+
     HLSLCameraConstant camData{};
     bool hasCam = false;
 
@@ -404,6 +464,10 @@ void GPUParticleObject::Update(float deltaTime) {
         }
     }
 }
+
+#endif
+
+*/
 
 void GPUParticleObject::TransitionBuffer(
     ID3D12GraphicsCommandList* cmdList,
@@ -449,6 +513,10 @@ void GPUParticleObject::DispatchCompute(ID3D12GraphicsCommandList* cmdList) {
     cmdList->SetComputeRootDescriptorTable(0, uavGpuHandle_);
     // param 1: CBV (b0: GPUEmitterConstant)
     cmdList->SetComputeRootConstantBufferView(1, emitterConstantBuffer_->GetGPUVirtualAddress());
+    // param 2: CBV (b1: TextShapeBuffer)
+    if (textShapeConstantBuffer_) {
+        cmdList->SetComputeRootConstantBufferView(2, textShapeConstantBuffer_->GetGPUVirtualAddress());
+    }
 
     // 5. ディスパッチ実行 (256スレッド/グループ)
     const uint32_t groupCountX = (maxParticles_ + kComputeThreadGroupSize - 1) / kComputeThreadGroupSize;
@@ -608,4 +676,18 @@ void GPUParticleObject::Reset() {
     // 弾丸再利用時に毎回0から同じ乱数を辿るのを防ぐため、ユニークな新シードを割り当て
     randomSeedCounter_ = ++s_globalSeedCounter * kSeedPrimeMultiplier;
     requestClearAll_ = true;
+}
+
+void GPUParticleObject::SetShapePoints(const std::vector<Vector2>& points) {
+    shapePointCount_ = static_cast<uint32_t>((std::min)(points.size(), static_cast<size_t>(kMaxShapeConstantPoints)));
+    if (!textShapeConstantBuffer_ || shapePointCount_ == 0) return;
+
+    void* mapped = nullptr;
+    if (SUCCEEDED(textShapeConstantBuffer_->Map(0, nullptr, &mapped))) {
+        auto* dst = static_cast<Vector4*>(mapped);
+        for (uint32_t i = 0; i < shapePointCount_; ++i) {
+            dst[i] = Vector4(points[i].x, points[i].y, 0.0f, 0.0f);
+        }
+        textShapeConstantBuffer_->Unmap(0, nullptr);
+    }
 }

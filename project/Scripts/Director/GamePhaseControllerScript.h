@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+
 class RouteManagerScript;
 class PlayerControllerScript;
 class EnemySpawnManagerScript;
@@ -128,6 +129,11 @@ private:
     /// </summary>
     void RenderPlayHUDDirectX();
 
+    /// <summary>
+    /// 走行戦闘中に画面上部中央へ水平スクロール式方位バー（自機進行方向基準のコンパスHUD）を描画します。
+    /// </summary>
+    void RenderCompassDirectX();
+
 private:
     // マジックナンバー排除のための定数
     static constexpr int kMaxAreas = 4;
@@ -180,6 +186,15 @@ private:
     static constexpr float kHudAreaPanelWidth = 240.0f;  // エリア進行度パネル幅 (px)
     static constexpr float kHudAreaPanelHeight = 36.0f;  // エリア進行度パネル高さ (px)
     static constexpr float kHudAreaMarginTop = 24.0f;    // 上マージン (px)
+
+    // 画面上部コンパスHUD（方位バー）の定数 (マジックナンバー排除)
+    static constexpr float kCompassBarWidth = 380.0f;       // コンパスバーの横幅 (px)
+    static constexpr float kCompassBarHeight = 26.0f;      // コンパスバーの高さ (px)
+    static constexpr float kCompassBarY = 20.0f;           // 画面上部からのY位置 (px)
+    static constexpr float kCompassFovDegrees = 120.0f;     // コンパスバーがカバーする視野角 (度: 左右各60度)
+    static constexpr float kCompassTickMajorHeight = 10.0f; // 大目盛りの長さ (px)
+    static constexpr float kCompassTickMinorHeight = 6.0f;  // 小目盛りの長さ (px)
+    static constexpr int kCompassTickPoolSize = 20;         // 目盛り線オブジェクトのプール数
 
     // ガイダンスパネル定数
     static constexpr float kGuidancePanelWidth = 560.0f;  // ガイダンスパネル幅 (px)
@@ -269,6 +284,23 @@ private:
     std::unique_ptr<TextObject2D> hudAreaTextObj_;
     std::unique_ptr<TextTextureGenerator> hudAreaTextGen_;
 
+    // 画面上部コンパスHUD（方位バー）パーツ (DirectX 12)
+    bool isCompassEnabled_ = true;
+    std::unique_ptr<SpriteObject> compassBgSprite_;
+    std::unique_ptr<Line2DObject> compassBorders_[4];
+    std::unique_ptr<Line2DObject> compassCenterMarker_;
+    std::vector<std::unique_ptr<Line2DObject>> compassTickLines_;
+    struct CompassLabelItem {
+        float angleDeg = 0.0f;
+        std::string text;
+        Vector4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        std::unique_ptr<TextObject2D> textObj;
+        std::unique_ptr<TextTextureGenerator> textGen;
+        float textWidth = 0.0f;
+        float textHeight = 0.0f;
+    };
+    std::vector<CompassLabelItem> compassLabels_;
+
     // ガイダンスパネル用パーツ (DirectX 12)
     std::unique_ptr<SpriteObject> guidanceBgSprite_;
     std::unique_ptr<Line2DObject> guidanceBorders_[4];
@@ -303,4 +335,3 @@ private:
     float flashAlpha_ = 0.0f;
     std::unique_ptr<SpriteObject> flashSprite_;
 };
-

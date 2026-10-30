@@ -14,11 +14,19 @@ ReticleControllerScript::ReticleControllerScript()
 }
 
 /// <summary>
-/// マウスカーソルのスクリーン座標をゲームビュー解像度へスケーリングし、
-/// レティクルの中央がカーソル先端と一致するようにオブジェクト座標（左上オフセット）を更新します。
+/// 走行戦闘中（APEXスタイル）はレティクルを画面中央に完全固定し、
+/// カーソル追従モード時はマウス座標に追従させます。
 /// </summary>
 void ReticleControllerScript::OnUpdate() {
     if (!owner_) return;
+
+    if (isLockedToCenter_) {
+        // APEXスタイル: 常に画面の中心（クライアント解像度の中央）へ固定配置
+        constexpr float kClientCenterX = static_cast<float>(WindowApp::kClientWidth) * 0.5f;
+        constexpr float kClientCenterY = static_cast<float>(WindowApp::kClientHeight) * 0.5f;
+        owner_->SetPosition({ kClientCenterX - halfSize_, kClientCenterY - halfSize_, 0.0f });
+        return;
+    }
 
     Vector2 viewSize = GameViewWindow::GetGameViewSize();
     Vector2 mousePos = GameViewWindow::GetMousePosition();
@@ -39,6 +47,8 @@ void ReticleControllerScript::OnInspectorGUI() {
     constexpr ImVec4 kHeaderColor = { 0.9f, 0.4f, 0.4f, 1.0f };
     ImGui::TextColored(kHeaderColor, "【レティクルUI設定】");
     ImGui::Separator();
+
+    ImGui::Checkbox("画面中央固定 (APEXスタイル)##LockToCenter", &isLockedToCenter_);
 
     float currentSize = reticleSize_;
     if (ImGui::DragFloat("レティクルサイズ##ReticleSize", &currentSize, 1.0f, 16.0f, 512.0f, "%.0f")) {

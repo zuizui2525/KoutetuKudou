@@ -1,0 +1,15 @@
+{
+  "prefab_name": "花火",
+  "game_object": {
+    "name": "花火",
+    "visible": true,
+    "transform": {
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    },
+    "components": [
+
+    ]
+  }
+}

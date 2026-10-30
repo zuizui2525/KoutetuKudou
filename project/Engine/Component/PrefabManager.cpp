@@ -414,7 +414,21 @@ std::string PrefabManager::SerializeGameObject(GameObject* gameObject) const {
             const auto& off = gpuComp->GetOffset();
             oss << "        \"offset\": [" << off.x << ", " << off.y << ", " << off.z << "],\n";
             oss << "        \"auto_spawn\": " << (gpuComp->IsAutoSpawning() ? "true" : "false") << ",\n";
-            oss << "        \"spawn_rate\": " << gpuComp->GetSpawnRate() << "\n";
+            oss << "        \"blend_mode\": " << static_cast<int>(gpuComp->GetBlendMode()) << ",\n";
+            oss << "        \"is_loop\": " << (gpuComp->IsLoop() ? "true" : "false") << ",\n";
+            oss << "        \"spawn_rate\": " << gpuComp->GetSpawnRate() << ",\n";
+            oss << "        \"burst_interval\": " << gpuComp->GetBurstInterval() << ",\n";
+            oss << "        \"burst_count\": " << gpuComp->GetBurstCount() << ",\n";
+            oss << "        \"min_lifetime\": " << gpuComp->GetMinLifeTime() << ",\n";
+            oss << "        \"max_lifetime\": " << gpuComp->GetMaxLifeTime() << ",\n";
+            oss << "        \"gravity\": " << gpuComp->GetGravity() << ",\n";
+            const auto& sc = gpuComp->GetStartColor();
+            oss << "        \"start_color\": [" << sc.x << ", " << sc.y << ", " << sc.z << ", " << sc.w << "],\n";
+            const auto& ec = gpuComp->GetEndColor();
+            oss << "        \"end_color\": [" << ec.x << ", " << ec.y << ", " << ec.z << ", " << ec.w << "],\n";
+            oss << "        \"firework_text\": \"" << gpuComp->GetFireworkText() << "\",\n";
+            oss << "        \"launch_height\": " << gpuComp->GetLaunchHeight() << ",\n";
+            oss << "        \"text_scale\": " << gpuComp->GetTextScale() << "\n";
             oss << "      }";
         } else if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
             oss << "      {\n";
@@ -625,7 +639,7 @@ std::unique_ptr<GameObject> PrefabManager::DeserializeGameObject(const std::stri
                 }
             }
         } else if (type == "ParticleEffect") {
-            auto* pe = go->AddComponent<ParticleEffectComponent>();
+            auto* pe = go->AddComponent<GPUParticleComponent>();
             pe->SetEffectName(ExtractString(compBlock, "effect_name", "Hit"));
             pe->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
             pe->SetLoop(ExtractBool(compBlock, "loop", false));
@@ -637,6 +651,20 @@ std::unique_ptr<GameObject> PrefabManager::DeserializeGameObject(const std::stri
             gpuComp->SetOffset(ExtractVector3(compBlock, "offset", { 0.0f, 0.0f, 0.0f }));
             gpuComp->SetAutoSpawning(ExtractBool(compBlock, "auto_spawn", true));
             gpuComp->SetSpawnRate(ExtractFloat(compBlock, "spawn_rate", 50.0f));
+            int bm = ExtractInt(compBlock, "blend_mode", 1);
+            gpuComp->SetBlendMode(static_cast<ParticleBlendMode>(bm));
+            bool loop = ExtractBool(compBlock, "is_loop", ExtractBool(compBlock, "auto_spawn", true));
+            gpuComp->SetLoop(loop);
+            gpuComp->SetBurstInterval(ExtractFloat(compBlock, "burst_interval", 2.0f));
+            gpuComp->SetBurstCount(static_cast<uint32_t>(ExtractInt(compBlock, "burst_count", 30)));
+            gpuComp->SetMinLifeTime(ExtractFloat(compBlock, "min_lifetime", gpuComp->GetMinLifeTime()));
+            gpuComp->SetMaxLifeTime(ExtractFloat(compBlock, "max_lifetime", gpuComp->GetMaxLifeTime()));
+            gpuComp->SetGravity(ExtractFloat(compBlock, "gravity", gpuComp->GetGravity()));
+            gpuComp->SetStartColor(ExtractVector4(compBlock, "start_color", gpuComp->GetStartColor()));
+            gpuComp->SetEndColor(ExtractVector4(compBlock, "end_color", gpuComp->GetEndColor()));
+            gpuComp->SetFireworkText(ExtractString(compBlock, "firework_text", "祝"));
+            gpuComp->SetLaunchHeight(ExtractFloat(compBlock, "launch_height", 30.0f));
+            gpuComp->SetTextScale(ExtractFloat(compBlock, "text_scale", 15.0f));
         } else if (type == "Camera") {
             auto* cam = go->AddComponent<CameraComponent>();
             cam->SetFov(ExtractFloat(compBlock, "fov", 0.45f));

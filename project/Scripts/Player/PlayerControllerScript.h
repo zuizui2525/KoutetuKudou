@@ -193,7 +193,8 @@ private:
 
     // 照準補正およびマズルフラッシュ関連定数 (マジックナンバー排除)
     static constexpr float kDefaultZeroInDistance = 22.0f;              // 交戦レンジに合わせたゼロイン距離 (m)
-    static constexpr Vector2 kDefaultAimCorrection = { -0.18f, 0.16f }; // 視差を解消する左(X)・上(Y)の照準バイアス補正
+    static constexpr Vector2 kDefaultAimCorrection = { 0.0f, 0.0f };   // レティクル視線と完全一致（視差バイアス不要）
+    static constexpr float kBulletCameraForwardOffset = 0.5f;           // レティクル視線発射時のカメラ前方スポーン距離 (m)
     static constexpr int kMuzzleFlashDuration = 3;                      // フラッシュ点灯フレーム数 (約0.05秒の瞬間閃光)
     static constexpr float kDefaultMuzzleFlashScale = 0.035f;           // 銃口口径(約3.4cm)に合わせた小型基準半径 (m)
     static constexpr float kDefaultMuzzleFlashForwardOffset = 0.04f;    // 銃口の真先に突き出す前方オフセット (m)
@@ -208,6 +209,8 @@ private:
     Vector4 gunColor_ = kGunDefaultColor;
     Vector3 gunMuzzleOffset_ = kDefaultGunMuzzleOffset;
     float gunRecoilProgress_ = 0.0f; // 0.0 (通常) 〜 1.0 (反動最大)
+
+    bool isGunVisible_ = true;      // 銃モデル描画フラグ
 
     // 照準補正パラメータ
     Vector2 aimCorrection_ = kDefaultAimCorrection;

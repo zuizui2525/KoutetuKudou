@@ -154,6 +154,15 @@ public:
     uint32_t GetRandomSeed() const { return randomSeedCounter_; }
     void SetRandomSeed(uint32_t seed) { randomSeedCounter_ = seed; }
 
+    /// <summary>
+    /// 文字花火用の形状点群を設定
+    /// </summary>
+    void SetShapePoints(const std::vector<Vector2>& points);
+    void SetShapeType(uint32_t type) { shapeType_ = type; }
+    uint32_t GetShapeType() const { return shapeType_; }
+    void SetBurstSpeed(float speed) { burstSpeed_ = speed; }
+    float GetBurstSpeed() const { return burstSpeed_; }
+
 private:
     // 内部初期化ヘルパー
     bool CreatePipelines(ID3D12Device* device);
@@ -207,4 +216,11 @@ private:
 
     // リソース状態追跡
     D3D12_RESOURCE_STATES currentBufferState_ = D3D12_RESOURCE_STATE_COMMON;
+
+    // 文字花火用定数バッファと設定
+    Microsoft::WRL::ComPtr<ID3D12Resource> textShapeConstantBuffer_;
+    uint32_t shapeType_ = 0;
+    uint32_t shapePointCount_ = 0;
+    float burstSpeed_ = 0.0f;
+    static constexpr uint32_t kMaxShapeConstantPoints = 1024;
 };

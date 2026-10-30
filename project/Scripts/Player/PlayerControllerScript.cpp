@@ -25,6 +25,9 @@
 REGISTER_SCRIPT(PlayerControllerScript)
 
 namespace {
+    constexpr float kEpsilon = 0.0001f;
+    constexpr float kPi = 3.1415926535f;
+    constexpr float kTwoPi = 6.283185307f;
     constexpr float kDefaultPlayerMuzzleHeight = 1.0f; // カメラ未初期化時のフォールバック高さ
     constexpr float kRayTargetDistance = 50.0f;
     constexpr int kReloadKey = DIK_R;
@@ -70,6 +73,7 @@ void PlayerControllerScript::Awake() {
     meltTimer_ = 0;
     isInitialPosSaved_ = false;
     gunRecoilProgress_ = 0.0f;
+    isGunVisible_ = true;
     EnsureGunModel();
 }
 
@@ -142,7 +146,7 @@ void PlayerControllerScript::OnUpdate() {
         HandleShooting();
     }
 
-    // 手持ちGunモデルのTransform更新（カメラ追従およびリコイル演出）
+    // 手持ちGunモデルのTransform更新（カメラ追従、射撃方向同期、首振り自動格納、リコイル演出）
     UpdateGunTransform();
 }
 
@@ -178,14 +182,14 @@ void PlayerControllerScript::HandleShooting() {
 }
 
 /// <summary>
-/// 自機の銃口位置からマウス照準方向（カメラレイ交点）へ向けて弾丸を射出し、
-/// 射撃反動によるカメラシェイクを誘発します。
+/// 画面のレティクル（マウス照準）の視線軸から前方へ向けて弾丸を射出し、
+/// 射撃反動によるカメラシェイクおよび銃モデルのリコイルを誘発します。
 /// 
 /// 【照準計算アルゴリズム】
 /// 1. ゲームビューのウィンドウサイズと解像度からマウス座標をクライアント空間へ補正。
-/// 2. アクティブカメラからマウス座標を通る3D視線レイ（rayStart, rayDir）を生成。
-/// 3. レイの前方（kRayTargetDistance）を着弾目標点（targetPos）として設定。
-/// 4. 自機前方の銃口座標（muzzlePos）から目標点へのベクトルを正規化し、弾丸の初速ベクトルを決定。
+/// 2. アクティブカメラからマウス座標（レティクル中心）を通る3D視線レイ（rayStart, rayDir）を生成。
+/// 3. カメラ前方（kBulletCameraForwardOffset）から、レティクルが指す方向ベクトル（rayDir）に向けて直進射出。
+/// 4. 銃口オフセットによる左右の視差（パララックス）を完全に解消し、レティクル中央へ100%正確に着弾。
 /// 5. 弾丸プレハブ（Bullet）を実体化し、パラメータを設定。
 /// </summary>
 void PlayerControllerScript::Fire() {
@@ -194,25 +198,48 @@ void PlayerControllerScript::Fire() {
     }
     shotIntervalTimer_ = shotInterval_;
 
-    // 銃口先端の正確な3Dワールド座標およびレティクルのエイム目標地点を取得
-    Vector3 muzzlePos = GetMuzzleWorldPosition();
-    Vector3 targetPos = GetAimTargetPosition();
+    // レティクルが指す正確な3Dワールド照準レイ（起点および方向ベクトル）を計算
+    auto* cameraMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = cameraMgr ? cameraMgr->GetActiveCamera() : nullptr;
 
-    // 銃口（muzzlePos）からエイム目標地点（targetPos）への発射ベクトルを計算
+    Vector3 bulletSpawnPos = GetMuzzleWorldPosition();
     Vector3 bulletDir = direction_;
-    Vector3 diff = {
-        targetPos.x - muzzlePos.x,
-        targetPos.y - muzzlePos.y,
-        targetPos.z - muzzlePos.z
-    };
-    float lenSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
-    if (lenSq > 0.0001f) {
-        float invLen = 1.0f / std::sqrt(lenSq);
-        bulletDir = { diff.x * invLen, diff.y * invLen, diff.z * invLen };
+
+    if (camera) {
+        float clientW = static_cast<float>(WindowApp::kClientWidth);
+        float clientH = static_cast<float>(WindowApp::kClientHeight);
+        Vector2 viewSize = GameViewWindow::GetGameViewSize();
+        Vector2 mousePos = GameViewWindow::GetMousePosition();
+
+        Vector2 scaledMousePos = mousePos;
+        if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
+            scaledMousePos.x = (mousePos.x / viewSize.x) * clientW;
+            scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
+        }
+
+        Vector3 rayStart = camera->GetPosition();
+        Vector3 rayDir = direction_;
+        camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
+
+        bulletDir = rayDir;
+        // レティクル中心軸（カメラ前方）から発射し、視差による左右のズレを完全解消
+        bulletSpawnPos = {
+            rayStart.x + rayDir.x * kBulletCameraForwardOffset,
+            rayStart.y + rayDir.y * kBulletCameraForwardOffset,
+            rayStart.z + rayDir.z * kBulletCameraForwardOffset
+        };
+    } else {
+        Vector3 targetPos = GetAimTargetPosition();
+        Vector3 diff = { targetPos.x - bulletSpawnPos.x, targetPos.y - bulletSpawnPos.y, targetPos.z - bulletSpawnPos.z };
+        float lenSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+        if (lenSq > kEpsilon) {
+            float invLen = 1.0f / std::sqrt(lenSq);
+            bulletDir = { diff.x * invLen, diff.y * invLen, diff.z * invLen };
+        }
     }
 
-    // プレハブからBulletを実体化（銃口位置から射出！）
-    GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", muzzlePos);
+    // プレハブからBulletを実体化（レティクル中心から奥へ直進射出！）
+    GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", bulletSpawnPos);
     if (bulletObj) {
         auto* bulletScript = bulletObj->GetComponent<BulletScript>();
         if (bulletScript) {
@@ -232,9 +259,11 @@ void PlayerControllerScript::Fire() {
     // 銃手持ちモデルの反動（キックバック）演出をトリガー
     gunRecoilProgress_ = 1.0f;
 
-    // マズルフラッシュ点火（銃口先端の瞬間閃光）
-    muzzleFlashTimer_ = kMuzzleFlashDuration;
-    muzzleFlashRotation_ = static_cast<float>(rand() % 360) * 0.0174533f;
+    // マズルフラッシュ点火（銃口先端の瞬間閃光、銃が見えている時のみ）
+    if (isGunVisible_) {
+        muzzleFlashTimer_ = kMuzzleFlashDuration;
+        muzzleFlashRotation_ = static_cast<float>(rand() % 360) * 0.0174533f;
+    }
 
     // 射撃効果音 (SE) の再生
     if (auto* audio = Audio::GetInstance()) {
@@ -390,6 +419,7 @@ void PlayerControllerScript::OnInspectorGUI() {
 
     ImGui::Separator();
     ImGui::TextColored(ImVec4(0.8f, 0.4f, 1.0f, 1.0f), "【手持ち武器 (Gun Viewmodel) 設定】");
+    ImGui::Checkbox("銃表示状態##IsGunVisible", &isGunVisible_);
     ImGui::DragFloat3("銃オフセット(右/下/前)##GunOffset", &gunOffset_.x, 0.01f, -2.0f, 2.0f, "%.2f m");
     ImGui::DragFloat3("銃回転角##GunRotation", &gunRotation_.x, 0.02f, -3.14f, 3.14f, "%.2f rad");
     ImGui::DragFloat3("銃スケール##GunScale", &gunScale_.x, 0.01f, 0.01f, 5.0f, "%.2f");
@@ -451,6 +481,9 @@ void PlayerControllerScript::UpdateGunTransform() {
     Vector3 camPos = camera->GetPosition();
     Vector3 camRot = camera->GetRotation();
 
+    // 銃は常時表示（APEXスタイルの全周交戦のため画面下に隠さない）
+    isGunVisible_ = true;
+
     // カメラ回転行列から右・上・前基底ベクトルを計算
     Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
     Vector3 camRight   = { rotMat.m[0][0], rotMat.m[0][1], rotMat.m[0][2] };
@@ -468,20 +501,30 @@ void PlayerControllerScript::UpdateGunTransform() {
         camPos.z + camRight.z * gunOffset_.x + camUp.z * gunOffset_.y + camForward.z * (gunOffset_.z + recoilKick)
     };
 
-    // レティクルのエイム目標地点に向けて銃を傾ける（エイム指向IK）
-    Vector3 targetPos = GetAimTargetPosition();
-    Vector3 aimDiff = {
-        targetPos.x - gunWorldPos.x,
-        targetPos.y - gunWorldPos.y,
-        targetPos.z - gunWorldPos.z
-    };
-    float hDist = std::sqrt(aimDiff.x * aimDiff.x + aimDiff.z * aimDiff.z);
-    float aimYaw = std::atan2(aimDiff.x, aimDiff.z);
-    float aimPitch = std::atan2(-aimDiff.y, hDist);
+    // 3. 弾の撃つ方向（レティクル視線レイ rayDir）と銃の向きを完全一致化
+    float clientW = static_cast<float>(WindowApp::kClientWidth);
+    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    Vector2 viewSize = GameViewWindow::GetGameViewSize();
+    Vector2 mousePos = GameViewWindow::GetMousePosition();
 
+    Vector2 scaledMousePos = mousePos;
+    if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
+        scaledMousePos.x = (mousePos.x / viewSize.x) * clientW;
+        scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
+    }
+
+    Vector3 rayStart = camPos;
+    Vector3 rayDir = direction_;
+    camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
+
+    float hLen = std::sqrt(rayDir.x * rayDir.x + rayDir.z * rayDir.z);
+    float bulletYaw = std::atan2(rayDir.x, rayDir.z);
+    float bulletPitch = -std::atan2(rayDir.y, hLen > kEpsilon ? hLen : kEpsilon);
+
+    // 銃の回転を弾丸の射出方向（bulletPitch, bulletYaw）と完全同期
     Vector3 gunWorldRot = {
-        aimPitch + gunRotation_.x + recoilPitch,
-        aimYaw + gunRotation_.y,
+        bulletPitch + gunRotation_.x + recoilPitch,
+        bulletYaw + gunRotation_.y,
         camRot.z + gunRotation_.z
     };
 
@@ -491,15 +534,14 @@ void PlayerControllerScript::UpdateGunTransform() {
     gunModel_->SetColor(gunColor_);
     gunModel_->Update();
 
-    // マズルフラッシュのTransform更新（銃口の真先・前方に突き出して小型配置）
-    if (muzzleFlashDisc_ && muzzleFlashTimer_ > 0) {
+    // マズルフラッシュのTransform更新（銃が表示されている時のみ）
+    if (muzzleFlashDisc_ && muzzleFlashTimer_ > 0 && isGunVisible_) {
         Vector3 muzzleWorldPos = GetMuzzleWorldPosition();
 
-        // 銃の向いている前方方向（gunWorldRotに基づく前方単位ベクトル）
+        // 銃の向いている前方方向
         Matrix4x4 gunRotMat = Math::MakeRotateMatrix(gunWorldRot.x, gunWorldRot.y, gunWorldRot.z);
         Vector3 gunForward = { gunRotMat.m[2][0], gunRotMat.m[2][1], gunRotMat.m[2][2] };
 
-        // 銃口の真先に突き出した位置へ配置
         Vector3 flashPos = {
             muzzleWorldPos.x + gunForward.x * muzzleFlashForwardOffset_,
             muzzleWorldPos.y + gunForward.y * muzzleFlashForwardOffset_,
@@ -519,7 +561,6 @@ Vector3 PlayerControllerScript::GetMuzzleWorldPosition() const {
     auto* cameraMgr = CameraResource::GetCameraManager();
     BaseCamera* camera = cameraMgr ? cameraMgr->GetActiveCamera() : nullptr;
     if (!camera) {
-        // カメラ未初期化時の安全なフォールバック
         if (owner_) {
             Vector3 pos = owner_->GetPosition();
             return { pos.x, pos.y + kDefaultPlayerMuzzleHeight, pos.z };
@@ -530,44 +571,49 @@ Vector3 PlayerControllerScript::GetMuzzleWorldPosition() const {
     Vector3 camPos = camera->GetPosition();
     Vector3 camRot = camera->GetRotation();
 
-    // カメラ回転行列から右・上・前基底ベクトルを計算
     Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
     Vector3 camRight   = { rotMat.m[0][0], rotMat.m[0][1], rotMat.m[0][2] };
     Vector3 camUp      = { rotMat.m[1][0], rotMat.m[1][1], rotMat.m[1][2] };
     Vector3 camForward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
 
-    // リコイルによる銃の手前への後退および銃口の跳ね上がり
     float recoilKick = gunRecoilProgress_ * kGunRecoilKickbackZ;
     float recoilPitch = gunRecoilProgress_ * kGunRecoilPitch;
 
-    // カメラローカル座標からワールド座標へ変換
     Vector3 gunWorldPos = {
         camPos.x + camRight.x * gunOffset_.x + camUp.x * gunOffset_.y + camForward.x * (gunOffset_.z + recoilKick),
         camPos.y + camRight.y * gunOffset_.x + camUp.y * gunOffset_.y + camForward.y * (gunOffset_.z + recoilKick),
         camPos.z + camRight.z * gunOffset_.x + camUp.z * gunOffset_.y + camForward.z * (gunOffset_.z + recoilKick)
     };
 
-    // レティクルのエイム目標地点に向けて銃を傾ける（エイム指向IK）
-    Vector3 targetPos = GetAimTargetPosition();
-    Vector3 aimDiff = {
-        targetPos.x - gunWorldPos.x,
-        targetPos.y - gunWorldPos.y,
-        targetPos.z - gunWorldPos.z
-    };
-    float hDist = std::sqrt(aimDiff.x * aimDiff.x + aimDiff.z * aimDiff.z);
-    float aimYaw = std::atan2(aimDiff.x, aimDiff.z);
-    float aimPitch = std::atan2(-aimDiff.y, hDist);
+    float clientW = static_cast<float>(WindowApp::kClientWidth);
+    float clientH = static_cast<float>(WindowApp::kClientHeight);
+    Vector2 viewSize = GameViewWindow::GetGameViewSize();
+    Vector2 mousePos = GameViewWindow::GetMousePosition();
+
+    Vector2 scaledMousePos = mousePos;
+    if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
+        scaledMousePos.x = (mousePos.x / viewSize.x) * clientW;
+        scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
+    }
+
+    Vector3 rayStart = camPos;
+    Vector3 rayDir = direction_;
+    camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
+
+    float hLen = std::sqrt(rayDir.x * rayDir.x + rayDir.z * rayDir.z);
+    float bulletYaw = std::atan2(rayDir.x, rayDir.z);
+    float bulletPitch = -std::atan2(rayDir.y, hLen > kEpsilon ? hLen : kEpsilon);
 
     Vector3 gunWorldRot = {
-        aimPitch + gunRotation_.x + recoilPitch,
-        aimYaw + gunRotation_.y,
+        bulletPitch + gunRotation_.x + recoilPitch,
+        bulletYaw + gunRotation_.y,
         camRot.z + gunRotation_.z
     };
 
     // 銃モデルの完全なワールドアフィン変換行列（Scale * Rotate * Translate）を構築
     Matrix4x4 gunWorldMatrix = Math::MakeAffineMatrix(gunScale_, gunWorldRot, gunWorldPos);
 
-    // gun.obj の銃口先端ローカル座標（銃身外側へ抜けた位置）をワールド座標へ射影変換
+    // gun.obj の銃口先端ローカル座標をワールド座標へ射影変換
     return Math::Transform(gunWorldMatrix, gunMuzzleOffset_);
 }
 
@@ -601,7 +647,7 @@ Vector3 PlayerControllerScript::GetAimTargetPosition() const {
 
     Vector3 rayStart = camPos;
     Vector3 rayDir = direction_;
-    camera->CreateRay(scaledMousePos, clientW, clientH, rayStart, rayDir);
+    camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
 
     // 照準レイ前方 zeroInDistance_ をエイム目標地点の基準とする
     Vector3 rawTargetPos = {
@@ -610,7 +656,7 @@ Vector3 PlayerControllerScript::GetAimTargetPosition() const {
         rayStart.z + rayDir.z * zeroInDistance_
     };
 
-    // カメラ基準の左・上方向バイアス補正を加算（レティクル中心への完全アライメント）
+    // カメラ基準のオフセット補正（デフォルト 0 でレティクル中心軸と完全一致）
     return {
         rawTargetPos.x + camRight.x * aimCorrection_.x + camUp.x * aimCorrection_.y,
         rawTargetPos.y + camRight.y * aimCorrection_.x + camUp.y * aimCorrection_.y,
@@ -621,15 +667,15 @@ Vector3 PlayerControllerScript::GetAimTargetPosition() const {
 void PlayerControllerScript::Draw() {
     if (isDead_ || isMelting_) return;
 
-    // 走行戦闘中（isAutoMoving_ == true）の一人称視点時にのみGunを手持ち描画
-    if (!isAutoMoving_) return;
+    // 走行戦闘中（isAutoMoving_ == true）の一人称視点時かつ銃が表示状態の時のみ描画
+    if (!isAutoMoving_ || !isGunVisible_) return;
 
     EnsureGunModel();
     if (gunModel_) {
         gunModel_->Draw(kGunModelKey, "white");
     }
 
-    // マズルフラッシュ描画（射撃瞬間のみ点灯）
+    // マズルフラッシュ描画（射撃瞬間のみ点灯、かつ銃が見えている時）
     if (muzzleFlashDisc_ && muzzleFlashTimer_ > 0) {
         muzzleFlashDisc_->Draw("white");
     }

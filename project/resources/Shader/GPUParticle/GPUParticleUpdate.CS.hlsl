@@ -68,6 +68,23 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float rL = RandFloat(seed, 200u);
         float3 rPosOffset = (RandFloat3(seed, 300u) - 0.5f) * 0.3f;
 
+        float3 initPos = gEmitter.emitterPos + rPosOffset;
+        float3 initVel = float3(0.0f, 0.0f, 0.0f);
+
+        if (gEmitter.shapeType == 1u && gEmitter.shapePointCount > 0u)
+        {
+            uint ptIdx = particleIndex % gEmitter.shapePointCount;
+            float2 pt = gShapePoints[ptIdx].xy;
+            float3 emitDir = pt.x * gEmitter.emitterRight + pt.y * gEmitter.emitterUp;
+
+            // 火花らしい微細な速度バラツキ（90%〜110%）
+            float speedVariation = 0.90f + 0.20f * RandFloat(seed, 260u);
+            initPos = gEmitter.emitterPos;
+            initVel = emitDir * (gEmitter.burstSpeed * 2.2f) * speedVariation;
+        }
+        else
+        {
+
         // --- 花火用 360度球面均等放射ベクトルの計算 ---
         float phi = RandFloat(seed, 101u) * 6.2831853f; // 0 〜 2π
         float cosTheta = RandFloat(seed, 102u) * 2.0f - 1.0f; // -1 〜 1
@@ -77,6 +94,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float minSpeed = length(gEmitter.minVelocity);
         float maxSpeed = max(length(gEmitter.maxVelocity), minSpeed + 0.1f);
         float speed = lerp(minSpeed, maxSpeed, RandFloat(seed, 103u));
+            initVel = sphereDir * speed;
+        }
 
         // 花火のバーストカラー（シード値に応じてゴールド、シアン、マゼンタ、ルビー、ライムグリーン等に彩り分け）
         static const float4 kFireworkPalette[5] = {
@@ -87,10 +106,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float4(0.9f, 0.4f, 1.0f, 1.0f)    // エレクトリックパープル (Purple)
         };
         uint paletteIdx = (gEmitter.randomSeed / 31u + particleIndex / 500u) % 5u;
-        float4 baseColor = kFireworkPalette[paletteIdx];
+        float4 baseColor = (gEmitter.shapeType == 1u) ? gEmitter.startColor : kFireworkPalette[paletteIdx];
 
-        p.position = gEmitter.emitterPos + rPosOffset;
-        p.velocity = sphereDir * speed;
+        p.position = initPos;
+        p.velocity = initVel;
         p.lifeTime = lerp(gEmitter.minLifeTime, gEmitter.maxLifeTime, rL);
         p.currentTime = 0.0f;
         p.scale = gEmitter.startScale;
@@ -118,6 +137,48 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
         else
         {
+            if (gEmitter.shapeType == 1u)
+            {
+                // 自然な空気抵抗（弾けて広がった後に滑らかに減速）
+                p.velocity *= (1.0f - saturate(1.8f * gEmitter.deltaTime));
+
+                // 最初から自然に重力落下（粒子ごとの重力差でパラパラと散り落ちる）
+                uint seed = gEmitter.randomSeed + particleIndex * 19u;
+                float fallRate = 0.8f + 0.4f * RandFloat(seed, 601u);
+                p.velocity.y -= gEmitter.gravity * fallRate * gEmitter.deltaTime;
+
+                // わずかな火花の揺らぎ
+                float sway = sin(p.currentTime * 16.0f + float(particleIndex) * 1.7f) * 0.2f;
+                p.velocity.x += sway * gEmitter.deltaTime;
+
+                // 位置更新
+                p.position += p.velocity * gEmitter.deltaTime;
+
+                // 寿命進行度
+                float t = saturate(p.currentTime / max(p.lifeTime, 0.0001f));
+                p.scale = lerp(gEmitter.startScale, gEmitter.endScale, t);
+
+                // 火花の熱変化（白熱 -> 設定色 -> 燃え尽きる赤橙）
+                float4 sparkColor;
+                if (t < 0.20f)
+                {
+                    sparkColor = lerp(float4(2.0f, 1.9f, 1.5f, 1.0f), gEmitter.startColor, t / 0.20f);
+                }
+                else
+                {
+                    sparkColor = lerp(gEmitter.startColor, gEmitter.endColor, (t - 0.20f) / 0.80f);
+                }
+                p.color = sparkColor;
+                p.color.a = saturate(1.0f - t);
+
+                // パチパチと瞬くスパークル（火花感）
+                float sparkFreq = 36.0f;
+                float twinkle = sin(p.currentTime * sparkFreq + float(particleIndex) * 2.37f);
+                float flash = (twinkle > 0.25f) ? 1.5f : 0.5f;
+                p.color.rgb *= flash;
+            }
+            else
+            {
             // 空気抵抗による自然な減速（爆発直後は高速、次第にふわりと舞う）
             p.velocity *= (1.0f - saturate(1.6f * gEmitter.deltaTime));
 
@@ -138,7 +199,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
             if (t > 0.45f)
             {
                 float twinkle = sin(p.currentTime * 32.0f + float(particleIndex)) * 0.4f + 0.6f;
+
                 p.color.rgb *= twinkle;
+            }
             }
         }
     }

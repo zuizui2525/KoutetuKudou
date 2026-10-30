@@ -18,7 +18,7 @@
           "far_z": 1000,
           "is_main_camera": true,
           "use_target": true,
-          "target": [0, 2, 0]
+          "target": [0, 0, 0]
         },
         {
           "type": "CameraOrbit",
@@ -88,6 +88,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "skyboxTex",
           "color": [0.45, 0.48, 0.52, 1],
           "lighting_mode": 2,
@@ -118,6 +121,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "skyboxTex",
           "color": [0.75, 0.45, 0.18, 1],
           "lighting_mode": 2,
@@ -148,6 +154,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "skyboxTex",
           "color": [0.35, 0.5, 0.72, 1],
           "lighting_mode": 2,
@@ -178,6 +187,9 @@
           "mesh_type": 0,
           "texture_key": "white",
           "model_key": "cube",
+          "animation_key": "",
+          "is_animation_playing": false,
+          "show_skeleton": true,
           "env_map_key": "skyboxTex",
           "color": [0.15, 0.16, 0.18, 1],
           "lighting_mode": 2,
@@ -309,6 +321,27 @@
           "volume": 0.5,
           "loop": true,
           "auto_play": true
+        }
+      ]
+    },
+    {
+      "uuid": "086589d2-67e3-4497-9d50-c9a36d38341d",
+      "name": "Skydome",
+      "visible": true,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "components": [
+        {
+          "type": "ScriptComponent",
+          "script_name": "SkydomeScript",
+          "target_uuid": "",
+          "rotation_speed": 0.002,
+          "color": [1, 1, 1, 1],
+          "model_key": "skydome",
+          "texture_key": "skydome"
         }
       ]
     }

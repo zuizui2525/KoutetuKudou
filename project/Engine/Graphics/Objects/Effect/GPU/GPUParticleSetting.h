@@ -255,8 +255,33 @@ public:
     /// <summary>
     /// 全ビルトインプリセット名一覧の取得
     /// </summary>
+    /// <summary>
+    /// 文字花火 (TextFirework): 上空でパッと文字の形に展開し、きらめきながら消える祝砲花火
+    /// </summary>
+    static GPUParticleSetting CreateTextFirework() {
+        GPUParticleSetting s;
+        s.name = "TextFirework";
+        s.textureKey = "circle";
+        s.emitterPosition = { 0.0f, 30.0f, 0.0f };
+        s.startScale = { 0.20f, 0.20f, 0.20f };
+        s.endScale = { 0.04f, 0.04f, 0.04f };
+        s.startColor = { 1.0f, 0.85f, 0.3f, 1.0f }; // 黄金色
+        s.endColor = { 1.0f, 0.2f, 0.0f, 0.0f };   // 朱色フェード
+        s.minVelocity = { -1.0f, -0.5f, -1.0f };
+        s.maxVelocity = {  1.0f,  1.0f,  1.0f };
+        s.minLifeTime = 0.6f;
+        s.maxLifeTime = 1.0f;
+        s.gravity = 2.2f;
+        s.killAtY = 0.0f;
+        s.spawnRatePerSec = 0.0f;
+        s.isAutoSpawning = false;
+        s.burstCount = 2000;
+        s.blendMode = 1; // Add
+        return s;
+    }
+
     static std::vector<std::string> GetPresetNames() {
-        return { "BulletTrail", "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks" };
+        return { "BulletTrail", "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks", "TextFirework" };
     }
 
     /// <summary>
@@ -271,6 +296,7 @@ public:
         if (name == "Snow") return CreateSnow();
         if (name == "MagicAura") return CreateMagicAura();
         if (name == "Fireworks") return CreateFireworks();
+        if (name == "TextFirework") return CreateTextFirework();
         return CreateBulletTrail(); // デフォルト
     }
 

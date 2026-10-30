@@ -621,6 +621,11 @@ void GamePhaseControllerScript::OnInspectorGUI() {
             ImGui::TextDisabled("画面上をドラッグしてスタートからゴールまで線を引いてください。");
         }
     } else {
+        ImGui::Separator();
+        ImGui::TextColored(kSubHeaderColor, "【HUD設定】");
+        ImGui::Checkbox("上部方位コンパス表示##EnableCompass", &isCompassEnabled_);
+        ImGui::Spacing();
+
         if (ImGui::Button("ルート描画に戻る##BackToDrawBtn")) {
             TransitionToDraw();
         }
@@ -937,6 +942,68 @@ void GamePhaseControllerScript::Init2DObjects() {
     SceneHierarchy::GetInstance()->Unregister(flashSprite_.get());
     flashSprite_->SetSize(kRenderWidth, kRenderHeight);
     flashSprite_->GetMaterialData()->color = { 1.0f, 1.0f, 1.0f, 0.0f };
+
+    // 13. 画面上部コンパスHUD（方位バー）用パーツ (DirectX 12)
+    compassBgSprite_ = std::make_unique<SpriteObject>();
+    compassBgSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(compassBgSprite_.get());
+    compassBgSprite_->SetSize(kCompassBarWidth, kCompassBarHeight);
+    compassBgSprite_->GetMaterialData()->color = { 10.0f / 255.0f, 16.0f / 255.0f, 26.0f / 255.0f, 210.0f / 255.0f };
+
+    for (int i = 0; i < 4; ++i) {
+        compassBorders_[i] = std::make_unique<Line2DObject>();
+        compassBorders_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(compassBorders_[i].get());
+        compassBorders_[i]->SetThickness(1.5f);
+        compassBorders_[i]->GetMaterialData()->color = { 35.0f / 255.0f, 170.0f / 255.0f, 245.0f / 255.0f, 200.0f / 255.0f };
+    }
+
+    compassCenterMarker_ = std::make_unique<Line2DObject>();
+    compassCenterMarker_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(compassCenterMarker_.get());
+    compassCenterMarker_->SetThickness(2.5f);
+    compassCenterMarker_->GetMaterialData()->color = { 40.0f / 255.0f, 240.0f / 255.0f, 255.0f / 255.0f, 1.0f };
+
+    compassTickLines_.clear();
+    compassTickLines_.reserve(kCompassTickPoolSize);
+    for (int i = 0; i < kCompassTickPoolSize; ++i) {
+        auto line = std::make_unique<Line2DObject>();
+        line->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(line.get());
+        line->SetThickness(1.0f);
+        line->GetMaterialData()->color = { 140.0f / 255.0f, 180.0f / 255.0f, 210.0f / 255.0f, 180.0f / 255.0f };
+        compassTickLines_.push_back(std::move(line));
+    }
+
+    struct LabelDef { float angle; const char* text; Vector4 color; };
+    const LabelDef kLabelDefs[] = {
+        { 0.0f,    "▲ FWD",  { 40.0f / 255.0f, 240.0f / 255.0f, 255.0f / 255.0f, 1.0f } },
+        { 45.0f,   "R45",    { 200.0f / 255.0f, 220.0f / 255.0f, 240.0f / 255.0f, 0.9f } },
+        { 90.0f,   "R90",    { 230.0f / 255.0f, 240.0f / 255.0f, 255.0f / 255.0f, 1.0f } },
+        { 135.0f,  "R135",   { 200.0f / 255.0f, 220.0f / 255.0f, 240.0f / 255.0f, 0.9f } },
+        { 180.0f,  "▼ BACK", { 255.0f / 255.0f, 140.0f / 255.0f, 40.0f / 255.0f, 1.0f } },
+        { -135.0f, "L135",   { 200.0f / 255.0f, 220.0f / 255.0f, 240.0f / 255.0f, 0.9f } },
+        { -90.0f,  "L90",    { 230.0f / 255.0f, 240.0f / 255.0f, 255.0f / 255.0f, 1.0f } },
+        { -45.0f,  "L45",    { 200.0f / 255.0f, 220.0f / 255.0f, 240.0f / 255.0f, 0.9f } }
+    };
+
+    compassLabels_.clear();
+    for (const auto& def : kLabelDefs) {
+        CompassLabelItem item;
+        item.angleDeg = def.angle;
+        item.text = def.text;
+        item.color = def.color;
+        item.textObj = std::make_unique<TextObject2D>();
+        item.textObj->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(item.textObj.get());
+        item.textGen = std::make_unique<TextTextureGenerator>();
+        if (item.textGen->Generate(def.text, "Yu Gothic UI", 11.0f, 1, true, false, false)) {
+            item.textWidth = static_cast<float>(item.textGen->GetWidth());
+            item.textHeight = static_cast<float>(item.textGen->GetHeight());
+            item.textObj->SetSize(item.textWidth, item.textHeight);
+        }
+        compassLabels_.push_back(std::move(item));
+    }
 
     is2DInitialized_ = true;
 }
@@ -1423,7 +1490,7 @@ void GamePhaseControllerScript::RenderPlayHUDDirectX() {
 
     // 3. エリア進行度パネル描画（画面上部中央）
     float areaPanelX = (kRenderWidth - kHudAreaPanelWidth) * 0.5f;
-    float areaPanelY = kHudAreaMarginTop;
+    float areaPanelY = isCompassEnabled_ ? (kCompassBarY + kCompassBarHeight + 6.0f) : kHudAreaMarginTop;
 
     hudAreaBgSprite_->SetPosition({ areaPanelX, areaPanelY, 0.0f });
     hudAreaBgSprite_->SetSize(kHudAreaPanelWidth, kHudAreaPanelHeight);
@@ -1453,6 +1520,106 @@ void GamePhaseControllerScript::RenderPlayHUDDirectX() {
     hudAreaTextObj_->SetColor(kDxTextColor);
     hudAreaTextObj_->Update();
     hudAreaTextObj_->Draw(hudAreaTextGen_->GetGpuHandle(), true);
+
+    // 4. 画面上部コンパスHUD（方位バー）の描画
+    if (isCompassEnabled_) {
+        RenderCompassDirectX();
+    }
+}
+
+/// <summary>
+/// 走行戦闘中に画面上部中央へ水平スクロール式方位バー（自機進行方向基準のコンパスHUD）を描画します。
+/// 自機の進行方向を「▲ FWD (0°)」とし、カメラの向いている角度に応じて目盛りと方位ラベルがリアルタイムにスクロールします。
+/// </summary>
+void GamePhaseControllerScript::RenderCompassDirectX() {
+    auto* cameraMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = cameraMgr ? cameraMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    // 自機進行方向に対するカメラの相対Yaw角を算出
+    Vector3 dir = playerScript_ ? playerScript_->GetDirection() : Vector3{ 0.0f, 0.0f, 1.0f };
+    float baseYaw = std::atan2(dir.x, dir.z);
+    float camYaw = camera->GetRotation().y;
+    float diffYaw = camYaw - baseYaw;
+
+    constexpr float kPi = 3.1415926535f;
+    constexpr float kTwoPi = 6.283185307f;
+    while (diffYaw > kPi) diffYaw -= kTwoPi;
+    while (diffYaw < -kPi) diffYaw += kTwoPi;
+    float relAngleDeg = diffYaw * (180.0f / kPi);
+
+    // コンパスバーのスクリーン座標
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    float centerX = kRenderWidth * 0.5f;
+    float barLeft = centerX - kCompassBarWidth * 0.5f;
+    float barRight = centerX + kCompassBarWidth * 0.5f;
+    float barTop = kCompassBarY;
+    float barBottom = barTop + kCompassBarHeight;
+
+    // 1. 背景描画
+    if (compassBgSprite_) {
+        compassBgSprite_->SetPosition({ barLeft, barTop, 0.0f });
+        compassBgSprite_->SetSize(kCompassBarWidth, kCompassBarHeight);
+        compassBgSprite_->Update();
+        compassBgSprite_->Draw("white", true);
+    }
+
+    // 2. 枠線4辺描画
+    if (compassBorders_[0]) {
+        compassBorders_[0]->SetPoints({ barLeft, barTop }, { barRight, barTop });
+        compassBorders_[1]->SetPoints({ barLeft, barBottom }, { barRight, barBottom });
+        compassBorders_[2]->SetPoints({ barLeft, barTop }, { barLeft, barBottom });
+        compassBorders_[3]->SetPoints({ barRight, barTop }, { barRight, barBottom });
+        for (int i = 0; i < 4; ++i) {
+            compassBorders_[i]->Update();
+            compassBorders_[i]->Draw("white", true);
+        }
+    }
+
+    // 3. 目盛り線描画 (15度刻み)
+    float pxPerDegree = kCompassBarWidth / kCompassFovDegrees;
+    size_t tickIndex = 0;
+    for (int deg = -180; deg < 180; deg += 15) {
+        float delta = static_cast<float>(deg) - relAngleDeg;
+        while (delta > 180.0f) delta -= 360.0f;
+        while (delta < -180.0f) delta += 360.0f;
+
+        float screenX = centerX + delta * pxPerDegree;
+        if (screenX >= barLeft + 4.0f && screenX <= barRight - 4.0f) {
+            if (tickIndex < compassTickLines_.size()) {
+                bool isMajor = (deg % 45 == 0);
+                float tickH = isMajor ? kCompassTickMajorHeight : kCompassTickMinorHeight;
+                auto& line = compassTickLines_[tickIndex++];
+                line->SetPoints({ screenX, barBottom - tickH }, { screenX, barBottom });
+                line->Update();
+                line->Draw("white", true);
+            }
+        }
+    }
+
+    // 4. 方位ラベル描画 (8方位)
+    for (auto& item : compassLabels_) {
+        float delta = item.angleDeg - relAngleDeg;
+        while (delta > 180.0f) delta -= 360.0f;
+        while (delta < -180.0f) delta += 360.0f;
+
+        float screenX = centerX + delta * pxPerDegree;
+        if (screenX >= barLeft + 16.0f && screenX <= barRight - 16.0f) {
+            float textX = screenX - item.textWidth * 0.5f;
+            float textY = barTop + 2.0f;
+            item.textObj->SetPosition({ textX, textY, 0.0f });
+            item.textObj->SetColor(item.color);
+            item.textObj->Update();
+            item.textObj->Draw(item.textGen->GetGpuHandle(), true);
+        }
+    }
+
+    // 5. センターマーカー描画 (中央視線インジケーター)
+    if (compassCenterMarker_) {
+        compassCenterMarker_->SetPoints({ centerX, barTop }, { centerX, barTop + 8.0f });
+        compassCenterMarker_->Update();
+        compassCenterMarker_->Draw("white", true);
+    }
 }
 
 /// <summary>

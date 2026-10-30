@@ -303,6 +303,10 @@ void GameObject::Ensure3DPosition(bool force) {
 void GameObject::Update() {
     if (!isVisible_) return;
 
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
+
     // 全アクティブコンポーネントの更新（スクリプト等が位置や回転を変更する可能性がある）
     for (auto& comp : components_) {
         if (comp && comp->IsActive()) {
@@ -319,6 +323,10 @@ void GameObject::Update() {
 void GameObject::UpdateEditor() {
     if (!isVisible_) return;
 
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
+
     // エディタ編集時も位置やテクスチャの同期が必要なレンダラー系のみ更新（アニメーション系はスキップ）
     for (auto& comp : components_) {
         if (comp && comp->IsActive()) {
@@ -330,6 +338,12 @@ void GameObject::UpdateEditor() {
                 mr->Update();
             } else if (auto* sr = dynamic_cast<SpriteRendererComponent*>(comp.get())) {
                 sr->Update();
+            } else if (auto* gpuPart = dynamic_cast<GPUParticleComponent*>(comp.get())) {
+                gpuPart->Update();
+            } else if (auto* cam = dynamic_cast<CameraComponent*>(comp.get())) {
+                cam->Update();
+            } else if (auto* light = dynamic_cast<LightComponent*>(comp.get())) {
+                light->Update();
             }
         }
     }
@@ -341,6 +355,10 @@ void GameObject::UpdateEditor() {
 
 void GameObject::Draw() {
     if (!isVisible_) return;
+
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 
     // 描画直前に必ず最新の行列に更新されていることを保証
     if (isMatrixDirty_) {
@@ -357,6 +375,10 @@ void GameObject::Draw() {
 
 void GameObject::Draw2D() {
     if (!isVisible_) return;
+
+    if (isMatrixDirty_) {
+        UpdateMatrix();
+    }
 
     if (isMatrixDirty_) {
         UpdateMatrix();
@@ -624,10 +646,10 @@ void GameObject::DrawInspector() {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Effects")) {
-            if (ImGui::MenuItem("ParticleEffect (エフェクト発生)")) {
+            if (false) {
                 AddComponent<ParticleEffectComponent>();
             }
-            if (ImGui::MenuItem("GPUParticle (GPUパーティクル発生)")) {
+            if (ImGui::MenuItem("GPUParticle (GPUパーティクル / エフェクト)")) {
                 AddComponent<GPUParticleComponent>();
             }
             ImGui::EndMenu();

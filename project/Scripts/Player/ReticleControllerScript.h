@@ -3,7 +3,7 @@
 #include "Engine/Math/MathStructs.h"
 
 /// <summary>
-/// マウスカーソルに追従する2D照準（レティクル）制御スクリプト
+/// 画面中央固定（APEXスタイル）およびマウスカーソル追従対応の2D照準（レティクル）制御スクリプト
 /// </summary>
 class ReticleControllerScript : public ScriptComponent {
 public:
@@ -30,10 +30,14 @@ public:
     /// <returns>レティクルサイズ（px）</returns>
     float GetReticleSize() const { return reticleSize_; }
 
+    void SetLockToCenter(bool lock) { isLockedToCenter_ = lock; }
+    bool IsLockedToCenter() const { return isLockedToCenter_; }
+
 private:
     static constexpr float kDefaultReticleSize = 128.0f;
     static constexpr float kDefaultHalfSize = 64.0f;
 
     float reticleSize_ = kDefaultReticleSize;
     float halfSize_ = kDefaultHalfSize;
+    bool isLockedToCenter_ = true; // APEXスタイル: 画面中央固定
 };

@@ -81,6 +81,7 @@
     <ClCompile Include="Engine\Component\ScriptRegistry.cpp" />
     <ClCompile Include="Engine\Component\PrefabManager.cpp" />
     <ClCompile Include="Engine\Graphics\Text\TextTextureGenerator.cpp" />
+    <ClCompile Include="Engine\Graphics\Text\TextShapeSampler.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\2d\Text\TextObject2D.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Text\TextObject3D.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\3d\Sphere\SphereObject.cpp" />
@@ -313,6 +314,7 @@
     <ClInclude Include="Engine\Component\ScriptRegistry.h" />
     <ClInclude Include="Engine\Component\PrefabManager.h" />
     <ClInclude Include="Engine\Graphics\Text\TextTextureGenerator.h" />
+    <ClInclude Include="Engine\Graphics\Text\TextShapeSampler.h" />
     <ClInclude Include="Engine\Graphics\Objects\2d\Text\TextObject2D.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Text\TextObject3D.h" />
     <ClInclude Include="Engine\Graphics\Objects\3d\Sphere\SphereObject.h" />
