@@ -280,8 +280,46 @@ public:
         return s;
     }
 
+    /// <summary>
+    /// マズルフラッシュ (MuzzleFlash): 射撃瞬間に銃口から鮮烈に閃光・火花が飛び散るGPUパーティクル
+    /// </summary>
+    static GPUParticleSetting CreateMuzzleFlash() {
+        constexpr Vector3 kStartScale = { 0.07f, 0.07f, 0.07f };
+        constexpr Vector3 kEndScale = { 0.01f, 0.01f, 0.01f };
+        constexpr Vector4 kStartColor = { 1.0f, 0.95f, 0.55f, 1.0f }; // 白熱の黄金閃光
+        constexpr Vector4 kEndColor = { 1.0f, 0.30f, 0.05f, 0.0f };   // 橙赤色フェードアウト
+        constexpr Vector3 kMinVel = { -1.5f, -1.0f, -1.0f };
+        constexpr Vector3 kMaxVel = {  1.5f,  1.5f,  3.0f };
+        constexpr float kMinLife = 0.04f;
+        constexpr float kMaxLife = 0.09f;
+        constexpr float kGravity = 1.0f;
+        constexpr float kKillAtY = -999.0f;
+        constexpr uint32_t kDefaultBurst = 25;
+        constexpr int kBlendModeAdd = 1;
+
+        GPUParticleSetting s;
+        s.name = "MuzzleFlash";
+        s.textureKey = "circle";
+        s.emitterPosition = { 0.0f, 0.0f, 0.0f };
+        s.startScale = kStartScale;
+        s.endScale = kEndScale;
+        s.startColor = kStartColor;
+        s.endColor = kEndColor;
+        s.minVelocity = kMinVel;
+        s.maxVelocity = kMaxVel;
+        s.minLifeTime = kMinLife;
+        s.maxLifeTime = kMaxLife;
+        s.gravity = kGravity;
+        s.killAtY = kKillAtY;
+        s.spawnRatePerSec = 0.0f;
+        s.isAutoSpawning = false; // バースト専用
+        s.burstCount = kDefaultBurst;
+        s.blendMode = kBlendModeAdd;
+        return s;
+    }
+
     static std::vector<std::string> GetPresetNames() {
-        return { "BulletTrail", "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks", "TextFirework" };
+        return { "BulletTrail", "Fire", "Explosion", "Smoke", "Sparks", "Snow", "MagicAura", "Fireworks", "TextFirework", "MuzzleFlash" };
     }
 
     /// <summary>
@@ -297,6 +335,7 @@ public:
         if (name == "MagicAura") return CreateMagicAura();
         if (name == "Fireworks") return CreateFireworks();
         if (name == "TextFirework") return CreateTextFirework();
+        if (name == "MuzzleFlash") return CreateMuzzleFlash();
         return CreateBulletTrail(); // デフォルト
     }
 

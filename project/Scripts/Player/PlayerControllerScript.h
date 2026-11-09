@@ -7,6 +7,8 @@
 
 class ModelObject;
 class FlatRingObject;
+class ConeObject;
+class GPUParticleObject;
 
 /// <summary>
 /// 自機キャラクターのHP、弾数管理、射撃、リロードを制御するスクリプトコンポーネント
@@ -91,6 +93,17 @@ public:
     void SetMoveSpeed(float speed) { moveSpeed_ = speed; }
 
     /// <summary>
+    /// 自機の1フレームあたりの移動差分ベクトル（ワールド速度）を取得します。
+    /// </summary>
+    const Vector3& GetVelocity() const { return currentVelocity_; }
+
+    /// <summary>
+    /// 弾丸への自機移動慣性同期の有効/無効を設定します。
+    /// </summary>
+    void SetEnableInertia(bool enable) { enableInertia_ = enable; }
+    bool IsEnableInertia() const { return enableInertia_; }
+
+    /// <summary>
     /// 現在の銃口（マズル先端）の3Dワールド座標を取得します。
     /// 銃モデルのワールドアフィン変換行列（カメラ追従・構えオフセット・リコイル）に基づいて計算されます。
     /// </summary>
@@ -164,6 +177,10 @@ private:
 
     bool isAutoMoving_ = false;
     Vector3 direction_ = { 0.0f, 0.0f, 1.0f };
+    Vector3 currentVelocity_ = { 0.0f, 0.0f, 0.0f }; // 1フレームあたりの実移動速度ベクトル
+    Vector3 prevPos_ = { 0.0f, 0.0f, 0.0f };
+    bool hasPrevPos_ = false;
+    bool enableInertia_ = true; // 弾丸への慣性同期（レティクル完全直進化）フラグ
     bool isDead_ = false;
 
     // 死亡溶解演出状態
@@ -181,7 +198,7 @@ private:
     // 手持ちGunモデル関連定数 (マジックナンバー排除)
     static inline const std::string kGunModelKey = "gun";
     static constexpr Vector4 kGunDefaultColor = { 0.12f, 0.12f, 0.14f, 1.0f }; // シックなマットブラック塗装
-    static constexpr Vector4 kPlayerBulletColor = { 0.08f, 0.08f, 0.10f, 1.0f }; // 漆黒ガンメタル
+    static constexpr Vector4 kPlayerBulletColor = { 1.0f, 0.70f, 0.20f, 1.0f }; // 白熱オレンジ曳光弾頭
     static constexpr Vector3 kGunDefaultOffset = { 0.22f, -0.22f, 0.42f };      // カメラローカル手前右下（Apex風の構え）
     static constexpr Vector3 kGunDefaultRotation = { 0.0f, 0.0f, -0.04f };      // 手首のロール傾きのみ（Pitch/Yawはレティクル自動追従）
     static constexpr Vector3 kGunDefaultScale = { 0.48f, 0.48f, 0.48f };        // Apex風にしっかり見せる大型スケール
@@ -195,11 +212,29 @@ private:
     static constexpr float kDefaultZeroInDistance = 22.0f;              // 交戦レンジに合わせたゼロイン距離 (m)
     static constexpr Vector2 kDefaultAimCorrection = { 0.0f, 0.0f };   // レティクル視線と完全一致（視差バイアス不要）
     static constexpr float kBulletCameraForwardOffset = 0.5f;           // レティクル視線発射時のカメラ前方スポーン距離 (m)
-    static constexpr int kMuzzleFlashDuration = 3;                      // フラッシュ点灯フレーム数 (約0.05秒の瞬間閃光)
-    static constexpr float kDefaultMuzzleFlashScale = 0.035f;           // 銃口口径(約3.4cm)に合わせた小型基準半径 (m)
-    static constexpr float kDefaultMuzzleFlashForwardOffset = 0.04f;    // 銃口の真先に突き出す前方オフセット (m)
-    static constexpr float kMuzzleFlashBaseScale = kDefaultMuzzleFlashScale;
-    static constexpr Vector4 kMuzzleFlashColor = { 1.0f, 0.90f, 0.40f, 1.0f }; // 発光オレンジイエロー
+    static constexpr Vector3 kDefaultBulletVisualScale = { 0.55f, 0.55f, 0.55f }; // 自機弾の小型スマートスケール
+    static constexpr float kDefaultBulletCollisionRadius = 0.35f;       // 自機弾の快適な当たり判定半径 (m)
+    static constexpr int kMuzzleFlashDuration = 2;                      // 火炎点灯フレーム数 (瞬間スナップ点灯 約0.033秒)
+    static constexpr float kDefaultMuzzleFlameLength = 0.20f;           // 前方ジェット火炎の全長 (m)
+    static constexpr float kDefaultMuzzleFlameRadius = 0.038f;          // 火炎コーンの底面半径 (m)
+    static constexpr float kDefaultMuzzleCoreRatio = 0.62f;             // 高温インナーコアのスケール比率
+    static constexpr float kDefaultMuzzleFlashForwardOffset = 0.02f;    // 銃口の真先に突き出す前方オフセット (m)
+    static constexpr Vector4 kDefaultFlameOuterColor = { 1.0f, 0.46f, 0.04f, 0.95f }; // 鮮烈な炎オレンジ
+    static constexpr Vector4 kDefaultFlameCoreColor  = { 1.0f, 0.96f, 0.45f, 1.0f };  // 超高輝度ホワイトイエロー高温核
+    static constexpr Vector4 kDefaultCoreDiscColor   = { 1.0f, 1.0f, 0.90f, 1.0f };   // 銃口リム白熱発光
+    static constexpr Vector4 kDefaultSmokeStartColor = { 0.35f, 0.20f, 0.12f, 0.35f }; // 半透明度を高めて標的の視認性を向上
+    static constexpr Vector4 kDefaultSmokeEndColor   = { 0.12f, 0.12f, 0.14f, 0.00f }; // 冷えたチャコール黒煙 (完全透明へ)
+    static constexpr Vector4 kDefaultBulletSparkStart = { 1.0f, 0.52f, 0.05f, 1.0f }; // 鮮烈ブライトオレンジ火花
+    static constexpr Vector4 kDefaultBulletSparkEnd   = { 0.85f, 0.18f, 0.02f, 0.00f }; // ディープバーントオレンジ（冷却消滅）
+    static constexpr uint32_t kDefaultMuzzleFlashGpuParticleCount = 20; // 射撃時の専用GPU硝煙ガス粒子数
+    static constexpr uint32_t kDefaultMuzzleMaxParticles = 512;         // 銃口専用GPUパーティクルバッファ数
+    static constexpr float kDefaultMuzzleSmokeForwardOffset = 0.030f;   // 銃口直近の先端オフセット (m)
+    static constexpr float kDefaultMuzzleSmokeSpeed = 3.5f;             // 前方硝煙ガス噴出初速 (m/s)
+    static constexpr float kDefaultMuzzleSmokeSpread = 0.35f;           // 横拡散を極小化 (m/s)
+    static constexpr float kDefaultMuzzleSmokeLifeMin = 0.08f;          // 最小煙寿命 (秒) (約5フレーム)
+    static constexpr float kDefaultMuzzleSmokeLifeMax = 0.15f;          // 最大煙寿命 (秒) (約9フレーム)
+    static constexpr float kDefaultMuzzleSmokeScaleStart = 0.012f;      // 発生時サイズ (超小型)
+    static constexpr float kDefaultMuzzleSmokeScaleEnd = 0.050f;        // 拡散時サイズ (コンパクトに収束)
 
     // Gun 手持ちモデルおよびTransform設定
     std::unique_ptr<ModelObject> gunModel_;
@@ -216,12 +251,38 @@ private:
     Vector2 aimCorrection_ = kDefaultAimCorrection;
     float zeroInDistance_ = kDefaultZeroInDistance;
 
-    // マズルフラッシュ発光オブジェクト
-    std::unique_ptr<FlatRingObject> muzzleFlashDisc_;
-    float muzzleFlashScale_ = kDefaultMuzzleFlashScale;
+    // リアル・ジェット火炎（3D円錐多層構造）＆ 硝煙ガスGPUパーティクル
+    std::unique_ptr<ConeObject> muzzleFlameOuter_;     // 前方アウター火炎コーン（オレンジ）
+    std::unique_ptr<ConeObject> muzzleFlameCore_;      // 前方インナー高温コア（白黄）
+    std::unique_ptr<FlatRingObject> muzzleCoreDisc_;   // 銃口白熱発光ディスク
+    std::unique_ptr<GPUParticleObject> muzzleGpuParticle_; // 銃口専用GPU硝煙ガスエミッター
+
+    float muzzleFlameLength_ = kDefaultMuzzleFlameLength;
+    float muzzleFlameRadius_ = kDefaultMuzzleFlameRadius;
+    float muzzleCoreRatio_ = kDefaultMuzzleCoreRatio;
     float muzzleFlashForwardOffset_ = kDefaultMuzzleFlashForwardOffset;
+    float muzzleSmokeForwardOffset_ = kDefaultMuzzleSmokeForwardOffset;
+    float muzzleSmokeSpeed_ = kDefaultMuzzleSmokeSpeed;
+    float muzzleSmokeSpread_ = kDefaultMuzzleSmokeSpread;
+    float muzzleSmokeScaleStart_ = kDefaultMuzzleSmokeScaleStart;
+    float muzzleSmokeScaleEnd_ = kDefaultMuzzleSmokeScaleEnd;
+    float muzzleSmokeLifeMax_ = kDefaultMuzzleSmokeLifeMax;
     int muzzleFlashTimer_ = 0;
     float muzzleFlashRotation_ = 0.0f;
+    uint32_t muzzleFlashGpuCount_ = kDefaultMuzzleFlashGpuParticleCount;
+
+    // 統合カラーパレット（実機調色可能）
+    Vector4 flameOuterColor_ = kDefaultFlameOuterColor;
+    Vector4 flameCoreColor_ = kDefaultFlameCoreColor;
+    Vector4 coreDiscColor_ = kDefaultCoreDiscColor;
+    Vector4 smokeStartColor_ = kDefaultSmokeStartColor;
+    Vector4 smokeEndColor_ = kDefaultSmokeEndColor;
+    Vector4 bulletSparkStartColor_ = kDefaultBulletSparkStart;
+    Vector4 bulletSparkEndColor_ = kDefaultBulletSparkEnd;
+
+    // 自機弾パラメータ
+    Vector3 bulletVisualScale_ = kDefaultBulletVisualScale;
+    float bulletCollisionRadius_ = kDefaultBulletCollisionRadius;
 
     void EnsureGunModel();
     void UpdateGunTransform();

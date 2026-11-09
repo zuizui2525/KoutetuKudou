@@ -47,7 +47,7 @@ struct GPUEmitterConstant
     uint   emitCount;          // 今フレーム新規発生させる個数
     uint   randomSeed;         // 乱数シード (フレーム番号やタイマー値)
 
-    uint   shapeType;          // 0: 通常球状放射, 1: 文字花火 (Text Firework)
+    uint   shapeType;          // 0: 通常物理 (AABB初速 + startColor->endColor), 1: 文字花火, 2: 球状花火
     uint   shapePointCount;    // 文字点群数
     float  burstSpeed;         // 拡散初速 / 文字サイズスケール
     float  padding0;

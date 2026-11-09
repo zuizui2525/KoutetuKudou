@@ -32,6 +32,9 @@ void BulletScript::Awake() {
 
 void BulletScript::Start() {
     if (owner_) {
+        // 弾丸の見た目スケールを設定（プレハブ基準から小型化）
+        owner_->SetScale(visualScale_);
+
         auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>();
         if (!gpuParticle) {
             gpuParticle = owner_->AddComponent<GPUParticleComponent>();
@@ -56,12 +59,42 @@ void BulletScript::Start() {
                 s.minLifeTime = kBaseLifeTimeMin + kJitterLifeScale * randJitter;
                 s.maxLifeTime = kBaseLifeTimeMax + kJitterLifeScale * randJitter;
 
-                // 自機弾: スタイリッシュな黒煙・ダークグレートレイル / 敵弾: 赤紫系
+                // 自機弾: 弾丸背後へ細く噴出する小型オレンジ・ジェット推進炎（加算合成 Add）
                 if (isPlayerBullet_) {
-                    constexpr Vector4 kPlayerTrailStartColor = { 0.15f, 0.15f, 0.18f, 0.70f };
-                    constexpr Vector4 kPlayerTrailEndColor = { 0.04f, 0.04f, 0.05f, 0.00f };
-                    s.startColor = kPlayerTrailStartColor;
-                    s.endColor = kPlayerTrailEndColor;
+                    gpuParticle->SetBlendMode(ParticleBlendMode::Add); // 加算合成で鮮烈に発光するノズル炎
+                    gpuParticle->SetTextureKey("circle");
+                    gpuParticle->SetSpawnRate(kDefaultBulletTrailSpawnRate);
+                    gpuParticle->SetStartColor(trailStartColor_);
+                    gpuParticle->SetEndColor(trailEndColor_);
+                    obj->SetBlendMode(ParticleBlendMode::Add);
+
+                    // 弾丸の進行方向の正反対（-direction_）へ向けて後退噴射
+                    Vector3 backJet = {
+                        -direction_.x * kPlayerJetBackwardSpeed,
+                        -direction_.y * kPlayerJetBackwardSpeed,
+                        -direction_.z * kPlayerJetBackwardSpeed
+                    };
+
+                    s.minVelocity = {
+                        backJet.x - kPlayerJetSpread,
+                        backJet.y - kPlayerJetSpread,
+                        backJet.z - kPlayerJetSpread
+                    };
+                    s.maxVelocity = {
+                        backJet.x + kPlayerJetSpread,
+                        backJet.y + kPlayerJetSpread,
+                        backJet.z + kPlayerJetSpread
+                    };
+                    s.minLifeTime = kPlayerJetLifeMin;
+                    s.maxLifeTime = kPlayerJetLifeMax;
+                    s.startScale = { kPlayerJetTrailStartScale, kPlayerJetTrailStartScale, kPlayerJetTrailStartScale };
+                    s.endScale = { kPlayerJetTrailEndScale, kPlayerJetTrailEndScale, kPlayerJetTrailEndScale };
+                    s.gravity = 0.0f; // 重力で垂れ下がらず、一直線にジェット噴射
+                    s.killAtY = -999.0f;
+                    s.spawnRatePerSec = kDefaultBulletTrailSpawnRate;
+                    s.isAutoSpawning = true;
+                    s.startColor = trailStartColor_;
+                    s.endColor = trailEndColor_;
                 } else {
                     constexpr Vector4 kEnemyTrailStartColor = { 1.0f, 0.2f, 0.4f, 1.0f };
                     constexpr Vector4 kEnemyTrailEndColor = { 0.8f, 0.0f, 0.2f, 0.0f };
@@ -80,6 +113,30 @@ void BulletScript::SetDirection(const Vector3& direction) {
         float horizontalDist = std::sqrt(direction.x * direction.x + direction.z * direction.z);
         float pitch = std::atan2(-direction.y, horizontalDist);
         owner_->SetRotate({ pitch, yaw, 0.0f });
+
+        // 自機弾のジェット噴射方向を射出方向の真後ろ（-direction_）に同期
+        if (isPlayerBullet_) {
+            if (auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>()) {
+                if (auto* obj = gpuParticle->GetParticleObject()) {
+                    auto& s = obj->GetSetting();
+                    Vector3 backJet = {
+                        -direction_.x * kPlayerJetBackwardSpeed,
+                        -direction_.y * kPlayerJetBackwardSpeed,
+                        -direction_.z * kPlayerJetBackwardSpeed
+                    };
+                    s.minVelocity = {
+                        backJet.x - kPlayerJetSpread,
+                        backJet.y - kPlayerJetSpread,
+                        backJet.z - kPlayerJetSpread
+                    };
+                    s.maxVelocity = {
+                        backJet.x + kPlayerJetSpread,
+                        backJet.y + kPlayerJetSpread,
+                        backJet.z + kPlayerJetSpread
+                    };
+                }
+            }
+        }
     }
 }
 
@@ -113,16 +170,16 @@ void BulletScript::OnUpdate() {
         return;
     }
 
-    // 2. 弾の移動処理
+    // 2. 弾の移動処理（射出方向速度 + 自機移動の慣性ベクトル）
     Vector3 currentPos = owner_->GetPosition();
     if (!hasPreviousPos_) {
         previousPos_ = currentPos;
         hasPreviousPos_ = true;
     }
 
-    currentPos.x += direction_.x * speed_;
-    currentPos.y += direction_.y * speed_;
-    currentPos.z += direction_.z * speed_;
+    currentPos.x += direction_.x * speed_ + inheritedVelocity_.x;
+    currentPos.y += direction_.y * speed_ + inheritedVelocity_.y;
+    currentPos.z += direction_.z * speed_ + inheritedVelocity_.z;
     owner_->SetPosition(currentPos);
 
     // 弾丸の軌跡（BulletTrail）は owner_ にアタッチされた GPUParticleComponent が
@@ -246,6 +303,11 @@ void BulletScript::OnInspectorGUI() {
 
     ImGui::DragFloat("弾速##BulletSpeed", &speed_, 0.05f, kMinSpeed, kMaxSpeed, "%.2f");
     ImGui::DragInt("最大寿命##MaxLife", &maxLifeTime_, 1, kMinLifeTime, kMaxLifeTimeLimit);
+    if (ImGui::DragFloat3("見た目スケール##VisualScale", &visualScale_.x, 0.02f, 0.1f, 3.0f, "%.2f")) {
+        if (owner_) {
+            owner_->SetScale(visualScale_);
+        }
+    }
     ImGui::DragFloat("当たり判定半径##ColRadius", &collisionRadius_, 0.02f, 0.05f, 2.0f, "%.2f");
     ImGui::DragInt("威力##Damage", &damage_, 1, 1, 100);
     ImGui::Checkbox("自機弾フラグ##IsPlayerBullet", &isPlayerBullet_);

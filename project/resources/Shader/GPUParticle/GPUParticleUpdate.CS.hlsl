@@ -71,6 +71,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float3 initPos = gEmitter.emitterPos + rPosOffset;
         float3 initVel = float3(0.0f, 0.0f, 0.0f);
 
+        float4 baseColor = gEmitter.startColor;
+
         if (gEmitter.shapeType == 1u && gEmitter.shapePointCount > 0u)
         {
             uint ptIdx = particleIndex % gEmitter.shapePointCount;
@@ -81,32 +83,38 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float speedVariation = 0.90f + 0.20f * RandFloat(seed, 260u);
             initPos = gEmitter.emitterPos;
             initVel = emitDir * (gEmitter.burstSpeed * 2.2f) * speedVariation;
+            baseColor = gEmitter.startColor;
+        }
+        else if (gEmitter.shapeType == 2u)
+        {
+            // --- 球状花火用 360度球面均等放射 ＆ 5色パレット ---
+            float phi = RandFloat(seed, 101u) * 6.2831853f; // 0 〜 2π
+            float cosTheta = RandFloat(seed, 102u) * 2.0f - 1.0f; // -1 〜 1
+            float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+            float3 sphereDir = float3(sinTheta * cos(phi), cosTheta, sinTheta * sin(phi));
+
+            float minSpeed = length(gEmitter.minVelocity);
+            float maxSpeed = max(length(gEmitter.maxVelocity), minSpeed + 0.1f);
+            float speed = lerp(minSpeed, maxSpeed, RandFloat(seed, 103u));
+            initVel = sphereDir * speed;
+
+            static const float4 kFireworkPalette[5] = {
+                float4(1.0f, 0.75f, 0.2f, 1.0f),  // 眩い黄金 (Gold)
+                float4(0.2f, 0.95f, 1.0f, 1.0f),  // ネオンシアン (Cyan)
+                float4(1.0f, 0.25f, 0.6f, 1.0f),  // 鮮烈なマゼンタ (Magenta)
+                float4(0.4f, 1.0f, 0.4f, 1.0f),   // エメラルドグリーン (Emerald)
+                float4(0.9f, 0.4f, 1.0f, 1.0f)    // エレクトリックパープル (Purple)
+            };
+            uint paletteIdx = (gEmitter.randomSeed / 31u + particleIndex / 500u) % 5u;
+            baseColor = kFireworkPalette[paletteIdx];
         }
         else
         {
-
-        // --- 花火用 360度球面均等放射ベクトルの計算 ---
-        float phi = RandFloat(seed, 101u) * 6.2831853f; // 0 〜 2π
-        float cosTheta = RandFloat(seed, 102u) * 2.0f - 1.0f; // -1 〜 1
-        float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
-        float3 sphereDir = float3(sinTheta * cos(phi), cosTheta, sinTheta * sin(phi));
-
-        float minSpeed = length(gEmitter.minVelocity);
-        float maxSpeed = max(length(gEmitter.maxVelocity), minSpeed + 0.1f);
-        float speed = lerp(minSpeed, maxSpeed, RandFloat(seed, 103u));
-            initVel = sphereDir * speed;
+            // --- 通常パーティクル (shapeType == 0u): minVelocity 〜 maxVelocity の正確な初速 ＆ 指定カラー ---
+            float3 rVel = RandFloat3(seed, 100u);
+            initVel = lerp(gEmitter.minVelocity, gEmitter.maxVelocity, rVel);
+            baseColor = gEmitter.startColor;
         }
-
-        // 花火のバーストカラー（シード値に応じてゴールド、シアン、マゼンタ、ルビー、ライムグリーン等に彩り分け）
-        static const float4 kFireworkPalette[5] = {
-            float4(1.0f, 0.75f, 0.2f, 1.0f),  // 眩い黄金 (Gold)
-            float4(0.2f, 0.95f, 1.0f, 1.0f),  // ネオンシアン (Cyan)
-            float4(1.0f, 0.25f, 0.6f, 1.0f),  // 鮮烈なマゼンタ (Magenta)
-            float4(0.4f, 1.0f, 0.4f, 1.0f),   // エメラルドグリーン (Emerald)
-            float4(0.9f, 0.4f, 1.0f, 1.0f)    // エレクトリックパープル (Purple)
-        };
-        uint paletteIdx = (gEmitter.randomSeed / 31u + particleIndex / 500u) % 5u;
-        float4 baseColor = (gEmitter.shapeType == 1u) ? gEmitter.startColor : kFireworkPalette[paletteIdx];
 
         p.position = initPos;
         p.velocity = initVel;
@@ -177,31 +185,40 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 float flash = (twinkle > 0.25f) ? 1.5f : 0.5f;
                 p.color.rgb *= flash;
             }
+            else if (gEmitter.shapeType == 2u)
+            {
+                // 球状花火: 空気抵抗による自然な減速（爆発直後は高速、次第にふわりと舞う）
+                p.velocity *= (1.0f - saturate(1.6f * gEmitter.deltaTime));
+
+                // 重力加速度の適用（下方向に優雅に垂れ落ちる）
+                p.velocity.y -= gEmitter.gravity * gEmitter.deltaTime;
+
+                // 位置更新
+                p.position += p.velocity * gEmitter.deltaTime;
+
+                // 寿命進行度 (0.0f 〜 1.0f)
+                float t = saturate(p.currentTime / max(p.lifeTime, 0.0001f));
+
+                // スケールおよび透明度フェード
+                p.scale = lerp(gEmitter.startScale, gEmitter.endScale, t);
+                p.color.a = (1.0f - t);
+
+                // 寿命後半でのスパークル（チカチカきらめき）演出
+                if (t > 0.45f)
+                {
+                    float twinkle = sin(p.currentTime * 32.0f + float(particleIndex)) * 0.4f + 0.6f;
+                    p.color.rgb *= twinkle;
+                }
+            }
             else
             {
-            // 空気抵抗による自然な減速（爆発直後は高速、次第にふわりと舞う）
-            p.velocity *= (1.0f - saturate(1.6f * gEmitter.deltaTime));
+                // 通常パーティクル (shapeType == 0u): 直進・物理移動 ＆ 重力 ＆ カラーグラデーション
+                p.velocity.y -= gEmitter.gravity * gEmitter.deltaTime;
+                p.position += p.velocity * gEmitter.deltaTime;
 
-            // 重力加速度の適用（下方向に優雅に垂れ落ちる）
-            p.velocity.y -= gEmitter.gravity * gEmitter.deltaTime;
-
-            // 位置更新
-            p.position += p.velocity * gEmitter.deltaTime;
-
-            // 寿命進行度 (0.0f 〜 1.0f)
-            float t = saturate(p.currentTime / max(p.lifeTime, 0.0001f));
-
-            // スケールおよび透明度フェード
-            p.scale = lerp(gEmitter.startScale, gEmitter.endScale, t);
-            p.color.a = (1.0f - t);
-
-            // 寿命後半でのスパークル（チカチカきらめき）演出
-            if (t > 0.45f)
-            {
-                float twinkle = sin(p.currentTime * 32.0f + float(particleIndex)) * 0.4f + 0.6f;
-
-                p.color.rgb *= twinkle;
-            }
+                float t = saturate(p.currentTime / max(p.lifeTime, 0.0001f));
+                p.scale = lerp(gEmitter.startScale, gEmitter.endScale, t);
+                p.color = lerp(gEmitter.startColor, gEmitter.endColor, t);
             }
         }
     }

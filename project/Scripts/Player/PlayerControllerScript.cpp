@@ -11,9 +11,12 @@
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Audio/Audio.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
+#include "Engine/Graphics/Objects/Effect/GPU/GPUParticleObject.h"
+#include "Engine/Graphics/Objects/Effect/GPU/GPUParticleSetting.h"
 #include "Engine/Graphics/Objects/3d/Model/ModelObject.h"
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/3d/FlatRing/FlatRingObject.h"
+#include "Engine/Graphics/Objects/3d/Cone/ConeObject.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Zuizui.h"
 #include <cmath>
@@ -31,6 +34,7 @@ namespace {
     constexpr float kDefaultPlayerMuzzleHeight = 1.0f; // カメラ未初期化時のフォールバック高さ
     constexpr float kRayTargetDistance = 50.0f;
     constexpr int kReloadKey = DIK_R;
+    constexpr float kDefaultDeltaTime = 1.0f / 60.0f;
 
     // 死亡演出用定数
     constexpr float kRandOffsetCenter = 0.5f;
@@ -58,7 +62,11 @@ PlayerControllerScript::~PlayerControllerScript() {
             dxCommon->FlushGPU();
         }
     }
-    muzzleFlashDisc_.reset();
+    muzzleFlameOuter_.reset();
+    muzzleFlameCore_.reset();
+    muzzleCoreDisc_.reset();
+    muzzleGpuParticle_.reset();
+    gunModel_.reset();
 }
 
 void PlayerControllerScript::Awake() {
@@ -74,6 +82,8 @@ void PlayerControllerScript::Awake() {
     isInitialPosSaved_ = false;
     gunRecoilProgress_ = 0.0f;
     isGunVisible_ = true;
+    hasPrevPos_ = false;
+    currentVelocity_ = { 0.0f, 0.0f, 0.0f };
     EnsureGunModel();
 }
 
@@ -107,6 +117,29 @@ void PlayerControllerScript::OnUpdate() {
     if (isDead_ || !owner_) {
         return;
     }
+
+    // 自機のフレーム移動差分（実速度ベクトル）の算出（弾丸の慣性同期・レティクル完全直進化に使用）
+    Vector3 currentPos = owner_->GetPosition();
+    if (isAutoMoving_) {
+        if (hasPrevPos_) {
+            currentVelocity_ = {
+                currentPos.x - prevPos_.x,
+                currentPos.y - prevPos_.y,
+                currentPos.z - prevPos_.z
+            };
+        } else {
+            currentVelocity_ = {
+                direction_.x * moveSpeed_,
+                direction_.y * moveSpeed_,
+                direction_.z * moveSpeed_
+            };
+            hasPrevPos_ = true;
+        }
+    } else {
+        currentVelocity_ = { 0.0f, 0.0f, 0.0f };
+        hasPrevPos_ = false;
+    }
+    prevPos_ = currentPos;
 
     // 無敵時間タイマーおよび被弾点滅演出の更新
     if (invincibilityTimer_ > 0) {
@@ -148,6 +181,11 @@ void PlayerControllerScript::OnUpdate() {
 
     // 手持ちGunモデルのTransform更新（カメラ追従、射撃方向同期、首振り自動格納、リコイル演出）
     UpdateGunTransform();
+
+    // 銃口専用GPUパーティクルエミッターのシミュレーション更新
+    if (muzzleGpuParticle_) {
+        muzzleGpuParticle_->Update(kDefaultDeltaTime);
+    }
 }
 
 /// <summary>
@@ -182,15 +220,8 @@ void PlayerControllerScript::HandleShooting() {
 }
 
 /// <summary>
-/// 画面のレティクル（マウス照準）の視線軸から前方へ向けて弾丸を射出し、
-/// 射撃反動によるカメラシェイクおよび銃モデルのリコイルを誘発します。
-/// 
-/// 【照準計算アルゴリズム】
-/// 1. ゲームビューのウィンドウサイズと解像度からマウス座標をクライアント空間へ補正。
-/// 2. アクティブカメラからマウス座標（レティクル中心）を通る3D視線レイ（rayStart, rayDir）を生成。
-/// 3. カメラ前方（kBulletCameraForwardOffset）から、レティクルが指す方向ベクトル（rayDir）に向けて直進射出。
-/// 4. 銃口オフセットによる左右の視差（パララックス）を完全に解消し、レティクル中央へ100%正確に着弾。
-/// 5. 弾丸プレハブ（Bullet）を実体化し、パラメータを設定。
+/// 画面中央のレティクル視線軸（rayDir）に沿って100%まっすぐ直進する弾丸を射出し、
+/// 銃口先端ではGPUパーティクル火花と瞬間閃光によるマズルフラッシュを炸裂させます（APEXスタイル）。
 /// </summary>
 void PlayerControllerScript::Fire() {
     if (!infiniteAmmo_) {
@@ -198,53 +229,38 @@ void PlayerControllerScript::Fire() {
     }
     shotIntervalTimer_ = shotInterval_;
 
-    // レティクルが指す正確な3Dワールド照準レイ（起点および方向ベクトル）を計算
+    // 1. カメラと画面中央レティクルの視線ベクトル（rayDir）を取得
     auto* cameraMgr = CameraResource::GetCameraManager();
     BaseCamera* camera = cameraMgr ? cameraMgr->GetActiveCamera() : nullptr;
 
-    Vector3 bulletSpawnPos = GetMuzzleWorldPosition();
-    Vector3 bulletDir = direction_;
+    Vector3 rayStart = { 0.0f, 0.0f, 0.0f };
+    Vector3 rayDir = direction_;
 
     if (camera) {
         float clientW = static_cast<float>(WindowApp::kClientWidth);
         float clientH = static_cast<float>(WindowApp::kClientHeight);
-        Vector2 viewSize = GameViewWindow::GetGameViewSize();
-        Vector2 mousePos = GameViewWindow::GetMousePosition();
-
-        Vector2 scaledMousePos = mousePos;
-        if (viewSize.x > 0.0f && viewSize.y > 0.0f) {
-            scaledMousePos.x = (mousePos.x / viewSize.x) * clientW;
-            scaledMousePos.y = (mousePos.y / viewSize.y) * clientH;
-        }
-
-        Vector3 rayStart = camera->GetPosition();
-        Vector3 rayDir = direction_;
+        rayStart = camera->GetPosition();
         camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
-
-        bulletDir = rayDir;
-        // レティクル中心軸（カメラ前方）から発射し、視差による左右のズレを完全解消
-        bulletSpawnPos = {
-            rayStart.x + rayDir.x * kBulletCameraForwardOffset,
-            rayStart.y + rayDir.y * kBulletCameraForwardOffset,
-            rayStart.z + rayDir.z * kBulletCameraForwardOffset
-        };
-    } else {
-        Vector3 targetPos = GetAimTargetPosition();
-        Vector3 diff = { targetPos.x - bulletSpawnPos.x, targetPos.y - bulletSpawnPos.y, targetPos.z - bulletSpawnPos.z };
-        float lenSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
-        if (lenSq > kEpsilon) {
-            float invLen = 1.0f / std::sqrt(lenSq);
-            bulletDir = { diff.x * invLen, diff.y * invLen, diff.z * invLen };
-        }
     }
 
-    // プレハブからBulletを実体化（レティクル中心から奥へ直進射出！）
+    // 2. 弾丸のスポーン位置: レティクル視線軸上のカメラ前方自然位置（中央直進）
+    Vector3 bulletSpawnPos = {
+        rayStart.x + rayDir.x * kBulletCameraForwardOffset,
+        rayStart.y + rayDir.y * kBulletCameraForwardOffset,
+        rayStart.z + rayDir.z * kBulletCameraForwardOffset
+    };
+
+    // 3. 弾丸プレハブの実体化（レティクル真ん中へ100%まっすぐ直進！）
     GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", bulletSpawnPos);
     if (bulletObj) {
         auto* bulletScript = bulletObj->GetComponent<BulletScript>();
         if (bulletScript) {
-            bulletScript->SetDirection(bulletDir);
+            bulletScript->SetDirection(rayDir); // 左右どちらを向いてもレティクル真ん中に直進！
             bulletScript->SetSpeed(bulletSpeed_);
+            bulletScript->SetInheritedVelocity(enableInertia_ ? currentVelocity_ : Vector3{ 0.0f, 0.0f, 0.0f }); // 自機移動慣性同期
+            bulletScript->SetVisualScale(bulletVisualScale_);         // 弾丸の見た目スケール（小型化）
+            bulletScript->SetCollisionRadius(bulletCollisionRadius_); // 見た目より広めの快適な当たり判定
+            bulletScript->SetTrailColors(bulletSparkStartColor_, bulletSparkEndColor_); // 白熱ゴールド〜赤橙火花トレイル
             bulletScript->SetIsPlayerBullet(true);
         }
         // 弾丸カラーをシックな漆黒（ガンメタルブラック）に設定
@@ -259,10 +275,64 @@ void PlayerControllerScript::Fire() {
     // 銃手持ちモデルの反動（キックバック）演出をトリガー
     gunRecoilProgress_ = 1.0f;
 
-    // マズルフラッシュ点火（銃口先端の瞬間閃光、銃が見えている時のみ）
+    // 4. リアル・ジェット火炎 ＆ 硝煙マズルガス点火（円錐トーチコーン ＆ 前方硝煙スモーク、銃が見えている時のみ）
     if (isGunVisible_) {
         muzzleFlashTimer_ = kMuzzleFlashDuration;
         muzzleFlashRotation_ = static_cast<float>(rand() % 360) * 0.0174533f;
+
+        // 銃口先端ワールド座標の取得
+        Vector3 muzzleWorldPos = GetMuzzleWorldPosition();
+
+        // 銃口専用GPUパーティクルによるリアル硝煙（マズルガススモーク）の噴出
+        EnsureGunModel();
+        if (muzzleGpuParticle_ && muzzleFlashGpuCount_ > 0) {
+            Vector3 forward = rayDir;
+
+            // 火炎先端付近から吹き出す前方オフセット位置
+            Vector3 smokeSpawnPos = {
+                muzzleWorldPos.x + forward.x * muzzleSmokeForwardOffset_,
+                muzzleWorldPos.y + forward.y * muzzleSmokeForwardOffset_,
+                muzzleWorldPos.z + forward.z * muzzleSmokeForwardOffset_
+            };
+
+            // 自機移動の慣性ベクトル（自機走行による煙の置き去りを防止し、銃口の先へ力強く推進）
+            Vector3 playerVel = enableInertia_ ? currentVelocity_ : Vector3{ 0.0f, 0.0f, 0.0f };
+
+            GPUParticleSetting s;
+            s.name = "MuzzleGasSmoke";
+            s.textureKey = "circle";
+            s.emitterPosition = smokeSpawnPos;
+            constexpr float kLifeMinRatio = 0.55f;
+            s.minLifeTime = muzzleSmokeLifeMax_ * kLifeMinRatio;
+            s.maxLifeTime = muzzleSmokeLifeMax_;
+            s.startScale = { muzzleSmokeScaleStart_, muzzleSmokeScaleStart_, muzzleSmokeScaleStart_ };
+            s.endScale = { muzzleSmokeScaleEnd_, muzzleSmokeScaleEnd_, muzzleSmokeScaleEnd_ };
+            s.startColor = smokeStartColor_; // 炎光を透過した温かい赤褐色硝煙
+            s.endColor = smokeEndColor_;     // 冷えたチャコール黒煙（消滅）
+            s.gravity = -0.5f;               // 温かいガスが微かに立ち昇る
+            s.killAtY = -999.0f;
+            s.isAutoSpawning = false;
+            s.spawnRatePerSec = 0.0f;
+            s.blendMode = 0; // Normal (半透明合成 - リアルな黒煙)
+
+            // 前方への力強いガス噴出初速 ＋ 横方向モクモク膨張 ＋ 自機移動慣性
+            float minSpd = muzzleSmokeSpeed_ * 0.70f;
+            float maxSpd = muzzleSmokeSpeed_ * 1.30f;
+            s.minVelocity = {
+                playerVel.x + forward.x * minSpd - muzzleSmokeSpread_,
+                playerVel.y + forward.y * minSpd - muzzleSmokeSpread_,
+                playerVel.z + forward.z * minSpd - muzzleSmokeSpread_
+            };
+            s.maxVelocity = {
+                playerVel.x + forward.x * maxSpd + muzzleSmokeSpread_,
+                playerVel.y + forward.y * maxSpd + muzzleSmokeSpread_,
+                playerVel.z + forward.z * maxSpd + muzzleSmokeSpread_
+            };
+
+            muzzleGpuParticle_->ApplySetting(s);
+            muzzleGpuParticle_->SetPosition(smokeSpawnPos);
+            muzzleGpuParticle_->EmitBurst(muzzleFlashGpuCount_);
+        }
     }
 
     // 射撃効果音 (SE) の再生
@@ -405,7 +475,10 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::DragInt("リロード時間(F)##ReloadTime", &reloadDuration_, 1, 1, 120);
     ImGui::DragInt("連射間隔(F)##ShotInterval", &shotInterval_, 1, 1, 60);
     ImGui::DragFloat("弾速##BulletSpeed", &bulletSpeed_, 0.05f, 0.1f, 5.0f, "%.2f");
+    ImGui::DragFloat3("自機弾スケール##PlayerBulletScale", &bulletVisualScale_.x, 0.02f, 0.1f, 2.0f, "%.2f");
+    ImGui::DragFloat("自機弾判定半径##PlayerBulletColRadius", &bulletCollisionRadius_, 0.02f, 0.05f, 1.5f, "%.2f m");
     ImGui::DragFloat("ルート走行速度##MoveSpeed", &moveSpeed_, 0.005f, kMinMoveSpeed, kMaxMoveSpeed, "%.3f");
+    ImGui::Checkbox("自機移動慣性同期 (レティクル直進化)##EnableInertia", &enableInertia_);
 
     ImGui::Separator();
     ImGui::Checkbox("自動走行中##IsAutoMoving", &isAutoMoving_);
@@ -426,9 +499,35 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::DragFloat3("銃口オフセット(X/Y/Z)##MuzzleOffset", &gunMuzzleOffset_.x, 0.01f, -2.0f, 3.0f, "%.2f m");
     ImGui::DragFloat2("照準補正(左/上)##AimCorrection", &aimCorrection_.x, 0.01f, -1.0f, 1.0f, "%.2f m");
     ImGui::DragFloat("ゼロイン距離##ZeroInDistance", &zeroInDistance_, 0.5f, 5.0f, 100.0f, "%.1f m");
-    ImGui::DragFloat("フラッシュサイズ##FlashScale", &muzzleFlashScale_, 0.002f, 0.005f, 0.20f, "%.3f m");
-    ImGui::DragFloat("フラッシュ前方位置##FlashForward", &muzzleFlashForwardOffset_, 0.005f, -0.1f, 0.3f, "%.3f m");
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "【リアル・ジェット火炎 ＆ 硝煙ガス設定】");
+    ImGui::DragFloat("火炎コーン長さ##FlameLength", &muzzleFlameLength_, 0.005f, 0.05f, 0.60f, "%.3f m");
+    ImGui::DragFloat("火炎コーン半径##FlameRadius", &muzzleFlameRadius_, 0.002f, 0.01f, 0.20f, "%.3f m");
+    ImGui::DragFloat("高温コア比率##CoreRatio", &muzzleCoreRatio_, 0.01f, 0.2f, 0.9f, "%.2f");
+    ImGui::DragFloat("火炎前方位置##FlashForward", &muzzleFlashForwardOffset_, 0.005f, -0.1f, 0.3f, "%.3f m");
+    ImGui::DragFloat("硝煙ガス噴出速度##SmokeSpeed", &muzzleSmokeSpeed_, 0.2f, 0.5f, 30.0f, "%.1f m/s");
+    ImGui::DragFloat("硝煙モクモク拡散##SmokeSpread", &muzzleSmokeSpread_, 0.1f, 0.0f, 5.0f, "%.1f m/s");
+    ImGui::DragFloat("硝煙前方位置##SmokeForward", &muzzleSmokeForwardOffset_, 0.005f, 0.0f, 0.5f, "%.3f m");
+    ImGui::DragFloat("硝煙発生サイズ##SmokeScaleStart", &muzzleSmokeScaleStart_, 0.002f, 0.005f, 0.10f, "%.3f m");
+    ImGui::DragFloat("硝煙拡散サイズ##SmokeScaleEnd", &muzzleSmokeScaleEnd_, 0.005f, 0.02f, 0.40f, "%.3f m");
+    ImGui::DragFloat("硝煙寿命##SmokeLife", &muzzleSmokeLifeMax_, 0.01f, 0.05f, 0.60f, "%.2f s");
+    int gpuFlashCount = static_cast<int>(muzzleFlashGpuCount_);
+    constexpr int kMinGpuFlashCount = 0;
+    constexpr int kMaxGpuFlashCount = 100;
+    if (ImGui::DragInt("硝煙ガス粒子数##MuzzleGpuCount", &gpuFlashCount, 1, kMinGpuFlashCount, kMaxGpuFlashCount)) {
+        muzzleFlashGpuCount_ = static_cast<uint32_t>((std::max)(kMinGpuFlashCount, gpuFlashCount));
+    }
     ImGui::ColorEdit4("銃マテリアル色##GunColor", &gunColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "【火炎・硝煙・弾丸火花 統合カラー設定】");
+    ImGui::ColorEdit4("火炎外層色##FlameOuterColor", &flameOuterColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("火炎核色##FlameCoreColor", &flameCoreColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("銃口白熱色##CoreDiscColor", &coreDiscColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("硝煙発生色##SmokeStartColor", &smokeStartColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("硝煙消滅色##SmokeEndColor", &smokeEndColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("弾丸火花発生色##BulletSparkStartColor", &bulletSparkStartColor_.x, ImGuiColorEditFlags_AlphaBar);
+    ImGui::ColorEdit4("弾丸火花消滅色##BulletSparkEndColor", &bulletSparkEndColor_.x, ImGuiColorEditFlags_AlphaBar);
+
     if (ImGui::Button("銃設定初期化##ResetGunOffset")) {
         gunOffset_ = kGunDefaultOffset;
         gunRotation_ = kGunDefaultRotation;
@@ -437,8 +536,26 @@ void PlayerControllerScript::OnInspectorGUI() {
         gunMuzzleOffset_ = kDefaultGunMuzzleOffset;
         aimCorrection_ = kDefaultAimCorrection;
         zeroInDistance_ = kDefaultZeroInDistance;
-        muzzleFlashScale_ = kDefaultMuzzleFlashScale;
+        muzzleFlameLength_ = kDefaultMuzzleFlameLength;
+        muzzleFlameRadius_ = kDefaultMuzzleFlameRadius;
+        muzzleCoreRatio_ = kDefaultMuzzleCoreRatio;
         muzzleFlashForwardOffset_ = kDefaultMuzzleFlashForwardOffset;
+        muzzleSmokeSpeed_ = kDefaultMuzzleSmokeSpeed;
+        muzzleSmokeSpread_ = kDefaultMuzzleSmokeSpread;
+        muzzleSmokeForwardOffset_ = kDefaultMuzzleSmokeForwardOffset;
+        muzzleSmokeScaleStart_ = kDefaultMuzzleSmokeScaleStart;
+        muzzleSmokeScaleEnd_ = kDefaultMuzzleSmokeScaleEnd;
+        muzzleSmokeLifeMax_ = kDefaultMuzzleSmokeLifeMax;
+        muzzleFlashGpuCount_ = kDefaultMuzzleFlashGpuParticleCount;
+        bulletVisualScale_ = kDefaultBulletVisualScale;
+        bulletCollisionRadius_ = kDefaultBulletCollisionRadius;
+        flameOuterColor_ = kDefaultFlameOuterColor;
+        flameCoreColor_ = kDefaultFlameCoreColor;
+        coreDiscColor_ = kDefaultCoreDiscColor;
+        smokeStartColor_ = kDefaultSmokeStartColor;
+        smokeEndColor_ = kDefaultSmokeEndColor;
+        bulletSparkStartColor_ = kDefaultBulletSparkStart;
+        bulletSparkEndColor_ = kDefaultBulletSparkEnd;
     }
 #endif
 }
@@ -451,14 +568,38 @@ void PlayerControllerScript::EnsureGunModel() {
         gunModel_->SetColor(gunColor_);
         gunModel_->SetScale(gunScale_);
     }
-    if (!muzzleFlashDisc_) {
-        constexpr uint32_t kFlashDivideCount = 16;
-        constexpr float kFlashBaseRadius = 1.0f;
-        constexpr float kFlashInnerRadius = 0.0f; // 完全な面ディスク
-        muzzleFlashDisc_ = std::make_unique<FlatRingObject>(kFlashDivideCount, kFlashBaseRadius, kFlashInnerRadius);
-        muzzleFlashDisc_->SetAutoRegisterHierarchy(false);
-        muzzleFlashDisc_->Initialize(0); // 非ライティング（鮮烈発光）
-        muzzleFlashDisc_->SetColor(kMuzzleFlashColor);
+
+    // 提示画像スタイル 円錐ジェット火炎（3D多層構造）オブジェクト群の生成
+    if (!muzzleFlameOuter_) {
+        muzzleFlameOuter_ = std::make_unique<ConeObject>();
+        muzzleFlameOuter_->SetAutoRegisterHierarchy(false);
+        muzzleFlameOuter_->SetRadius(1.0f);
+        muzzleFlameOuter_->SetHeight(1.0f);
+        muzzleFlameOuter_->Initialize(0); // 非ライティング（鮮烈自発光）
+        muzzleFlameOuter_->SetColor(flameOuterColor_);
+    }
+    if (!muzzleFlameCore_) {
+        muzzleFlameCore_ = std::make_unique<ConeObject>();
+        muzzleFlameCore_->SetAutoRegisterHierarchy(false);
+        muzzleFlameCore_->SetRadius(1.0f);
+        muzzleFlameCore_->SetHeight(1.0f);
+        muzzleFlameCore_->Initialize(0); // 非ライティング（超高輝度発光）
+        muzzleFlameCore_->SetColor(flameCoreColor_);
+    }
+    if (!muzzleCoreDisc_) {
+        constexpr uint32_t kCoreDivide = 16;
+        constexpr float kCoreOuter = 1.0f;
+        constexpr float kCoreInner = 0.0f;
+        muzzleCoreDisc_ = std::make_unique<FlatRingObject>(kCoreDivide, kCoreOuter, kCoreInner);
+        muzzleCoreDisc_->SetAutoRegisterHierarchy(false);
+        muzzleCoreDisc_->Initialize(0);
+        muzzleCoreDisc_->SetColor(coreDiscColor_);
+    }
+
+    // 銃口専用GPU硝煙（マズルガス）パーティクルエミッターの初期化
+    if (!muzzleGpuParticle_) {
+        muzzleGpuParticle_ = std::make_unique<GPUParticleObject>();
+        muzzleGpuParticle_->Initialize(kDefaultMuzzleMaxParticles);
     }
 }
 
@@ -534,8 +675,8 @@ void PlayerControllerScript::UpdateGunTransform() {
     gunModel_->SetColor(gunColor_);
     gunModel_->Update();
 
-    // マズルフラッシュのTransform更新（銃が表示されている時のみ）
-    if (muzzleFlashDisc_ && muzzleFlashTimer_ > 0 && isGunVisible_) {
+    // VALORANT風マズルフラッシュのTransform更新（銃が表示されている時のみ）
+    if (muzzleFlashTimer_ > 0 && isGunVisible_) {
         Vector3 muzzleWorldPos = GetMuzzleWorldPosition();
 
         // 銃の向いている前方方向
@@ -548,12 +689,49 @@ void PlayerControllerScript::UpdateGunTransform() {
             muzzleWorldPos.z + gunForward.z * muzzleFlashForwardOffset_
         };
 
-        float flashScale = muzzleFlashScale_ * (static_cast<float>(muzzleFlashTimer_) / static_cast<float>(kMuzzleFlashDuration));
-        muzzleFlashDisc_->SetPosition(flashPos);
-        muzzleFlashDisc_->SetScale({ flashScale, flashScale, 1.0f });
-        muzzleFlashDisc_->SetRotate({ gunWorldRot.x, gunWorldRot.y, gunWorldRot.z + muzzleFlashRotation_ });
-        muzzleFlashDisc_->SetColor(kMuzzleFlashColor);
-        muzzleFlashDisc_->Update();
+        float progress = static_cast<float>(muzzleFlashTimer_) / static_cast<float>(kMuzzleFlashDuration);
+        constexpr float kHalfPi = 1.5707963f;
+
+        // 1. アウター円錐火炎コーン（鮮烈な炎オレンジ、前方に向かって尖る円錐）
+        float outerLen = muzzleFlameLength_ * progress;
+        float outerRad = muzzleFlameRadius_ * progress;
+        Vector3 outerCenter = {
+            flashPos.x + gunForward.x * (outerLen * 0.5f),
+            flashPos.y + gunForward.y * (outerLen * 0.5f),
+            flashPos.z + gunForward.z * (outerLen * 0.5f)
+        };
+        if (muzzleFlameOuter_) {
+            muzzleFlameOuter_->SetPosition(outerCenter);
+            muzzleFlameOuter_->SetScale({ outerRad, outerLen, outerRad });
+            muzzleFlameOuter_->SetRotate({ gunWorldRot.x + kHalfPi, gunWorldRot.y, gunWorldRot.z + muzzleFlashRotation_ });
+            muzzleFlameOuter_->SetColor(flameOuterColor_);
+            muzzleFlameOuter_->Update();
+        }
+
+        // 2. インナー高温コアコーン（白〜黄色に輝く超高温核）
+        float coreLen = outerLen * muzzleCoreRatio_;
+        float coreRad = outerRad * muzzleCoreRatio_;
+        Vector3 coreCenter = {
+            flashPos.x + gunForward.x * (coreLen * 0.5f),
+            flashPos.y + gunForward.y * (coreLen * 0.5f),
+            flashPos.z + gunForward.z * (coreLen * 0.5f)
+        };
+        if (muzzleFlameCore_) {
+            muzzleFlameCore_->SetPosition(coreCenter);
+            muzzleFlameCore_->SetScale({ coreRad, coreLen, coreRad });
+            muzzleFlameCore_->SetRotate({ gunWorldRot.x + kHalfPi, gunWorldRot.y, gunWorldRot.z + muzzleFlashRotation_ });
+            muzzleFlameCore_->SetColor(flameCoreColor_);
+            muzzleFlameCore_->Update();
+        }
+
+        // 3. 銃口白熱発光ディスク（銃口リムの白熱リング）
+        if (muzzleCoreDisc_) {
+            muzzleCoreDisc_->SetPosition(flashPos);
+            muzzleCoreDisc_->SetScale({ outerRad * 1.15f, outerRad * 1.15f, 1.0f });
+            muzzleCoreDisc_->SetRotate({ gunWorldRot.x, gunWorldRot.y, gunWorldRot.z + muzzleFlashRotation_ });
+            muzzleCoreDisc_->SetColor(coreDiscColor_);
+            muzzleCoreDisc_->Update();
+        }
     }
 }
 
@@ -675,8 +853,21 @@ void PlayerControllerScript::Draw() {
         gunModel_->Draw(kGunModelKey, "white");
     }
 
-    // マズルフラッシュ描画（射撃瞬間のみ点灯、かつ銃が見えている時）
-    if (muzzleFlashDisc_ && muzzleFlashTimer_ > 0) {
-        muzzleFlashDisc_->Draw("white");
+    // 提示画像スタイル 3D円錐ジェット火炎描画（射撃瞬間のみ点灯）
+    if (muzzleFlashTimer_ > 0) {
+        if (muzzleFlameOuter_) muzzleFlameOuter_->Draw("white");
+        if (muzzleFlameCore_) muzzleFlameCore_->Draw("white");
+        if (muzzleCoreDisc_) muzzleCoreDisc_->Draw("white");
+    }
+
+    // 銃口専用GPU硝煙（マズルガス）パーティクルの描画
+    if (muzzleGpuParticle_) {
+        if (auto engine = EngineResource::GetEngine()) {
+            if (auto dxCommon = engine->GetDxCommon()) {
+                auto* cmdList = dxCommon->GetCommandList();
+                muzzleGpuParticle_->DispatchCompute(cmdList);
+                muzzleGpuParticle_->Draw(cmdList, "circle", ParticleBlendMode::Normal);
+            }
+        }
     }
 }
