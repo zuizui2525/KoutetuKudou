@@ -5,6 +5,7 @@
 #include "Engine/Debug/PerformanceMonitorWindow.h"
 #include "Engine/Debug/ContentBrowserWindow.h"
 #include "Engine/Debug/ParticleStudioWindow.h"
+#include "Engine/Debug/MapStudioWindow.h"
 #include "Engine/Debug/EngineHelpData.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Debug/IGameObject.h"
@@ -909,6 +910,7 @@ DebugEditor::DebugEditor()
     : showSceneView_(true),
       showGameView_(true),
       showParticleStudio_(false),
+      showMapStudio_(false),
       showPerfMonitor_(true),
       showHierarchy_(true),
       showInspector_(true),
@@ -998,6 +1000,7 @@ void DebugEditor::ApplyWorkspaceWindowState(size_t index) {
     showHierarchy_      = s.showHierarchy;
     showInspector_      = s.showInspector;
     showParticleStudio_ = s.showParticleStudio;
+    showMapStudio_      = s.showMapStudio;
     showPerfMonitor_    = s.showPerfMonitor;
     showContentBrowser_ = s.showContentBrowser;
 
@@ -1020,6 +1023,7 @@ void DebugEditor::SyncCurrentWorkspaceWindowState() {
     s.showHierarchy      = showHierarchy_;
     s.showInspector      = showInspector_;
     s.showParticleStudio = showParticleStudio_;
+    s.showMapStudio      = showMapStudio_;
     s.showPerfMonitor    = showPerfMonitor_;
     s.showContentBrowser = showContentBrowser_;
 
@@ -1389,6 +1393,7 @@ void DebugEditor::Initialize() {
     perfMonitorWindow_ = std::make_unique<PerformanceMonitorWindow>();
     contentBrowserWindow_ = std::make_unique<ContentBrowserWindow>();
     particleStudioWindow_ = std::make_unique<ParticleStudioWindow>();
+    mapStudioWindow_ = std::make_unique<MapStudioWindow>();
 
     // ウィンドウ終了時（×ボタン、Alt+F4、終了メニュー）のセーブ確認ハンドラを登録
     HWND hwnd = Zuizui::GetInstance()->GetWindow()->GetHWND();
@@ -1482,6 +1487,11 @@ void DebugEditor::Draw(ID3D12GraphicsCommandList* commandList) {
         float deltaTime = Zuizui::GetInstance()->GetDxCommon()->GetDeltaTime();
         particleStudioWindow_->Update(deltaTime);
         particleStudioWindow_->Draw(&showParticleStudio_, commandList);
+    }
+
+    // Map Studio (3Dマップスタジオ)
+    if (showMapStudio_ && mapStudioWindow_) {
+        mapStudioWindow_->Draw(&showMapStudio_, commandList);
     }
 
     // Scene View (編集画面)
@@ -2218,6 +2228,10 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
             }
             if (ImGui::MenuItem("パーティクルスタジオ (GPU)", nullptr, showParticleStudio_)) {
                 showParticleStudio_ = !showParticleStudio_;
+                SyncCurrentWorkspaceWindowState();
+            }
+            if (ImGui::MenuItem("Map Studio (マップエディター)", nullptr, showMapStudio_)) {
+                showMapStudio_ = !showMapStudio_;
                 SyncCurrentWorkspaceWindowState();
             }
             if (auto* postProcessPtr = PostProcess::GetShowWindowPtr()) {
@@ -3279,6 +3293,14 @@ void DebugEditor::DrawShortcutsWindow() {
         } // isSearching の else 節の閉じ
     }
     ImGui::End();
+}
+
+void DebugEditor::OpenMapStudio(const std::string& mapAssetPath) {
+    showMapStudio_ = true;
+    if (mapStudioWindow_ && !mapAssetPath.empty()) {
+        mapStudioWindow_->OpenMapAsset(mapAssetPath);
+    }
+    SyncCurrentWorkspaceWindowState();
 }
 #endif
 

@@ -284,6 +284,8 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClCompile Include="Scripts\Route\RouteManagerScript.cpp" />
     <ClCompile Include="Scripts\Route\RouteRendererScript.cpp" />
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp" />
+    <ClCompile Include="Scripts\Stage\MapRendererScript.cpp" />
+    <ClCompile Include="Engine\Debug\MapStudioWindow.cpp" />
     <ClCompile Include="Scripts\Stage\SkydomeScript.cpp" />
     <ClCompile Include="Scripts\Sample\SamplePlayerScript.cpp" />
     <ClCompile Include="Scripts\Sample\SampleFollowerScript.cpp" />
@@ -599,6 +601,9 @@ if not exist "%SDK_BIN%\dxil.dll" if exist "%SDK_BIN_ALT%\dxil.dll" copy "%SDK_B
     <ClInclude Include="Scripts\Route\RouteManagerScript.h" />
     <ClInclude Include="Scripts\Route\RouteRendererScript.h" />
     <ClInclude Include="Scripts\Stage\StageManagerScript.h" />
+    <ClInclude Include="Scripts\Stage\MapData.h" />
+    <ClInclude Include="Scripts\Stage\MapRendererScript.h" />
+    <ClInclude Include="Engine\Debug\MapStudioWindow.h" />
     <ClInclude Include="Scripts\Stage\SkydomeScript.h" />
     <ClInclude Include="Scripts\Sample\SamplePlayerScript.h" />
     <ClInclude Include="Scripts\Sample\SampleFollowerScript.h" />

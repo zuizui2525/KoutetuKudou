@@ -28,6 +28,7 @@ struct WorkspaceWindowState {
     bool showEffectList      = false;
     bool showPerfMonitor     = false;
     bool showContentBrowser  = false;
+    bool showMapStudio       = false;
 };
 
 /// <summary>
@@ -83,6 +84,10 @@ public:
 
     // ワークスペース永続化（JSON保存・復元・リセット・ページ別ini保存読込）
     void SaveWorkspacesConfig();
+
+    // MapStudio (マップエディター) アクセサ
+    class MapStudioWindow* GetMapStudioWindow() const { return mapStudioWindow_.get(); }
+    void OpenMapStudio(const std::string& mapAssetPath = "");
     void LoadWorkspacesConfig();
     void ResetWorkspaceLayout(size_t index);
     void SaveWorkspaceLayoutIni(const WorkspaceDefinition& ws);
@@ -98,11 +103,13 @@ private:
     std::unique_ptr<class PerformanceMonitorWindow> perfMonitorWindow_;
     std::unique_ptr<class ContentBrowserWindow> contentBrowserWindow_;
     std::unique_ptr<class ParticleStudioWindow> particleStudioWindow_;
+    std::unique_ptr<class MapStudioWindow> mapStudioWindow_;
 
     // 各ウィンドウの表示・非表示フラグ
     bool showSceneView_ = true;
     bool showGameView_ = true;
     bool showParticleStudio_ = false;
+    bool showMapStudio_ = false;
     bool showPerfMonitor_ = true;
     bool showHierarchy_ = true;
     bool showInspector_ = true;

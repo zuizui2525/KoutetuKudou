@@ -1,5 +1,5 @@
 {
-  "activeWorkspaceIndex": 0,
+  "activeWorkspaceIndex": 2,
   "isLayoutLocked": true,
   "workspaces": [
     {
@@ -32,6 +32,24 @@
         "showInspector": false,
         "showConsole": false,
         "showParticleStudio": true,
+        "showPostProcess": false,
+        "showEffectList": false,
+        "showPerfMonitor": false,
+        "showContentBrowser": false
+      }
+    },
+    {
+      "id": "custom_2",
+      "name": "マップ",
+      "isParticleStudio": false,
+      "isCustom": true,
+      "windowState": {
+        "showSceneView": false,
+        "showGameView": false,
+        "showHierarchy": false,
+        "showInspector": false,
+        "showConsole": false,
+        "showParticleStudio": false,
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": false,

@@ -203,6 +203,12 @@
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp">
       <Filter>Scripts\Stage</Filter>
     </ClCompile>
+    <ClCompile Include="Scripts\Stage\MapRendererScript.cpp">
+      <Filter>Scripts\Stage</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Debug\MapStudioWindow.cpp">
+      <Filter>Engine\Debug</Filter>
+    </ClCompile>
     <ClCompile Include="Scripts\Stage\SkydomeScript.cpp">
       <Filter>Scripts\Stage</Filter>
     </ClCompile>
@@ -465,6 +471,15 @@
     </ClInclude>
     <ClInclude Include="Scripts\Stage\StageManagerScript.h">
       <Filter>Scripts\Stage</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripts\Stage\MapData.h">
+      <Filter>Scripts\Stage</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripts\Stage\MapRendererScript.h">
+      <Filter>Scripts\Stage</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Debug\MapStudioWindow.h">
+      <Filter>Engine\Debug</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Stage\SkydomeScript.h">
       <Filter>Scripts\Stage</Filter>

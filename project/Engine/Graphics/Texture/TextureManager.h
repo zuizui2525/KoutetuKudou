@@ -14,6 +14,7 @@ public:
     static constexpr uint32_t kReservedPostProcessTempIndex = 2;  // ポストプロセス 中間RT
     static constexpr uint32_t kReservedDepthOutlineIndex   = 3;  // 深度バッファ SRV
     static constexpr uint32_t kReservedParticleStudioIndex = 4;  // GPUパーティクルスタジオ プレビューRT
+    static constexpr uint32_t kReservedMapStudioIndex      = 5;  // 3Dマップスタジオ プレビューRT
     static constexpr uint32_t kSystemReservedCount         = 10; // 予約枠の総数 (0〜9)
 
     // 2. 動的アロケーション領域 (スロット 10 〜 1899)
