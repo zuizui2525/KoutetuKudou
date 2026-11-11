@@ -6,6 +6,7 @@
 #include "Scripts/Enemy/EnemySpawnManagerScript.h"
 #include "Scripts/Enemy/EnemySpawnPointScript.h"
 #include "Scripts/Enemy/EnemyAIScript.h"
+#include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
 #include "Engine/Graphics/Objects/2d/Circle/Circle2DObject.h"
 #include "Engine/Graphics/Objects/2d/Ring/Ring2DObject.h"
@@ -41,6 +42,7 @@ namespace {
     constexpr Vector4 kDxPanelConnectedBorderColor = { 40.0f / 255.0f, 230.0f / 255.0f, 140.0f / 255.0f, 240.0f / 255.0f };
     constexpr Vector4 kDxPanelInnerBgColor = { 8.0f / 255.0f, 12.0f / 255.0f, 18.0f / 255.0f, 200.0f / 255.0f };
     constexpr Vector4 kDxPanelInnerBorderColor = { 25.0f / 255.0f, 90.0f / 255.0f, 140.0f / 255.0f, 150.0f / 255.0f };
+    constexpr Vector4 kDxMapBuildingFillColor = { 45.0f / 255.0f, 60.0f / 255.0f, 85.0f / 255.0f, 215.0f / 255.0f };
     constexpr Vector4 kDxGridLineColor = { 40.0f / 255.0f, 70.0f / 255.0f, 95.0f / 255.0f, 120.0f / 255.0f };
     constexpr Vector4 kDxStartColor = { 40.0f / 255.0f, 240.0f / 255.0f, 100.0f / 255.0f, 1.0f };
     constexpr Vector4 kDxGoalColor = { 255.0f / 255.0f, 60.0f / 255.0f, 60.0f / 255.0f, 1.0f };
@@ -106,6 +108,9 @@ GamePhaseControllerScript::GamePhaseControllerScript()
 }
 
 GamePhaseControllerScript::~GamePhaseControllerScript() {
+    if (sInstance_ == this) {
+        sInstance_ = nullptr;
+    }
     // 2D DirectX12描画オブジェクト破棄時のクラッシュを防ぐためGPU処理を同期
     if (auto engine = EngineResource::GetEngine()) {
         if (auto dxCommon = engine->GetDxCommon()) {
@@ -115,6 +120,7 @@ GamePhaseControllerScript::~GamePhaseControllerScript() {
 }
 
 void GamePhaseControllerScript::Awake() {
+    sInstance_ = this;
     currentPhase_ = Phase::DrawRoute;
     currentArea_ = 0;
     currentDistance_ = 0.0f;
@@ -1140,7 +1146,89 @@ void GamePhaseControllerScript::Render2DMapDirectX() {
         };
     };
 
-    // 9. ミニマップ上の敵スポーン警戒ゾーン（円＆外枠リング）の描画
+    // 9. ミニマップ上の市街地建物ブロック描画 (水平ランレングス結合で超軽量描画)
+    size_t bldgSpriteIdx = 0;
+    for (auto* mapRenderer : MapRendererScript::GetAllInstances()) {
+        if (!mapRenderer || !mapRenderer->IsMapLoaded()) continue;
+
+        const auto& mapGrid = mapRenderer->GetMapGrid();
+        auto* mapOwner = mapRenderer->GetOwner();
+        Vector3 basePos = mapOwner ? mapOwner->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+
+        const float tileSize = mapGrid.tileSize;
+        const float totalW = static_cast<float>(mapGrid.width) * tileSize;
+        const float totalH = static_cast<float>(mapGrid.height) * tileSize;
+        constexpr float kHalfFactor = 0.5f;
+        const float startX = basePos.x - totalW * kHalfFactor;
+        const float mapBaseZ = basePos.z - totalH * kHalfFactor;
+        const float mapEndBaseZ = mapBaseZ + totalH;
+
+        // このマップが現在のエリア区間 [startZ, goalZ] と重なっていない場合はスキップ
+        if (mapEndBaseZ < startZ || mapBaseZ > goalZ) continue;
+
+        for (int gz = 0; gz < mapGrid.height; ++gz) {
+            float bldgMinZ = mapBaseZ + static_cast<float>(gz) * tileSize;
+            float bldgMaxZ = bldgMinZ + tileSize;
+
+            // 現在のエリアのZ区間 [startZ, goalZ] の外にあるマスはスキップ
+            if (bldgMaxZ < startZ || bldgMinZ > goalZ) continue;
+
+            int gx = 0;
+            while (gx < mapGrid.width) {
+                if (mapGrid.GetTile(gx, gz) == kTileBuilding) {
+                    int startGx = gx;
+                    while (gx < mapGrid.width && mapGrid.GetTile(gx, gz) == kTileBuilding) {
+                        ++gx;
+                    }
+                    int endGx = gx; // 区間 [startGx, endGx)
+
+                    float bldgMinX = startX + static_cast<float>(startGx) * tileSize;
+                    float bldgMaxX = startX + static_cast<float>(endGx) * tileSize;
+
+                    float normMinX = (bldgMinX + kMapBoundaryX) / (2.0f * kMapBoundaryX);
+                    float normMaxX = (bldgMaxX + kMapBoundaryX) / (2.0f * kMapBoundaryX);
+                    float normMinZ = (bldgMinZ - startZ) / areaLength;
+                    float normMaxZ = (bldgMaxZ - startZ) / areaLength;
+
+                    normMinX = std::clamp(normMinX, 0.0f, 1.0f);
+                    normMaxX = std::clamp(normMaxX, 0.0f, 1.0f);
+                    normMinZ = std::clamp(normMinZ, 0.0f, 1.0f);
+                    normMaxZ = std::clamp(normMaxZ, 0.0f, 1.0f);
+
+                    float rectMinX = innerMinX + normMinX * innerW;
+                    float rectMaxX = innerMinX + normMaxX * innerW;
+                    float rectMinY = innerMaxY - normMaxZ * innerH;
+                    float rectMaxY = innerMaxY - normMinZ * innerH;
+
+                    float rectW = rectMaxX - rectMinX;
+                    float rectH = rectMaxY - rectMinY;
+
+                    if (rectW > 0.0f && rectH > 0.0f) {
+                        // プール拡張
+                        while (mapBuildingSprites_.size() <= bldgSpriteIdx) {
+                            auto sp = std::make_unique<SpriteObject>();
+                            sp->Initialize();
+                            SceneHierarchy::GetInstance()->Unregister(sp.get());
+                            mapBuildingSprites_.push_back(std::move(sp));
+                        }
+
+                        auto& bldgSprite = mapBuildingSprites_[bldgSpriteIdx];
+                        bldgSprite->SetPosition({ rectMinX, rectMinY, 0.0f });
+                        bldgSprite->SetSize(rectW, rectH);
+                        bldgSprite->GetMaterialData()->color = kDxMapBuildingFillColor;
+                        bldgSprite->Update();
+                        bldgSprite->Draw("white", true);
+
+                        bldgSpriteIdx++;
+                    }
+                } else {
+                    ++gx;
+                }
+            }
+        }
+    }
+
+    // 10. ミニマップ上の敵スポーン警戒ゾーン（円＆外枠リング）の描画
     if (spawnMgr_) {
         const auto& spawnPoints = spawnMgr_->GetCachedSpawnPoints();
         size_t enemyCircleIdx = 0;

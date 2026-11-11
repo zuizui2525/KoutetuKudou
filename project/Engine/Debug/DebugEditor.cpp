@@ -1219,7 +1219,8 @@ void DebugEditor::SaveWorkspacesConfig() {
         ofs << "        \"showPostProcess\": " << (s.showPostProcess ? "true" : "false") << ",\n";
         ofs << "        \"showEffectList\": " << (s.showEffectList ? "true" : "false") << ",\n";
         ofs << "        \"showPerfMonitor\": " << (s.showPerfMonitor ? "true" : "false") << ",\n";
-        ofs << "        \"showContentBrowser\": " << (s.showContentBrowser ? "true" : "false") << "\n";
+        ofs << "        \"showContentBrowser\": " << (s.showContentBrowser ? "true" : "false") << ",\n";
+        ofs << "        \"showMapStudio\": " << (s.showMapStudio ? "true" : "false") << "\n";
         ofs << "      }\n";
         ofs << "    }" << (i + 1 < workspaces_.size() ? "," : "") << "\n";
     }
@@ -1287,6 +1288,7 @@ void DebugEditor::LoadWorkspacesConfig() {
             ws.windowState.showEffectList     = ExtractJsonBool(stateBlock, "showEffectList", false);
             ws.windowState.showPerfMonitor    = ExtractJsonBool(stateBlock, "showPerfMonitor", true);
             ws.windowState.showContentBrowser = ExtractJsonBool(stateBlock, "showContentBrowser", true);
+            ws.windowState.showMapStudio      = ExtractJsonBool(stateBlock, "showMapStudio", false);
 
             loadedWorkspaces.push_back(ws);
             curPos = objEnd;

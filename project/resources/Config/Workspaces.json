@@ -1,5 +1,5 @@
 {
-  "activeWorkspaceIndex": 2,
+  "activeWorkspaceIndex": 0,
   "isLayoutLocked": true,
   "workspaces": [
     {
@@ -17,7 +17,8 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": true,
-        "showContentBrowser": true
+        "showContentBrowser": true,
+        "showMapStudio": false
       }
     },
     {
@@ -35,7 +36,8 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": false,
-        "showContentBrowser": false
+        "showContentBrowser": false,
+        "showMapStudio": false
       }
     },
     {
@@ -53,7 +55,8 @@
         "showPostProcess": false,
         "showEffectList": false,
         "showPerfMonitor": false,
-        "showContentBrowser": false
+        "showContentBrowser": false,
+        "showMapStudio": true
       }
     }
   ]

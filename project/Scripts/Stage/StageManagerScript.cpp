@@ -28,7 +28,7 @@ void StageManagerScript::Awake() {
 }
 
 void StageManagerScript::Start() {
-    BuildStageGeometry();
+    // ユーザー要望により左右の境界柱（Pillar）は全削除（生成停止）
 }
 
 void StageManagerScript::OnUpdate() {

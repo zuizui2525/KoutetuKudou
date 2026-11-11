@@ -61,7 +61,7 @@ private:
     Vector3 centerOffset_ = { 0.0f, 0.0f, 0.0f };
     Vector3 size_ = { 1.0f, 1.0f, 1.0f };
     bool isTrigger_ = false;
-    bool showDebugGizmo_ = true;
+    bool showDebugGizmo_ = false;
     bool isColliding_ = false;
     float gizmoWireThickness_ = 0.03f;
 

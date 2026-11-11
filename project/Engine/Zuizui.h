@@ -17,6 +17,7 @@ public:
     void Initialize(const wchar_t* title = L"title", const int32_t width = WindowApp::kClientWidth, const int32_t height = WindowApp::kClientHeight);
     void Update();
     void Finalize();
+    void FinalizeEditor();
 
     // フレーム制御
     bool ProcessMessage() { return window->ProcessMessage(); }

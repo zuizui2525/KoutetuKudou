@@ -4,9 +4,18 @@
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/MeshRendererComponent.h"
+#include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
+#include "Engine/Graphics/Objects/2d/Line/Line2DObject.h"
+#include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
+#include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
+#include "Engine/Debug/SceneHierarchy.h"
+#include "Engine/Base/DxCommon/DxCommon.h"
+#include "Engine/Base/BaseResource.h"
+#include "Engine/Zuizui.h"
 #include "App/Scene/Core/SceneManager.h"
 #include "App/Scene/Generic/GenericScene.h"
 #include <cmath>
+#include <algorithm>
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
@@ -19,10 +28,136 @@ namespace {
     constexpr float kCenterXThreshold = 0.3f; // 正面回り込み完了とみなすX距離誤差 (m)
     constexpr int kCriticalMultiplier = 2;    // ヘッドショット時のダメージ倍率
     constexpr float kEpsilon = 0.0001f;
+
+    // HPバー描画用カラー定数 (RGBA: 0.0f - 1.0f)
+    constexpr Vector4 kHpBarBgColor = { 10.0f / 255.0f, 15.0f / 255.0f, 22.0f / 255.0f, 220.0f / 255.0f };
+    constexpr Vector4 kHpBarBorderColor = { 20.0f / 255.0f, 25.0f / 255.0f, 35.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kHpGreen = { 45.0f / 255.0f, 235.0f / 255.0f, 115.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kHpYellow = { 245.0f / 255.0f, 205.0f / 255.0f, 45.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kHpRed = { 245.0f / 255.0f, 55.0f / 255.0f, 55.0f / 255.0f, 240.0f / 255.0f };
+    constexpr Vector4 kBossHpBarColor = { 220.0f / 255.0f, 50.0f / 255.0f, 240.0f / 255.0f, 245.0f / 255.0f };
+    constexpr Vector4 kBossBorderColor = { 255.0f / 255.0f, 215.0f / 255.0f, 60.0f / 255.0f, 240.0f / 255.0f };
+
+    constexpr float kNearClipW = 0.05f;
+    constexpr float kHalf = 0.5f;
+    constexpr float kScreenWidth = 1280.0f;
+    constexpr float kScreenHeight = 720.0f;
+    constexpr float kScreenCullMargin = 80.0f;
+    constexpr float kYellowHpRatioThreshold = 0.5f;
+    constexpr float kRedHpRatioThreshold = 0.2f;
 }
 
 EnemyAIScript::EnemyAIScript()
     : ScriptComponent("EnemyAIScript") {
+}
+
+EnemyAIScript::~EnemyAIScript() {
+    if (auto engine = EngineResource::GetEngine()) {
+        if (auto dxCommon = engine->GetDxCommon()) {
+            dxCommon->FlushGPU();
+        }
+    }
+}
+
+void EnemyAIScript::EnsureHpBarVisuals() {
+    if (!hpBgSprite_) {
+        hpBgSprite_ = std::make_unique<SpriteObject>();
+        hpBgSprite_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(hpBgSprite_.get());
+    }
+    if (!hpFillSprite_) {
+        hpFillSprite_ = std::make_unique<SpriteObject>();
+        hpFillSprite_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(hpFillSprite_.get());
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (!hpBorders_[i]) {
+            hpBorders_[i] = std::make_unique<Line2DObject>();
+            hpBorders_[i]->Initialize();
+            SceneHierarchy::GetInstance()->Unregister(hpBorders_[i].get());
+        }
+    }
+}
+
+void EnemyAIScript::Draw() {
+    if (isDead_ || !owner_ || !owner_->IsVisible()) return;
+
+    // 敵の頭上ワールド座標
+    Vector3 enemyPos = owner_->GetPosition();
+    float headOffset = isBoss_ ? kBossHpBarYOffset : kNormalHpBarYOffset;
+    Vector3 headWorldPos = { enemyPos.x, enemyPos.y + headOffset, enemyPos.z };
+
+    auto* camMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    Matrix4x4 viewProj = Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    float w = headWorldPos.x * viewProj.m[0][3] + headWorldPos.y * viewProj.m[1][3] + headWorldPos.z * viewProj.m[2][3] + viewProj.m[3][3];
+    if (w <= kNearClipW) return; // カメラ背後は非表示
+
+    float invW = 1.0f / w;
+    float ndcX = (headWorldPos.x * viewProj.m[0][0] + headWorldPos.y * viewProj.m[1][0] + headWorldPos.z * viewProj.m[2][0] + viewProj.m[3][0]) * invW;
+    float ndcY = (headWorldPos.x * viewProj.m[0][1] + headWorldPos.y * viewProj.m[1][1] + headWorldPos.z * viewProj.m[2][1] + viewProj.m[3][1]) * invW;
+
+    float screenX = (ndcX * kHalf + kHalf) * kScreenWidth;
+    float screenY = (-ndcY * kHalf + kHalf) * kScreenHeight;
+
+    if (screenX < -kScreenCullMargin || screenX > kScreenWidth + kScreenCullMargin ||
+        screenY < -kScreenCullMargin || screenY > kScreenHeight + kScreenCullMargin) {
+        return;
+    }
+
+    EnsureHpBarVisuals();
+
+    // 距離に応じた適度なサイズ減衰（遠くは小さく、近くは大きく）
+    float baseWidth = isBoss_ ? kBossBarWidth : kNormalBarWidth;
+    float baseHeight = isBoss_ ? kBossBarHeight : kNormalBarHeight;
+    float scale = std::clamp(kReferenceDistance / (std::max)(4.0f, w), kMinBarScale, kMaxBarScale);
+    float barW = baseWidth * scale;
+    float barH = baseHeight * scale;
+
+    float barMinX = screenX - barW * kHalf;
+    float barMinY = screenY - barH * kHalf;
+    float barMaxX = barMinX + barW;
+    float barMaxY = barMinY + barH;
+
+    float hpRatio = (maxHp_ > 0) ? std::clamp(static_cast<float>(hp_) / static_cast<float>(maxHp_), 0.0f, 1.0f) : 0.0f;
+    float fillW = barW * hpRatio;
+
+    Vector4 fillColor = (hpRatio > kYellowHpRatioThreshold) ? kHpGreen :
+                        ((hpRatio > kRedHpRatioThreshold) ? kHpYellow : kHpRed);
+    if (isBoss_) {
+        fillColor = kBossHpBarColor;
+    }
+
+    // 1. 背景描画
+    hpBgSprite_->SetPosition({ barMinX, barMinY, 0.0f });
+    hpBgSprite_->SetSize(barW, barH);
+    hpBgSprite_->GetMaterialData()->color = kHpBarBgColor;
+    hpBgSprite_->Update();
+    hpBgSprite_->Draw("white", true);
+
+    // 2. 残量バー描画
+    if (fillW > 0.0f) {
+        hpFillSprite_->SetPosition({ barMinX, barMinY, 0.0f });
+        hpFillSprite_->SetSize(fillW, barH);
+        hpFillSprite_->GetMaterialData()->color = fillColor;
+        hpFillSprite_->Update();
+        hpFillSprite_->Draw("white", true);
+    }
+
+    // 3. 外枠線描画
+    Vector4 borderColor = isBoss_ ? kBossBorderColor : kHpBarBorderColor;
+    hpBorders_[0]->SetPoints({ barMinX, barMinY }, { barMaxX, barMinY });
+    hpBorders_[1]->SetPoints({ barMinX, barMaxY }, { barMaxX, barMaxY });
+    hpBorders_[2]->SetPoints({ barMinX, barMinY }, { barMinX, barMaxY });
+    hpBorders_[3]->SetPoints({ barMaxX, barMinY }, { barMaxX, barMaxY });
+    for (int i = 0; i < 4; ++i) {
+        hpBorders_[i]->SetThickness(kBorderThickness);
+        hpBorders_[i]->GetMaterialData()->color = borderColor;
+        hpBorders_[i]->Update();
+        hpBorders_[i]->Draw("white", true);
+    }
 }
 
 void EnemyAIScript::Awake() {

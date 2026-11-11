@@ -30,6 +30,12 @@ public:
     static constexpr float kCameraRotateSpeed      = 0.003f;  // マウス回転感度
     static constexpr float kCameraWheelSensitivity = 2.00f;   // ホイール移動感度
     static constexpr float kMaxCameraPitch         = 1.55f;   // 上下首振り上限 (約89度)
+    static constexpr float kOrbitRotateSpeed       = 0.004f;  // Blender風MMBオービット回転感度
+    static constexpr float kPanSpeedFactor         = 0.0016f; // Blender風Shift+MMBパン移動感度 (距離比例)
+    static constexpr float kZoomWheelFactor        = 0.10f;   // Blender風ホイールズーム倍率
+    static constexpr float kMinCameraDistance      = 2.0f;    // 最小ズーム距離 (m)
+    static constexpr float kMaxCameraDistance      = 500.0f;  // 最大ズーム距離 (m)
+    static constexpr float kMinCameraPitch         = -1.55f;  // オービット下限角 (ラジアン)
     static constexpr float kDefaultInspectorWidth  = 380.0f;
     static constexpr float kMinInspectorWidth      = 260.0f;
     static constexpr float kMinViewportWidth       = 220.0f;
@@ -91,6 +97,10 @@ private:
     void OpenSaveFileDialog();
     void OpenLoadFileDialog();
 
+    void RebuildGridAndBorderMeshes();
+    void RebuildBuildingMesh();
+    void RenderGridAndBorders(ID3D12GraphicsCommandList* cmdList);
+
 private:
     bool isInitialized_ = false;
     bool isOpen_ = false;
@@ -107,15 +117,68 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsvHeap_;
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle_{};
 
-    // プレビュー用3Dオブジェクト
-    std::unique_ptr<CubeObject> previewCube_;
+    // プレビュー用3Dオブジェクト (上書き競合防止のため独立インスタンス化)
+    std::unique_ptr<CubeObject> previewGroundBase_;      // 外側の拡張ベース土台 (暗色プラットフォーム)
+    std::unique_ptr<CubeObject> previewStageGround_;     // ステージ編集エリアの床面プレート
+    std::unique_ptr<CubeObject> previewCornerPole_;      // 四隅の境界マーカーポスト
+    std::unique_ptr<CubeObject> previewBuildingCube_;    // 配置済みビル用キューブ
+    std::unique_ptr<CubeObject> previewHoverCube_;       // ホバープレビュー半透明キューブ
     std::unique_ptr<LineObject> previewLine_;
 
-    // スタジオ専用デバッグカメラ (SceneViewと同一のWASD+マウス操作)
+    // グリッド線・境界線のバッチ描画用オブジェクトと頂点バッファ
+    std::unique_ptr<CubeObject> gridBatchObject_;        // 通常グリッド線用マテリアル保持
+    std::unique_ptr<CubeObject> majorGridBatchObject_;   // 5マスごと主グリッド線用マテリアル保持
+    std::unique_ptr<CubeObject> borderBatchObject_;      // ステージ外枠境界線用マテリアル保持
+    std::unique_ptr<CubeObject> startLineBatchObject_;   // START手前ライン用マテリアル保持
+    std::unique_ptr<CubeObject> goalLineBatchObject_;    // GOAL奥ライン用マテリアル保持
+    std::unique_ptr<CubeObject> hoverBorderBatchObject_; // ホバー中マス枠線用マテリアル保持
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> gridVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW gridVbView_{};
+    uint32_t gridVertexCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> majorGridVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW majorGridVbView_{};
+    uint32_t majorGridVertexCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> borderVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW borderVbView_{};
+    uint32_t borderVertexCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> startLineVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW startLineVbView_{};
+    uint32_t startLineVertexCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> goalLineVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW goalLineVbView_{};
+    uint32_t goalLineVertexCount_ = 0;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> hoverBorderVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW hoverBorderVbView_{};
+    uint32_t hoverBorderVertexCount_ = 0;
+
+    // 配置済みビルのバッチ描画用バッファ
+    Microsoft::WRL::ComPtr<ID3D12Resource> buildingVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW buildingVbView_{};
+    uint32_t buildingVertexCount_ = 0;
+    bool isBuildingMeshDirty_ = true;
+
+    // メッシュ再構築判定用キャッシュ
+    int cachedGridWidth_ = -1;
+    int cachedGridHeight_ = -1;
+    float cachedTileSize_ = -1.0f;
+
+    // スタジオ専用カメラ (Blender風オービット操作 & WASDフライスルー操作)
     std::shared_ptr<BaseCamera> studioCamera_;
     Vector3 cameraPosition_ = { 0.0f, 35.0f, -40.0f };
     Vector3 cameraRotation_ = { 0.65f, 0.0f, 0.0f }; // 俯瞰約37度
-    bool isCameraNavigating_ = false; // 右クリック操作中フラグ
+    Vector3 cameraTarget_ = { 0.0f, 0.0f, 0.0f };   // 注視点 (Orbitの中心)
+    float cameraDistance_ = 65.0f;                  // 注視点からの距離 (m)
+    float cameraPitch_ = 0.62f;                     // 俯瞰ピッチ角 (ラジアン)
+    float cameraYaw_ = 0.0f;                        // 水平ヨー角 (ラジアン)
+    bool isCameraNavigating_ = false;               // 操作中フラグ
+    bool isOrbitNavigating_ = false;                // MMBドラッグによるOrbit/Pan/Zoom操作中フラグ
+    bool isFlyNavigating_ = false;                  // RMBドラッグによるWASDフライ操作中フラグ
 
     // UI状態
     float inspectorWidth_ = kDefaultInspectorWidth;

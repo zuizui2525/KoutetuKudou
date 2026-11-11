@@ -40,9 +40,7 @@ void EnemySpawnManagerScript::Awake() {
 
 void EnemySpawnManagerScript::Start() {
     RefreshSpawnPoints();
-    if (cachedSpawnPoints_.empty()) {
-        SetupStage1Preset();
-    }
+    SetupStage1Preset();
 }
 
 void EnemySpawnManagerScript::ResetSpawns(float startZ) {
@@ -221,67 +219,244 @@ void EnemySpawnManagerScript::ClearPreviewEnemies() {
 }
 
 /// <summary>
-/// ステージ1（Area 1: 0m〜120m）用の仮敵配置プリセット（4箇所のスポーン地点）を一括構築します。
+/// ステージ1（全4エリア: Area 0〜3、全長480m）用の仮敵配置プリセット（Wave 1〜16）を一括構築します。
 /// </summary>
 void EnemySpawnManagerScript::SetupStage1Preset() {
     auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene());
     if (!scene) return;
 
-    // 既にArea 1にスポーン地点が存在するかチェック
+    // 既に各エリアにスポーン地点が存在するかチェック
     RefreshSpawnPoints();
+    bool hasArea[4] = { false, false, false, false };
     for (auto* sp : cachedSpawnPoints_) {
-        if (sp && sp->GetTargetArea() == 0) {
-            return; // 既に配置済みなら重複生成しない
-        }
+        if (!sp) continue;
+        int a = sp->GetTargetArea();
+        if (a >= 0 && a < 4) hasArea[a] = true;
     }
 
-    // Wave 1: 序盤の偵察敵 (Z: 25.0m, X: 3.5m, 1体)
-    {
-        Vector3 pos = { 3.5f, 0.0f, 25.0f };
-        GameObject* go = CreateSpawnPoint(pos, 0, false);
-        if (go) {
-            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
-                sp->SetTriggerZ(0.0f); // スタート直後に出現
-                sp->SetCount(1);
+    // ============================================================
+    // Area 0 (0m ~ 120m: 基本市街地大通り)
+    // ============================================================
+    if (!hasArea[0]) {
+        // Wave 1: 序盤の偵察敵 (Z: 25.0m, X: 3.5m, 1体)
+        {
+            Vector3 pos = { 3.5f, 0.0f, 25.0f };
+            GameObject* go = CreateSpawnPoint(pos, 0, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(0.0f);
+                    sp->SetCount(1);
+                }
+            }
+        }
+
+        // Wave 2: 左右挟撃の2体 (Z: 50.0m, 2体, 拡散半径 4.0m)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 50.0f };
+            GameObject* go = CreateSpawnPoint(pos, 0, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(25.0f);
+                    sp->SetCount(2);
+                    sp->SetSpreadRadius(4.0f);
+                }
+            }
+        }
+
+        // Wave 3: 中央小隊の3体 (Z: 80.0m, 3体, 拡散半径 5.0m)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 80.0f };
+            GameObject* go = CreateSpawnPoint(pos, 0, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(55.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(5.0f);
+                }
+            }
+        }
+
+        // Wave 4: エリア1終端ゲート前の門番 (Z: 105.0m, 2体)
+        {
+            Vector3 pos = { -2.0f, 0.0f, 105.0f };
+            GameObject* go = CreateSpawnPoint(pos, 0, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(80.0f);
+                    sp->SetCount(2);
+                    sp->SetSpreadRadius(3.5f);
+                }
             }
         }
     }
 
-    // Wave 2: 左右挟撃の2体 (Z: 50.0m, 2体, 拡散半径 4.0m)
-    {
-        Vector3 pos = { 0.0f, 0.0f, 50.0f };
-        GameObject* go = CreateSpawnPoint(pos, 0, false);
-        if (go) {
-            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
-                sp->SetTriggerZ(25.0f);
-                sp->SetCount(2);
-                sp->SetSpreadRadius(4.0f);
+    // ============================================================
+    // Area 1 (120m ~ 240m: クランク蛇行街区)
+    // ============================================================
+    if (!hasArea[1]) {
+        // Wave 5: 右側進入路の待ち伏せ (Z: 145.0m, X: 12.0m, 2体)
+        {
+            Vector3 pos = { 12.0f, 0.0f, 145.0f };
+            GameObject* go = CreateSpawnPoint(pos, 1, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(125.0f);
+                    sp->SetCount(2);
+                    sp->SetSpreadRadius(3.0f);
+                }
+            }
+        }
+
+        // Wave 6: コーナーの挟撃隊 (Z: 175.0m, X: -10.0m, 3体)
+        {
+            Vector3 pos = { -10.0f, 0.0f, 175.0f };
+            GameObject* go = CreateSpawnPoint(pos, 1, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(155.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(4.0f);
+                }
+            }
+        }
+
+        // Wave 7: 後半直線の突撃部隊 (Z: 205.0m, X: 0.0m, 3体)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 205.0f };
+            GameObject* go = CreateSpawnPoint(pos, 1, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(185.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(4.5f);
+                }
+            }
+        }
+
+        // Wave 8: エリア2ゲート前の守備隊 (Z: 225.0m, X: -2.0m, 2体)
+        {
+            Vector3 pos = { -2.0f, 0.0f, 225.0f };
+            GameObject* go = CreateSpawnPoint(pos, 1, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(205.0f);
+                    sp->SetCount(2);
+                    sp->SetSpreadRadius(3.5f);
+                }
             }
         }
     }
 
-    // Wave 3: 中央小隊の3体 (Z: 80.0m, 3体, 拡散半径 5.0m)
-    {
-        Vector3 pos = { 0.0f, 0.0f, 80.0f };
-        GameObject* go = CreateSpawnPoint(pos, 0, false);
-        if (go) {
-            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
-                sp->SetTriggerZ(55.0f);
-                sp->SetCount(3);
-                sp->SetSpreadRadius(5.0f);
+    // ============================================================
+    // Area 2 (240m ~ 360m: 二股分岐＆ロータリー街区)
+    // ============================================================
+    if (!hasArea[2]) {
+        // Wave 9: 分岐路手前の索敵隊 (Z: 265.0m, X: 0.0m, 2体)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 265.0f };
+            GameObject* go = CreateSpawnPoint(pos, 2, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(245.0f);
+                    sp->SetCount(2);
+                    sp->SetSpreadRadius(4.0f);
+                }
+            }
+        }
+
+        // Wave 10: 左ルートの防衛隊 (Z: 295.0m, X: -18.0m, 3体)
+        {
+            Vector3 pos = { -18.0f, 0.0f, 295.0f };
+            GameObject* go = CreateSpawnPoint(pos, 2, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(275.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(3.5f);
+                }
+            }
+        }
+
+        // Wave 11: 右ルートの防衛隊 (Z: 295.0m, X: 18.0m, 3体)
+        {
+            Vector3 pos = { 18.0f, 0.0f, 295.0f };
+            GameObject* go = CreateSpawnPoint(pos, 2, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(275.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(3.5f);
+                }
+            }
+        }
+
+        // Wave 12: 合流地点の防衛隊 (Z: 345.0m, X: 0.0f, 3体)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 345.0f };
+            GameObject* go = CreateSpawnPoint(pos, 2, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(325.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(5.0f);
+                }
             }
         }
     }
 
-    // Wave 4: エリア1終端ゲート前の門番 (Z: 105.0m, 2体)
-    {
-        Vector3 pos = { -2.0f, 0.0f, 105.0f };
-        GameObject* go = CreateSpawnPoint(pos, 0, false);
-        if (go) {
-            if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
-                sp->SetTriggerZ(80.0f);
-                sp->SetCount(2);
-                sp->SetSpreadRadius(3.5f);
+    // ============================================================
+    // Area 3 (360m ~ 480m: 決戦高層回廊＆アリーナ広場)
+    // ============================================================
+    if (!hasArea[3]) {
+        // Wave 13: 密集回廊入口の哨戒隊 (Z: 385.0m, X: 0.0f, 3体)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 385.0f };
+            GameObject* go = CreateSpawnPoint(pos, 3, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(365.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(4.0f);
+                }
+            }
+        }
+
+        // Wave 14: 狭窄ゲート突撃隊 (Z: 415.0m, X: 0.0f, 3体)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 415.0f };
+            GameObject* go = CreateSpawnPoint(pos, 3, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(395.0f);
+                    sp->SetCount(3);
+                    sp->SetSpreadRadius(3.0f);
+                }
+            }
+        }
+
+        // Wave 15: 決戦アリーナ前衛隊 (Z: 445.0m, X: -6.0m, 4体)
+        {
+            Vector3 pos = { -6.0f, 0.0f, 445.0f };
+            GameObject* go = CreateSpawnPoint(pos, 3, false);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(425.0f);
+                    sp->SetCount(4);
+                    sp->SetSpreadRadius(4.5f);
+                }
+            }
+        }
+
+        // Wave 16: ファイナルボス＆親衛隊 (Z: 465.0m, X: 0.0f, 5体, Bossフラグ有効)
+        {
+            Vector3 pos = { 0.0f, 0.0f, 465.0f };
+            GameObject* go = CreateSpawnPoint(pos, 3, true);
+            if (go) {
+                if (auto* sp = go->GetComponent<EnemySpawnPointScript>()) {
+                    sp->SetTriggerZ(445.0f);
+                    sp->SetCount(5);
+                    sp->SetSpreadRadius(6.0f);
+                }
             }
         }
     }

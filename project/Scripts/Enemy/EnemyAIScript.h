@@ -1,6 +1,10 @@
 #pragma once
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Math/MathStructs.h"
+#include <memory>
+
+class SpriteObject;
+class Line2DObject;
 
 /// <summary>
 /// 敵キャラクターのAIステートマシン、部位別ダメージ判定、追従・攻撃を制御するスクリプトコンポーネント
@@ -17,11 +21,12 @@ public:
     };
 
     EnemyAIScript();
-    ~EnemyAIScript() override = default;
+    ~EnemyAIScript() override;
 
     void Awake() override;
     void Start() override;
     void OnUpdate() override;
+    void Draw() override;
     void OnInspectorGUI() override;
 
     /// <summary>
@@ -68,10 +73,25 @@ private:
     /// </summary>
     void HandleHitFlash();
 
+    /// <summary>
+    /// 頭上HPバー用のDirectX 12スプライト・枠線オブジェクトを安全に初期化します。
+    /// </summary>
+    void EnsureHpBarVisuals();
+
 private:
     // マジックナンバー排除のための定数定義
     static constexpr int kDefaultNormalHp = 3;
     static constexpr int kDefaultBossHp = 30;
+    static constexpr float kNormalHpBarYOffset = 1.8f;
+    static constexpr float kBossHpBarYOffset = 2.8f;
+    static constexpr float kNormalBarWidth = 48.0f;
+    static constexpr float kNormalBarHeight = 6.0f;
+    static constexpr float kBossBarWidth = 92.0f;
+    static constexpr float kBossBarHeight = 10.0f;
+    static constexpr float kMinBarScale = 0.5f;
+    static constexpr float kMaxBarScale = 1.4f;
+    static constexpr float kReferenceDistance = 14.0f;
+    static constexpr float kBorderThickness = 1.0f;
     static constexpr float kApproachSpeedZ = 0.12f;
     static constexpr float kApproachTransitionOffset = 10.0f; // 視界内に入るZ距離
     static constexpr float kPreferredDistanceZ = 12.0f;       // 自機前方の理想維持距離 (m)
@@ -103,4 +123,9 @@ private:
     int hitFlashTimer_ = 0;
 
     Vector4 originalColor_ = { 1.0f, 0.1f, 0.1f, 1.0f }; // 敵基本色（赤）
+
+    // 頭上HPバー用描画オブジェクト (DirectX 12)
+    std::unique_ptr<SpriteObject> hpBgSprite_;
+    std::unique_ptr<SpriteObject> hpFillSprite_;
+    std::unique_ptr<Line2DObject> hpBorders_[4];
 };

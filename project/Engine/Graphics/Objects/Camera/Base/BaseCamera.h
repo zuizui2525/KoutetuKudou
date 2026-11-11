@@ -34,6 +34,14 @@ public:
     const Matrix4x4& GetProjectionMatrix() const { return projectionMatrix_; }  
     void UpdateProjection(float aspect);
 
+    // クリップ面・画角の設定
+    void SetNearClip(float nearZ) { nearZ_ = nearZ; }
+    void SetFarClip(float farZ) { farZ_ = farZ; }
+    void SetFov(float fov) { fov_ = fov; }
+    float GetNearClip() const { return nearZ_; }
+    float GetFarClip() const { return farZ_; }
+    float GetFov() const { return fov_; }
+
     // スクリーン座標からワールド空間へのレイを生成する
     void CreateRay(const Vector2& screenPos, float windowWidth, float windowHeight, Vector3& rayStart, Vector3& rayDir) const;
 

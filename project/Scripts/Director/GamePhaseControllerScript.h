@@ -58,6 +58,11 @@ public:
     Phase GetCurrentPhase() const { return currentPhase_; }
     int GetCurrentArea() const { return currentArea_; }
 
+    /// <summary>
+    /// シーン上でアクティブな GamePhaseControllerScript のインスタンスを取得します。
+    /// </summary>
+    static GamePhaseControllerScript* GetInstance() { return sInstance_; }
+
     float GetPlayerMoveSpeed() const { return playerMoveSpeed_; }
     void SetPlayerMoveSpeed(float speed) { playerMoveSpeed_ = speed; }
 
@@ -248,6 +253,7 @@ private:
     std::vector<std::unique_ptr<Line2DObject>> routeLinePool_;
     std::vector<std::unique_ptr<Circle2DObject>> mapEnemyCircles_;
     std::vector<std::unique_ptr<Ring2DObject>> mapEnemyRings_;
+    std::vector<std::unique_ptr<SpriteObject>> mapBuildingSprites_;
 
     // ミニリセットボタン用パーツ
     std::unique_ptr<SpriteObject> mapResetBtnSprite_;
@@ -334,4 +340,7 @@ private:
     float pulseTimer_ = 0.0f;
     float flashAlpha_ = 0.0f;
     std::unique_ptr<SpriteObject> flashSprite_;
+
+    // シングルトンインスタンス参照
+    static inline GamePhaseControllerScript* sInstance_ = nullptr;
 };

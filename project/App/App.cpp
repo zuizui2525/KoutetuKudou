@@ -183,13 +183,26 @@ void App::Run() {
     }
 #endif
 
-    // --- ゲーム停止状態と音声（BGM・SE）再生の自動連動 ---
-    static bool sLastPausedState = false;
+    // --- ゲーム停止状態・メインビュー有無と音声（BGM・SE）再生の自動連動 ---
+#ifdef _USEIMGUI
+    // 表示中のタブ判定（重なっているタブは前面のみ Visible が true になる）
+    bool isGameViewVisibleNow = GameViewWindow::IsGameViewVisible();
+    bool isSceneViewVisibleNow = SceneViewWindow::IsSceneViewVisible();
+    bool hasMainViewport = isGameViewVisibleNow || isSceneViewVisibleNow;
+#else
+    bool isGameViewVisibleNow = true;
+    bool isSceneViewVisibleNow = false;
+    bool hasMainViewport = true;
+#endif
+
+    // GameView / SceneView が存在しないページ（Map Studio / Particle Studio等）またはポーズ中は音声を自動一時停止
+    bool shouldAudioPause = isPaused || !hasMainViewport;
+    static bool sLastAudioPausedState = false;
     static bool sIsFirstAudioCheck = true;
-    if (sIsFirstAudioCheck || isPaused != sLastPausedState) {
-        sLastPausedState = isPaused;
+    if (sIsFirstAudioCheck || shouldAudioPause != sLastAudioPausedState) {
+        sLastAudioPausedState = shouldAudioPause;
         sIsFirstAudioCheck = false;
-        if (isPaused) {
+        if (shouldAudioPause) {
             Audio::GetInstance()->PauseAll();
         } else {
             Audio::GetInstance()->ResumeAll();
@@ -214,10 +227,6 @@ void App::Run() {
     }
 
 #ifdef _USEIMGUI
-    // 表示中のタブ判定（重なっているタブは前面のみ Visible が true になる）
-    bool isGameViewVisibleNow = GameViewWindow::IsGameViewVisible();
-    bool isSceneViewVisibleNow = SceneViewWindow::IsSceneViewVisible();
-
     EditorTab determinedTab = sCurrentActiveTab;
     if (isGameViewVisibleNow && !isSceneViewVisibleNow) {
         determinedTab = EditorTab::GameView;
@@ -303,7 +312,13 @@ void App::Run() {
         }
     }
 
-    if (!isPaused) {
+    if (!hasMainViewport) {
+        // 【GameView も SceneView も存在しないページ (Map Studio, Particle Studio 等)】
+        // ユーザー要望: ゲームのウィンドウとシーンのウィンドウがないページの時はゲームのアップデートを動かさない
+        // ゲームロジック、敵・プレイヤーの行動、物理、エフェクト等の更新を完全にスキップして負荷・副作用を根絶する。
+        cameraMgr_->Update();
+    } else if (!isPaused) {
+        // 【GameView または SceneView があり、再生中 (!isPaused)】
         lightMgr_->Update();
         Log::Update(deltaTime);
         EffectManager::GetInstance()->Update();
@@ -317,53 +332,43 @@ void App::Run() {
 
         cameraMgr_->Update();
     } else {
-        // ポーズ中の更新処理：
-        // エディタ画面（GameView または SceneView）が表示されている場合、オブジェクト編集やカメラ見回しを反映させる
-#ifdef _USEIMGUI
-        bool isEditorActive = isGameViewVisible || SceneViewWindow::IsSceneViewVisible();
-#else
-        bool isEditorActive = isGameViewVisible;
-#endif
-        if (isEditorActive) {
-            // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
-            if (cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
-                SceneManager::GetInstance()->Update();
-            }
+        // 【GameView または SceneView があり、再生停止中 (isPaused / ポーズ中)】
+        // ユーザー要望: 再生を押さなくても動くようにしたい
+        // 再生ボタンを押していなくても、SceneView でのカメラ移動、オブジェクト編集の反映、エフェクトプレビューがスムーズに動作する。
 
-            // もしアクティブカメラが DebugCamera であれば、ポーズ中も入力操作で飛び回れるように更新する
-            BaseCamera* activeCam = cameraMgr_->GetActiveCamera();
-            if (auto* dc = dynamic_cast<DebugCamera*>(activeCam)) {
-                dc->Update(input_.get());
-            }
-
-            cameraMgr_->Update();
-            lightMgr_->Update();
-
-            // シーン内のすべてのオブジェクトを更新して行列再計算（位置・色変更）を即座に反映させる（アニメーションは停止）
-            const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
-            for (auto* obj : objects) {
-                if (obj) {
-                    obj->UpdateEditor();
-                }
-            }
-
-            // エフェクトの更新と行列再計算を行い、エディタ停止中もエフェクトのリアルタイムプレビューを可能にする
-            EffectManager::GetInstance()->Update();
-            EffectManager::GetInstance()->UpdateMatrices();
+        // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
+        if (cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
+            SceneManager::GetInstance()->Update();
         }
-    }
 
+        // もしアクティブカメラが DebugCamera であれば、ポーズ中も入力操作で飛び回れるように更新する
+        BaseCamera* activeCam = cameraMgr_->GetActiveCamera();
+        if (auto* dc = dynamic_cast<DebugCamera*>(activeCam)) {
+            dc->Update(input_.get());
+        }
+
+        cameraMgr_->Update();
+        lightMgr_->Update();
+
+        // シーン内のすべてのオブジェクトを更新して行列再計算（位置・色変更）を即座に反映させる（アニメーションは停止）
+        const auto& objects = SceneHierarchy::GetInstance()->GetObjects();
+        for (auto* obj : objects) {
+            if (obj) {
+                obj->UpdateEditor();
+            }
+        }
+
+        // エフェクトの更新と行列再計算を行い、エディタ停止中もエフェクトのリアルタイムプレビューを可能にする
+        EffectManager::GetInstance()->Update();
+        EffectManager::GetInstance()->UpdateMatrices();
+    }
 
     // --- 描画 ---
     engine_->BeginFrame();
 
-#ifdef _USEIMGUI
-    bool isEditorViewportVisible = isGameViewVisible || SceneViewWindow::IsSceneViewVisible();
-#else
-    bool isEditorViewportVisible = isGameViewVisible;
-#endif
-    // ポーズ中でもエディタビューポート（GameView または SceneView）が表示されている場合は 3D レンダリングを実行
-    bool shouldDraw = !isPaused || isEditorViewportVisible;
+    // 描画判定:
+    // GameView または SceneView が存在し、かつ (再生中 または ポーズ中エディタ表示) の場合にメインシーン描画を実行
+    bool shouldDraw = hasMainViewport && (!isPaused || isGameViewVisibleNow || isSceneViewVisibleNow);
 
     if (shouldDraw) {
         // 1. 3Dシーン描画パス（RenderTextureへの描画）
@@ -413,6 +418,12 @@ void App::Finalize() {
     // 5. GPUパイプラインの完了を同期待機（破棄リソースを参照する描画コマンドの完了を保証）
     if (engine_ && engine_->GetDxCommon()) {
         engine_->GetDxCommon()->FlushGPU();
+    }
+
+    // 5.5. デバッグエディタ（MapStudio, ParticleStudio 等）の先行終了処理
+    //      （CameraManager や TextureManager が生存している安全な状態でエディタ内リソースを解放）
+    if (engine_) {
+        engine_->FinalizeEditor();
     }
 
     // 6. アプリケーションが所有するグラフィックスマネージャ・リソースの明示的破棄

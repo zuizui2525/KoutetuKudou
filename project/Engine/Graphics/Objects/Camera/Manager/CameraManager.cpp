@@ -142,22 +142,32 @@ void CameraManager::ImGuiControl() {
 }
 
 void CameraManager::Clear() {
-    // "Editor" カメラを一時的に退避させる
+    // "Editor" および "MapStudioCamera" 等のエディタ専用システムカメラを一時的に退避させる
     std::shared_ptr<BaseCamera> editorCam = nullptr;
-    auto it = cameras_.find(kEditorCameraName);
-    if (it != cameras_.end()) {
-        editorCam = it->second;
+    auto itEditor = cameras_.find(kEditorCameraName);
+    if (itEditor != cameras_.end()) {
+        editorCam = itEditor->second;
     }
 
-    if (cameras_.size() > (editorCam ? 1 : 0)) {
+    std::shared_ptr<BaseCamera> mapStudioCam = nullptr;
+    auto itMapStudio = cameras_.find(kMapStudioCameraName);
+    if (itMapStudio != cameras_.end()) {
+        mapStudioCam = itMapStudio->second;
+    }
+
+    size_t preservedCount = (editorCam ? 1 : 0) + (mapStudioCam ? 1 : 0);
+    if (cameras_.size() > preservedCount) {
         Log::Write(L" ├─ 【カメラシステムクリア】 登録されていたすべてのカメラリソースを破棄しました。");
     }
     cameras_.clear();
     activeCamera_ = nullptr;
 
-    // 退避させた "Editor" を再格納して温存する
+    // 退避させたシステムカメラを再格納して温存する
     if (editorCam) {
         cameras_[kEditorCameraName] = editorCam;
+    }
+    if (mapStudioCam) {
+        cameras_[kMapStudioCameraName] = mapStudioCam;
     }
 }
 

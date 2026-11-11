@@ -38,6 +38,14 @@ void Zuizui::Initialize(const wchar_t* title, const int32_t width, const int32_t
     Log::Write(L"========================================= [エンジン起動完了] =========================================");
 }
 
+void Zuizui::FinalizeEditor() {
+#ifdef _USEIMGUI
+    if (debugEditor) {
+        debugEditor.reset();
+    }
+#endif
+}
+
 void Zuizui::Finalize() {
     Log::Write(L"========================================= [エンジン終了処理開始] =========================================");
     // 終了前にGPU描画処理の完了を待機（ImGui等のリソース安全破棄のため）

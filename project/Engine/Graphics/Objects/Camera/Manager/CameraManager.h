@@ -30,6 +30,7 @@ public:
     static inline const std::string kZoomCameraName = "Zoom";
     static inline const std::string kDefaultCameraName = "Camera";
     static inline const std::string kMainCameraName = "Main";
+    static inline const std::string kMapStudioCameraName = "MapStudioCamera";
 
     // --- カメラ管理 ---
     void AddCamera(const std::string& name, std::shared_ptr<BaseCamera> camera);

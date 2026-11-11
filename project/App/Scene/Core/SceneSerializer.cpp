@@ -19,6 +19,7 @@
 #include "Engine/Component/ScriptRegistry.h"
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Stage/SkydomeScript.h"
+#include "Scripts/Stage/MapRendererScript.h"
 
 #include <fstream>
 #include <sstream>
@@ -461,6 +462,9 @@ std::string SceneSerializer::SerializeToString(
                         ofs << "          \"color\": [" << col.x << ", " << col.y << ", " << col.z << ", " << col.w << "],\n";
                         ofs << "          \"model_key\": \"" << sky->GetModelKey() << "\",\n";
                         ofs << "          \"texture_key\": \"" << sky->GetTextureKey() << "\"";
+                    } else if (auto* mr = dynamic_cast<MapRendererScript*>(sc)) {
+                        ofs << ",\n";
+                        ofs << "          \"map_asset_path\": \"" << mr->GetMapAssetPath() << "\"";
                     }
                 }
             }
@@ -769,6 +773,11 @@ bool SceneSerializer::DeserializeFromString(
                         const std::string kDefaultTextureKeyFallback = "skydome";
                         std::string texKey = ExtractString(compBlock, "texture_key", kDefaultTextureKeyFallback);
                         sky->SetTextureKey(texKey);
+                    } else if (auto* mr = dynamic_cast<MapRendererScript*>(script.get())) {
+                        std::string mapPath = ExtractString(compBlock, "map_asset_path", "");
+                        if (!mapPath.empty()) {
+                            mr->SetMapAssetPath(mapPath);
+                        }
                     }
                     go->AddComponentInstance(std::move(script));
                 }

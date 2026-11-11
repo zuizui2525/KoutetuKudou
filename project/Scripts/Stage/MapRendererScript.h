@@ -2,10 +2,14 @@
 
 #include "Engine/Component/ScriptComponent.h"
 #include "Scripts/Stage/MapData.h"
+#include <d3d12.h>
+#include <wrl/client.h>
 #include <string>
 #include <vector>
+#include <memory>
 
 class GameObject;
+class CubeObject;
 
 /// <summary>
 /// マップアセット（JSON）を読み込み、シーン上にビル群およびコライダーを一括展開するスクリプトコンポーネント。
@@ -19,8 +23,19 @@ public:
     void Awake() override;
     void Start() override;
     void OnUpdate() override;
+    void Draw() override;
     void OnDestroy() override;
     void OnInspectorGUI() override;
+
+    /// <summary>
+    /// シーン上でアクティブな MapRendererScript のインスタンスを取得します。
+    /// </summary>
+    static MapRendererScript* GetInstance() { return sInstance_; }
+
+    /// <summary>
+    /// シーン上でアクティブな MapRendererScript の全インスタンス一覧を取得します。
+    /// </summary>
+    static const std::vector<MapRendererScript*>& GetAllInstances() { return sInstances_; }
 
     /// <summary>
     /// マップJSONアセットを指定して読み込み、ビル群をシーン上に展開します。
@@ -64,9 +79,29 @@ public:
 
 private:
     /// <summary>
-    /// mapGrid_ に基づいてシーン上にビルのGameObject群を展開します。
+    /// mapGrid_ に基づいてビル群の静的バッチメッシュおよび境界コライダーを構築します。
     /// </summary>
     void BuildMapGeometry();
+
+    /// <summary>
+    /// 全ビルの直方体頂点を結合し、単一の頂点バッファへアップロードします（ドローコール極限削減）。
+    /// </summary>
+    void RebuildBuildingMesh();
+
+    /// <summary>
+    /// GPU頂点バッファおよびバッチ描画オブジェクトを遅延解放キューで安全に破棄します。
+    /// </summary>
+    void ReleaseMeshResources();
+
+    /// <summary>
+    /// コース外脱落防止用の外枠境界コライダーを生成します。
+    /// </summary>
+    void BuildBoundaryColliders();
+
+    /// <summary>
+    /// 生成済みの外枠境界コライダーを全破棄します。
+    /// </summary>
+    void ClearBoundaryColliders();
 
     /// <summary>
     /// JSONファイルからマップデータ（map設定およびbuildings座標配列）をパースします。
@@ -75,6 +110,8 @@ private:
 
 private:
     static constexpr size_t kMaxPathBufferLength = 256;
+    static constexpr float kAreaSpanZ = 120.0f;       // 1エリアの標準Z長
+    static constexpr int kMaxVisibleAreaDelta = 1;     // 距離カリング許容エリア差 (現在エリア±1エリアのみ描画)
 
     // パラメータ
     std::string mapAssetPath_ = "resources/Maps/Stage1_Area0.json";
@@ -84,6 +121,20 @@ private:
     // グリッドデータ
     MapGrid mapGrid_;
 
-    // 生成済みビルGameObject群の参照リスト
+    // 静的バッチ結合メッシュ（全ビルを1回のDrawコールで一括描画）
+    Microsoft::WRL::ComPtr<ID3D12Resource> buildingVbResource_;
+    D3D12_VERTEX_BUFFER_VIEW buildingVbView_{};
+    uint32_t buildingVertexCount_ = 0;
+    std::unique_ptr<CubeObject> batchCubeObject_;
+    bool isMeshDirty_ = false;
+
+    // コース境界コライダーGameObject群（左右各1個、計2個のみ生成）
+    std::vector<GameObject*> boundaryColliders_;
+
+    // 旧個別ビルオブジェクト互換用（破棄クリーンアップ用）
     std::vector<GameObject*> generatedBuildings_;
+
+    // シングルトンインスタンス参照および全インスタンス追跡
+    static inline MapRendererScript* sInstance_ = nullptr;
+    static inline std::vector<MapRendererScript*> sInstances_;
 };

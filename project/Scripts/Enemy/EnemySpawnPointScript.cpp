@@ -332,9 +332,21 @@ void EnemySpawnPointScript::UpdateText2D(bool isGamePlay) {
 }
 
 void EnemySpawnPointScript::Draw() {
+    // 現在の進行エリア（currentArea）以外のスポーン情報は一切描画せず非表示
+    auto* gamePhase = GamePhaseControllerScript::GetInstance();
+    int activeArea = gamePhase ? gamePhase->GetCurrentArea() : 0;
+    if (targetArea_ != activeArea) {
+        if (text2D_) {
+            text2D_->SetActive(false);
+        }
+        return;
+    }
+
     // ゲーム進行中（走行戦闘フェーズ）かエディタ編集時かを自動判別
     bool isGamePlay = false;
-    if (owner_) {
+    if (gamePhase) {
+        isGamePlay = (gamePhase->GetCurrentPhase() == GamePhaseControllerScript::Phase::Play);
+    } else if (owner_) {
         auto* scene = dynamic_cast<Scene*>(SceneManager::GetInstance()->GetCurrentScene());
         if (scene && scene->GetDirector()) {
             if (auto* phaseCtrl = scene->GetDirector()->GetScript<GamePhaseControllerScript>()) {
