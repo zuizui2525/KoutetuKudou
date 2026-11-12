@@ -5,6 +5,8 @@
 
 class SpriteObject;
 class Line2DObject;
+class Ring2DObject;
+class Circle2DObject;
 
 /// <summary>
 /// 敵キャラクターのAIステートマシン、部位別ダメージ判定、追従・攻撃を制御するスクリプトコンポーネント
@@ -17,7 +19,8 @@ public:
         MoveToCenter,      // 正面へ回り込み
         AttackCharge,      // 攻撃チャージ
         UnavoidableAttack, // 攻撃発射
-        Cooldown           // 攻撃後クールタイム（距離維持＆待機）
+        Cooldown,          // 攻撃後クールタイム（距離維持＆待機）
+        Stun               // 攻撃阻止スタン（カウンター成功で隙を晒す）
     };
 
     EnemyAIScript();
@@ -74,38 +77,54 @@ private:
     void HandleHitFlash();
 
     /// <summary>
-    /// 頭上HPバー用のDirectX 12スプライト・枠線オブジェクトを安全に初期化します。
+    /// トランスフォーマー風アーケードターゲットサイトおよび円形HPバー用描画オブジェクトを初期化します。
     /// </summary>
-    void EnsureHpBarVisuals();
+    void EnsureTargetSightVisuals();
+
+    /// <summary>
+    /// 敵の円形ターゲットサイト（外周八角形HPゲージ＋照準クロスヘア＋攻撃予兆収束リング）を描画します。
+    /// </summary>
+    void DrawTargetSight();
+
+    /// <summary>
+    /// 自機との間に遮蔽物（建物）があるかをレイキャストサンプリングで判定します。
+    /// </summary>
+    bool HasLineOfSightToPlayer() const;
 
 private:
     // マジックナンバー排除のための定数定義
-    static constexpr int kDefaultNormalHp = 3;
-    static constexpr int kDefaultBossHp = 30;
-    static constexpr float kNormalHpBarYOffset = 1.8f;
-    static constexpr float kBossHpBarYOffset = 2.8f;
-    static constexpr float kNormalBarWidth = 48.0f;
-    static constexpr float kNormalBarHeight = 6.0f;
-    static constexpr float kBossBarWidth = 92.0f;
-    static constexpr float kBossBarHeight = 10.0f;
-    static constexpr float kMinBarScale = 0.5f;
-    static constexpr float kMaxBarScale = 1.4f;
-    static constexpr float kReferenceDistance = 14.0f;
-    static constexpr float kBorderThickness = 1.0f;
+    static constexpr int kDefaultNormalHp = 15;                // 通常敵HP（秒間20発連射で約0.75秒の撃ち応え）
+    static constexpr int kDefaultBossHp = 150;                 // ボス敵HP（約7.5秒の集中連射）
+    static constexpr float kNormalTargetCenterYOffset = 1.0f;  // 通常敵の胸部・照準中心Yオフセット
+    static constexpr float kBossTargetCenterYOffset = 1.8f;    // ボス敵の胸部・照準中心Yオフセット
+    static constexpr float kNormalTargetRadius = 38.0f;        // 通常敵のサイトリング半径 (px)
+    static constexpr float kBossTargetRadius = 56.0f;          // ボス敵のサイトリング半径 (px)
+    static constexpr int kHpSegmentCount = 8;                  // 八角形HPバーのセグメント数
+    static constexpr float kHpSegmentThickness = 4.0f;         // HPバーセグメント線の太さ (px)
+    static constexpr float kHpSegmentGapRatio = 0.12f;         // セグメント間のスリット隙間率
     static constexpr float kApproachSpeedZ = 0.12f;
-    static constexpr float kApproachTransitionOffset = 10.0f; // 視界内に入るZ距離
-    static constexpr float kPreferredDistanceZ = 12.0f;       // 自機前方の理想維持距離 (m)
-    static constexpr float kMinDistanceZ = 7.0f;              // 自機への絶対接近限界距離 (m) 重なり防止
-    static constexpr float kDistanceAdjustSpeed = 0.08f;      // 停止距離調整速度
-    static constexpr float kMoveLerpFactorX = 0.05f;          // 正面回り込みの滑らかなLerp係数
-    static constexpr float kToCenterGaugeSpeed = 0.015f;      // ロックオン蓄積速度
-    static constexpr float kAttackGaugeSpeed = 0.02f;         // 攻撃チャージ速度
-    static constexpr int kDefaultCooldownDuration = 90;       // 攻撃後のクールタイムフレーム数（約1.5秒）
-    static constexpr int kEnemyBulletDamage = 10;             // 敵弾ダメージ（検証用に10に設定）
-    static constexpr float kCullDistanceBack = 60.0f;         // 後方取り残され時のカリング距離
-    static constexpr int kHitFlashDuration = 5;               // 被弾点滅持続フレーム数
-    static constexpr float kBulletSpawnOffsetZ = -1.0f;       // 弾発射オフセット
+    static constexpr float kApproachTransitionOffset = 10.0f;  // 視界内に入るZ距離
+    static constexpr float kPreferredDistanceZ = 12.0f;        // 自機前方の理想維持距離 (m)
+    static constexpr float kMinDistanceZ = 7.0f;               // 自機への絶対接近限界距離 (m) 重なり防止
+    static constexpr float kDistanceAdjustSpeed = 0.08f;       // 停止距離調整速度
+    static constexpr float kMoveLerpFactorX = 0.05f;           // 正面回り込みの滑らかなLerp係数
+    static constexpr float kToCenterGaugeSpeed = 0.0075f;      // ロックオン蓄積速度（約2.2秒）
+    static constexpr float kAttackGaugeSpeed = 0.0083f;        // 攻撃チャージ速度（約2.0秒）
+    static constexpr int kDefaultCooldownDuration = 210;       // 攻撃後のクールタイムフレーム数（約3.5秒）
+    static constexpr int kEnemyBulletDamage = 1;               // 敵弾ダメージ（1ダメージ）
+    static constexpr float kCullDistanceBack = 60.0f;          // 後方取り残され時のカリング距離
+    static constexpr int kHitFlashDuration = 5;                // 被弾点滅持続フレーム数
+    static constexpr float kBulletSpawnOffsetZ = -1.0f;        // 弾発射オフセット
     static constexpr float kEnemyBulletSpeed = 0.35f;
+
+    // トランスフォーマー風アタックマーカー定数 (マジックナンバー排除)
+    static constexpr int kStunDuration = 45;                   // 攻撃阻止スタン持続フレーム数（約0.75秒）
+    static constexpr float kTimingMarkerStartRadius = 90.0f;   // タイミング収束リング最大半径 (px)
+    static constexpr float kMarkerThickness = 2.5f;            // 収束リング枠線の太さ (px)
+    static constexpr float kCenterDotRadius = 4.0f;            // 中心ドット半径 (px)
+    static constexpr float kCenterCrosshairSize = 10.0f;       // 中心照準クロスヘアの長さ (px)
+    static constexpr float kCenterCrosshairGap = 4.0f;         // クロスヘアとサイトリングの間隔 (px)
+    static constexpr float kChargeShakeIntensity = 0.05f;      // チャージ中の微小震動強度
 
     // メンバ変数
     int maxHp_ = kDefaultNormalHp;
@@ -121,11 +140,19 @@ private:
     float preferredDistanceZ_ = kPreferredDistanceZ;
     int bulletDamage_ = kEnemyBulletDamage;
     int hitFlashTimer_ = 0;
+    int stunTimer_ = 0;
+    float markerPulseTimer_ = 0.0f;
 
     Vector4 originalColor_ = { 1.0f, 0.1f, 0.1f, 1.0f }; // 敵基本色（赤）
 
-    // 頭上HPバー用描画オブジェクト (DirectX 12)
-    std::unique_ptr<SpriteObject> hpBgSprite_;
-    std::unique_ptr<SpriteObject> hpFillSprite_;
-    std::unique_ptr<Line2DObject> hpBorders_[4];
+    // 建物進入防止用の直前安全座標
+    Vector3 prevSafePos_ = { 0.0f, 0.0f, 0.0f };
+    bool hasPrevSafePos_ = false;
+
+    // トランスフォーマー風アーケードターゲットサイト＆円形HPバー描画用オブジェクト (DirectX 12)
+    std::unique_ptr<Line2DObject> hpSegments_[kHpSegmentCount]; // 八角形HPセグメントゲージ
+    std::unique_ptr<Ring2DObject> targetBaseRing_;              // 下地ベースリング（暗色枠）
+    std::unique_ptr<Ring2DObject> attackTimingRing_;            // 攻撃予兆タイミング収束リング
+    std::unique_ptr<Circle2DObject> targetCenterDot_;           // 照準中心ドット
+    std::unique_ptr<Line2DObject> targetCrossLines_[4];         // 十字照準クロスヘア
 };

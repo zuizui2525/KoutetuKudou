@@ -225,6 +225,15 @@ private:
     static constexpr float kPulseMaxScale = 1.35f;        // 数字パルス最大拡大率
     static constexpr float kPulseDecayRate = 7.0f;        // パルス減衰速度
 
+    // 建物突入時の視界悪化・継続ダメージ定数 (マジックナンバー排除)
+    static constexpr float kBuildingBlindMaxAlpha = 0.88f;       // 視界悪化の最大アルファ (煙・粉塵でほぼ前方が見えなくなる)
+    static constexpr float kBuildingBlindFadeInSpeed = 0.12f;     // スモーク侵入フェードイン速度
+    static constexpr float kBuildingBlindFadeOutSpeed = 0.06f;    // スモーク脱出フェードアウト速度
+    static constexpr int kBuildingDamageInterval = 18;            // 建物突入時のスリップダメージ間隔 (フレーム数: 約0.3秒ごと)
+    static constexpr int kBuildingDamageAmount = 1;               // 建物突入時の被ダメージ量
+    static constexpr float kBuildingCollisionShakeIntensity = 0.08f; // 激突カメラシェイク強度
+    static constexpr float kBuildingCollisionShakeDuration = 0.15f;  // 激突カメラシェイク持続時間
+
     // メンバ変数
     Phase currentPhase_ = Phase::DrawRoute;
     int currentArea_ = 0;
@@ -340,6 +349,11 @@ private:
     float pulseTimer_ = 0.0f;
     float flashAlpha_ = 0.0f;
     std::unique_ptr<SpriteObject> flashSprite_;
+
+    // 建物突入時の視界悪化スモーク＆継続スリップダメージ用パーツ (DirectX 12)
+    std::unique_ptr<SpriteObject> buildingBlindSprite_;
+    float buildingBlindAlpha_ = 0.0f;
+    int buildingDamageTimer_ = 0;
 
     // シングルトンインスタンス参照
     static inline GamePhaseControllerScript* sInstance_ = nullptr;

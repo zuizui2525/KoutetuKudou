@@ -77,6 +77,22 @@ public:
     Vector3 GetMapWorldMin() const;
     Vector3 GetMapWorldMax() const;
 
+    /// <summary>
+    /// 指定された3Dワールド座標がビル（建物）の内部（またはマージン半径内）にあるかを O(1) で判定します。
+    /// </summary>
+    /// <param name="worldPos">判定対象の3Dワールド座標</param>
+    /// <param name="radius">判定マージン半径（m）</param>
+    /// <returns>建物内部にある場合 true</returns>
+    static bool IsInsideBuilding(const Vector3& worldPos, float radius = 0.0f);
+
+    /// <summary>
+    /// 指定されたワールド座標が建物内（または衝突半径内）にある場合、建物の外側（道路方向）へ脱出するための押し返しベクトルを計算します。
+    /// </summary>
+    /// <param name="worldPos">現在のワールド座標</param>
+    /// <param name="radius">キャラクターの衝突半径（m）</param>
+    /// <returns>押し返しベクトル（非衝突時はゼロベクトル）</returns>
+    static Vector3 GetBuildingPushout(const Vector3& worldPos, float radius);
+
 private:
     /// <summary>
     /// mapGrid_ に基づいてビル群の静的バッチメッシュおよび境界コライダーを構築します。

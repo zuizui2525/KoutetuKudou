@@ -1,6 +1,7 @@
 #include "Scripts/Player/BulletScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Enemy/EnemyAIScript.h"
+#include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/BoxColliderComponent.h"
@@ -209,6 +210,26 @@ void BulletScript::CheckCollisions() {
     if (!owner_ || isDead_) return;
 
     Vector3 bulletPos = owner_->GetPosition();
+
+    // 建物（ビル）との衝突遮蔽判定（壁に着弾して即座に消滅）
+    if (MapRendererScript::IsInsideBuilding(bulletPos, collisionRadius_)) {
+        isDead_ = true;
+        owner_->SetVisible(false);
+
+        // 着弾火花エフェクトの再生
+        EffectPlayParam hitParam{};
+        hitParam.position = bulletPos;
+        hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
+        hitParam.isLoop = false;
+        if (auto* effectMgr = EffectManager::GetInstance()) {
+            effectMgr->PlayEffect3D(kEffectBulletHit, hitParam);
+        }
+
+        ShakeCamera(kHitShakeIntensity * 0.5f, kHitShakeDuration);
+        Destroy(owner_);
+        return;
+    }
+
     Sphere bulletSphere;
     bulletSphere.center = bulletPos;
     bulletSphere.radius = collisionRadius_;

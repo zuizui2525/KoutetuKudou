@@ -18,6 +18,7 @@
 #include "Engine/Debug/SceneViewWindow.h"
 #include "Engine/Debug/GameViewWindow.h"
 #include "Engine/Audio/Audio.h"
+#include "Scripts/Director/GamePhaseControllerScript.h"
 #include <psapi.h> // メモリ取得用（追加）
 
 
@@ -315,8 +316,9 @@ void App::Run() {
     if (!hasMainViewport) {
         // 【GameView も SceneView も存在しないページ (Map Studio, Particle Studio 等)】
         // ユーザー要望: ゲームのウィンドウとシーンのウィンドウがないページの時はゲームのアップデートを動かさない
-        // ゲームロジック、敵・プレイヤーの行動、物理、エフェクト等の更新を完全にスキップして負荷・副作用を根絶する。
+        // ゲームロジック、敵・プレイヤーの行動、物理、エフェクト等の更新をスキップしつつ、カメラとライトの定数バッファを確実に同期
         cameraMgr_->Update();
+        lightMgr_->Update();
     } else if (!isPaused) {
         // 【GameView または SceneView があり、再生中 (!isPaused)】
         lightMgr_->Update();
@@ -333,11 +335,11 @@ void App::Run() {
         cameraMgr_->Update();
     } else {
         // 【GameView または SceneView があり、再生停止中 (isPaused / ポーズ中)】
-        // ユーザー要望: 再生を押さなくても動くようにしたい
-        // 再生ボタンを押していなくても、SceneView でのカメラ移動、オブジェクト編集の反映、エフェクトプレビューがスムーズに動作する。
-
-        // ルート描画・敵配置モード（"Zoom" カメラ使用時）の場合は、ポーズ中もフェーズの更新（カメラ移動や敵配置、アスペクト比同期）を実行
-        if (cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
+        // ユーザー要望: マップエディターが再生停止関係なく動くようにしたい（パーティクルエディターみたいな感じで）
+        // ルート手書き描画・敵配置パレット（DrawRouteフェーズ中）は、再生ボタンを押していなくても常に完全動作するよう更新！
+        auto* phaseCtrl = GamePhaseControllerScript::GetInstance();
+        bool isDrawRouteMode = (phaseCtrl && phaseCtrl->GetCurrentPhase() == GamePhaseControllerScript::Phase::DrawRoute);
+        if (isDrawRouteMode || cameraMgr_->GetActiveCameraName() == CameraManager::kZoomCameraName || sCurrentGameCamera == CameraManager::kZoomCameraName) {
             SceneManager::GetInstance()->Update();
         }
 

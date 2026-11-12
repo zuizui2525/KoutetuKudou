@@ -49,6 +49,7 @@ namespace {
     constexpr Vector4 kDxGoalConnectedColor = { 40.0f / 255.0f, 240.0f / 255.0f, 140.0f / 255.0f, 1.0f };
     constexpr Vector4 kDxDrawingRouteColor = { 255.0f / 255.0f, 180.0f / 255.0f, 30.0f / 255.0f, 1.0f };
     constexpr Vector4 kDxCompletedRouteColor = { 20.0f / 255.0f, 220.0f / 255.0f, 255.0f / 255.0f, 1.0f };
+    constexpr Vector4 kDxDangerRouteColor = { 255.0f / 255.0f, 65.0f / 255.0f, 40.0f / 255.0f, 1.0f }; // 建物突入危険ルート線色 (鮮烈レッドオレンジ)
     constexpr Vector4 kDxPlayerIconColor = { 255.0f / 255.0f, 230.0f / 255.0f, 40.0f / 255.0f, 1.0f };
     constexpr Vector4 kDxTextColor = { 220.0f / 255.0f, 240.0f / 255.0f, 255.0f / 255.0f, 1.0f };
     constexpr Vector4 kDxSubTextColor = { 140.0f / 255.0f, 170.0f / 255.0f, 195.0f / 255.0f, 1.0f };
@@ -383,6 +384,29 @@ void GamePhaseControllerScript::UpdatePlayPhase() {
     }
     playerScript_->SetDirection(playerDir);
 
+    // 建物突入判定（視界悪化スモーク＆継続スリップダメージ）
+    bool inBuilding = MapRendererScript::IsInsideBuilding(playerPos);
+    if (inBuilding) {
+        // スモークのフェードイン（視界を極端に狭める）
+        buildingBlindAlpha_ = (std::min)(kBuildingBlindMaxAlpha, buildingBlindAlpha_ + kBuildingBlindFadeInSpeed);
+
+        // 激突カメラシェイク（コンクリート壁を突き破る激しい振動）
+        ScriptComponent::ShakeCamera(kBuildingCollisionShakeIntensity, kBuildingCollisionShakeDuration);
+
+        // 周期スリップダメージ（ガリガリと削れる衝突ダメージ）
+        buildingDamageTimer_++;
+        if (buildingDamageTimer_ >= kBuildingDamageInterval) {
+            buildingDamageTimer_ = 0;
+            if (playerScript_) {
+                playerScript_->TakeDamage(kBuildingDamageAmount);
+            }
+        }
+    } else {
+        // 建物外（道路）へ脱出時はスムーズに視界回復
+        buildingBlindAlpha_ = (std::max)(0.0f, buildingBlindAlpha_ - kBuildingBlindFadeOutSpeed);
+        buildingDamageTimer_ = 0;
+    }
+
     // エリアゴール到達判定
     if (currentDistance_ >= routeMgr_->GetTotalDistance()) {
         HandleAreaClear();
@@ -664,7 +688,18 @@ void GamePhaseControllerScript::Draw2D() {
         RenderPlayHUDDirectX();
     }
 
-    // 4. 発進白フラッシュ描画（全フェーズ共通の最前面オーバーレイ）
+    // 4. 建物突入時の視界悪化スモーク描画（全画面暗転・粉塵オーバーレイ）
+    if (buildingBlindSprite_ && buildingBlindAlpha_ > 0.005f) {
+        constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+        constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+        buildingBlindSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        buildingBlindSprite_->SetSize(kRenderWidth, kRenderHeight);
+        buildingBlindSprite_->GetMaterialData()->color = { 0.08f, 0.07f, 0.06f, buildingBlindAlpha_ };
+        buildingBlindSprite_->Update();
+        buildingBlindSprite_->Draw("white", true);
+    }
+
+    // 5. 発進白フラッシュ描画（全フェーズ共通の最前面オーバーレイ）
     if (flashSprite_ && flashAlpha_ > 0.005f) {
         constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
         constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
@@ -948,6 +983,13 @@ void GamePhaseControllerScript::Init2DObjects() {
     SceneHierarchy::GetInstance()->Unregister(flashSprite_.get());
     flashSprite_->SetSize(kRenderWidth, kRenderHeight);
     flashSprite_->GetMaterialData()->color = { 1.0f, 1.0f, 1.0f, 0.0f };
+
+    // 12-2. 建物突入時の視界悪化全画面スモークスプライト (DirectX 12)
+    buildingBlindSprite_ = std::make_unique<SpriteObject>();
+    buildingBlindSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(buildingBlindSprite_.get());
+    buildingBlindSprite_->SetSize(kRenderWidth, kRenderHeight);
+    buildingBlindSprite_->GetMaterialData()->color = { 0.08f, 0.07f, 0.06f, 0.0f };
 
     // 13. 画面上部コンパスHUD（方位バー）用パーツ (DirectX 12)
     compassBgSprite_ = std::make_unique<SpriteObject>();
@@ -1335,7 +1377,16 @@ void GamePhaseControllerScript::Render2DMapDirectX() {
                 auto& line = routeLinePool_[i];
                 line->SetPoints(p1, p2);
                 line->SetThickness(kCompletedLineThickness);
-                line->GetMaterialData()->color = kDxCompletedRouteColor;
+
+                // 建物内を通るセグメントは危険ルート警告色（赤橙色）で強調
+                Vector3 midPoint = {
+                    (pathPoints[i].x + pathPoints[i + 1].x) * 0.5f,
+                    (pathPoints[i].y + pathPoints[i + 1].y) * 0.5f,
+                    (pathPoints[i].z + pathPoints[i + 1].z) * 0.5f
+                };
+                bool isMidInBuilding = MapRendererScript::IsInsideBuilding(midPoint);
+                line->GetMaterialData()->color = isMidInBuilding ? kDxDangerRouteColor : kDxCompletedRouteColor;
+
                 line->Update();
                 line->Draw("white", true);
             }
@@ -1356,7 +1407,16 @@ void GamePhaseControllerScript::Render2DMapDirectX() {
                 auto& line = routeLinePool_[i];
                 line->SetPoints(p1, p2);
                 line->SetThickness(kRouteLineThickness);
-                line->GetMaterialData()->color = kDxDrawingRouteColor;
+
+                // 手書き中も建物内セグメントは警告色
+                Vector3 midPoint = {
+                    (rawPoints[i].x + rawPoints[i + 1].x) * 0.5f,
+                    (rawPoints[i].y + rawPoints[i + 1].y) * 0.5f,
+                    (rawPoints[i].z + rawPoints[i + 1].z) * 0.5f
+                };
+                bool isMidInBuilding = MapRendererScript::IsInsideBuilding(midPoint);
+                line->GetMaterialData()->color = isMidInBuilding ? kDxDangerRouteColor : kDxDrawingRouteColor;
+
                 line->Update();
                 line->Draw("white", true);
             }
@@ -1521,10 +1581,8 @@ void GamePhaseControllerScript::RenderPlayHUDDirectX() {
         hudHpBarFillSprite_->Draw("white", true);
     }
 
-    // HPテキスト
-    char hpBuf[32];
-    snprintf(hpBuf, sizeof(hpBuf), "HP %d / %d", hp, maxHp);
-    if (hudHpTextGen_->Generate(hpBuf, "Yu Gothic UI", 12.0f, 0, true, false, false)) {
+    // HPテキスト（数値は画面から隠し、"HP" ラベルのみ表示）
+    if (hudHpTextGen_->Generate("HP", "Yu Gothic UI", 12.0f, 0, true, false, false)) {
         hudHpTextObj_->SetSize(static_cast<float>(hudHpTextGen_->GetWidth()), static_cast<float>(hudHpTextGen_->GetHeight()));
     }
     hudHpTextObj_->SetPosition({ barX, hpPanelY + 5.0f, 0.0f });

@@ -465,6 +465,149 @@ Vector3 MapRendererScript::GetMapWorldMax() const {
     return { basePos.x + totalWidth * kHalfFactor, basePos.y + mapGrid_.buildingHeight, basePos.z + totalHeight * kHalfFactor };
 }
 
+bool MapRendererScript::IsInsideBuilding(const Vector3& worldPos, float radius) {
+    for (auto* renderer : sInstances_) {
+        if (!renderer || !renderer->isMapLoaded_) continue;
+
+        auto* owner = renderer->GetOwner();
+        Vector3 basePos = owner ? owner->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+        const auto& grid = renderer->mapGrid_;
+        const float tileSize = grid.tileSize;
+        if (tileSize <= 0.0f) continue;
+
+        const float totalWidth = static_cast<float>(grid.width) * tileSize;
+        const float totalHeight = static_cast<float>(grid.height) * tileSize;
+        const float startX = basePos.x - totalWidth * kHalfFactor;
+        const float startZ = basePos.z - totalHeight * kHalfFactor;
+
+        // 高さ方向（Y軸）の判定
+        const float minY = basePos.y;
+        const float maxY = basePos.y + grid.buildingHeight;
+        if (worldPos.y < minY - radius || worldPos.y > maxY + radius) {
+            continue;
+        }
+
+        const float localX = worldPos.x - startX;
+        const float localZ = worldPos.z - startZ;
+
+        if (radius <= 0.0f) {
+            // 単純点判定
+            if (localX < 0.0f || localX >= totalWidth || localZ < 0.0f || localZ >= totalHeight) {
+                continue;
+            }
+            int gx = static_cast<int>(std::floor(localX / tileSize));
+            int gz = static_cast<int>(std::floor(localZ / tileSize));
+            if (gx >= 0 && gx < grid.width && gz >= 0 && gz < grid.height) {
+                if (grid.GetTile(gx, gz) == kTileBuilding) {
+                    return true;
+                }
+            }
+        } else {
+            // 半径マージン付きAABB衝突判定
+            int minGx = (std::max)(0, static_cast<int>(std::floor((localX - radius) / tileSize)));
+            int maxGx = (std::min)(grid.width - 1, static_cast<int>(std::floor((localX + radius) / tileSize)));
+            int minGz = (std::max)(0, static_cast<int>(std::floor((localZ - radius) / tileSize)));
+            int maxGz = (std::min)(grid.height - 1, static_cast<int>(std::floor((localZ + radius) / tileSize)));
+
+            for (int gz = minGz; gz <= maxGz; ++gz) {
+                for (int gx = minGx; gx <= maxGx; ++gx) {
+                    if (grid.GetTile(gx, gz) != kTileBuilding) continue;
+
+                    float bMinX = startX + static_cast<float>(gx) * tileSize;
+                    float bMaxX = bMinX + tileSize;
+                    float bMinZ = startZ + static_cast<float>(gz) * tileSize;
+                    float bMaxZ = bMinZ + tileSize;
+
+                    // 点とAABBの最近接点
+                    float closestX = std::clamp(worldPos.x, bMinX, bMaxX);
+                    float closestZ = std::clamp(worldPos.z, bMinZ, bMaxZ);
+
+                    float dx = worldPos.x - closestX;
+                    float dz = worldPos.z - closestZ;
+                    if (dx * dx + dz * dz < radius * radius) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+Vector3 MapRendererScript::GetBuildingPushout(const Vector3& worldPos, float radius) {
+    Vector3 totalPushout = { 0.0f, 0.0f, 0.0f };
+    if (radius <= 0.0f) return totalPushout;
+
+    for (auto* renderer : sInstances_) {
+        if (!renderer || !renderer->isMapLoaded_) continue;
+
+        auto* owner = renderer->GetOwner();
+        Vector3 basePos = owner ? owner->GetPosition() : Vector3{ 0.0f, 0.0f, 0.0f };
+        const auto& grid = renderer->mapGrid_;
+        const float tileSize = grid.tileSize;
+        if (tileSize <= 0.0f) continue;
+
+        const float totalWidth = static_cast<float>(grid.width) * tileSize;
+        const float totalHeight = static_cast<float>(grid.height) * tileSize;
+        const float startX = basePos.x - totalWidth * kHalfFactor;
+        const float startZ = basePos.z - totalHeight * kHalfFactor;
+
+        // 高さ方向の簡易チェック
+        if (worldPos.y < basePos.y - radius || worldPos.y > basePos.y + grid.buildingHeight + radius) {
+            continue;
+        }
+
+        const float localX = worldPos.x - startX;
+        const float localZ = worldPos.z - startZ;
+
+        int minGx = (std::max)(0, static_cast<int>(std::floor((localX - radius) / tileSize)));
+        int maxGx = (std::min)(grid.width - 1, static_cast<int>(std::floor((localX + radius) / tileSize)));
+        int minGz = (std::max)(0, static_cast<int>(std::floor((localZ - radius) / tileSize)));
+        int maxGz = (std::min)(grid.height - 1, static_cast<int>(std::floor((localZ + radius) / tileSize)));
+
+        for (int gz = minGz; gz <= maxGz; ++gz) {
+            for (int gx = minGx; gx <= maxGx; ++gx) {
+                if (grid.GetTile(gx, gz) != kTileBuilding) continue;
+
+                float bMinX = startX + static_cast<float>(gx) * tileSize;
+                float bMaxX = bMinX + tileSize;
+                float bMinZ = startZ + static_cast<float>(gz) * tileSize;
+                float bMaxZ = bMinZ + tileSize;
+
+                float closestX = std::clamp(worldPos.x, bMinX, bMaxX);
+                float closestZ = std::clamp(worldPos.z, bMinZ, bMaxZ);
+
+                float dx = worldPos.x - closestX;
+                float dz = worldPos.z - closestZ;
+                float distSq = dx * dx + dz * dz;
+
+                if (distSq < radius * radius) {
+                    float dist = std::sqrt(distSq);
+                    if (dist > 1e-4f) {
+                        float penetration = radius - dist;
+                        totalPushout.x += (dx / dist) * penetration;
+                        totalPushout.z += (dz / dist) * penetration;
+                    } else {
+                        // 完全に中心に埋没した場合はビルの外周へ押し出す
+                        float centerBx = (bMinX + bMaxX) * kHalfFactor;
+                        float centerBz = (bMinZ + bMaxZ) * kHalfFactor;
+                        float awayX = worldPos.x - centerBx;
+                        float awayZ = worldPos.z - centerBz;
+                        float awayLen = std::sqrt(awayX * awayX + awayZ * awayZ);
+                        if (awayLen > 1e-4f) {
+                            totalPushout.x += (awayX / awayLen) * radius;
+                            totalPushout.z += (awayZ / awayLen) * radius;
+                        } else {
+                            totalPushout.x += radius;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return totalPushout;
+}
+
 void MapRendererScript::OnInspectorGUI() {
 #ifdef _USEIMGUI
     constexpr ImVec4 kHeaderColor = { 0.3f, 0.8f, 1.0f, 1.0f };
