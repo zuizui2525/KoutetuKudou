@@ -10,7 +10,7 @@ public:
 
     void Initialize(int lightingMode);
     void Update();
-    void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "");
+    void Draw(const std::string& textureKey = "white", const std::string& envMapKey = "", const std::string& psoKey = "Object3D");
 
     // パラメータ変更用セッター
     void SetDivide(uint32_t divide) { divide_ = divide; needsUpdate_ = true; }

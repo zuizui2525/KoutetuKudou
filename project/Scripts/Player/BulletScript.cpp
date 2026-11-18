@@ -1,5 +1,6 @@
 #include "Scripts/Player/BulletScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
+#include "Scripts/Player/ReticleControllerScript.h"
 #include "Scripts/Enemy/EnemyAIScript.h"
 #include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Component/GameObject.h"
@@ -33,74 +34,33 @@ void BulletScript::Awake() {
 
 void BulletScript::Start() {
     if (owner_) {
-        // 弾丸の見た目スケールを設定（プレハブ基準から小型化）
+        // 弾丸の見た目スケールを設定（自機弾: VALORANT風一本線レーザービーム）
         owner_->SetScale(visualScale_);
 
-        auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>();
-        if (!gpuParticle) {
-            gpuParticle = owner_->AddComponent<GPUParticleComponent>();
-        }
-        if (gpuParticle) {
-            gpuParticle->ApplyPreset("BulletTrail");
-            if (auto* obj = gpuParticle->GetParticleObject()) {
-                auto& s = obj->GetSetting();
-
-                // 連射時の同一形状化を打破するための微小ジッター付与 (マジックナンバー排除)
-                // 弾丸ごとに速度拡散と寿命をばらつかせ、1発ごとに有機的で異なる軌跡を生成
-                float randJitter = static_cast<float>(rand() % 100) / 100.0f; // 0.0f 〜 1.0f
-                constexpr float kBaseVelocityRange = 0.05f;
-                constexpr float kJitterVelocityScale = 0.04f;
-                constexpr float kBaseLifeTimeMin = 0.07f;
-                constexpr float kBaseLifeTimeMax = 0.15f;
-                constexpr float kJitterLifeScale = 0.05f;
-
-                float velRange = kBaseVelocityRange + kJitterVelocityScale * randJitter;
-                s.minVelocity = { -velRange, -velRange, -velRange };
-                s.maxVelocity = {  velRange,  velRange,  velRange };
-                s.minLifeTime = kBaseLifeTimeMin + kJitterLifeScale * randJitter;
-                s.maxLifeTime = kBaseLifeTimeMax + kJitterLifeScale * randJitter;
-
-                // 自機弾: 弾丸背後へ細く噴出する小型オレンジ・ジェット推進炎（加算合成 Add）
-                if (isPlayerBullet_) {
-                    gpuParticle->SetBlendMode(ParticleBlendMode::Add); // 加算合成で鮮烈に発光するノズル炎
-                    gpuParticle->SetTextureKey("circle");
-                    gpuParticle->SetSpawnRate(kDefaultBulletTrailSpawnRate);
-                    gpuParticle->SetStartColor(trailStartColor_);
-                    gpuParticle->SetEndColor(trailEndColor_);
-                    obj->SetBlendMode(ParticleBlendMode::Add);
-
-                    // 弾丸の進行方向の正反対（-direction_）へ向けて後退噴射
-                    Vector3 backJet = {
-                        -direction_.x * kPlayerJetBackwardSpeed,
-                        -direction_.y * kPlayerJetBackwardSpeed,
-                        -direction_.z * kPlayerJetBackwardSpeed
-                    };
-
-                    s.minVelocity = {
-                        backJet.x - kPlayerJetSpread,
-                        backJet.y - kPlayerJetSpread,
-                        backJet.z - kPlayerJetSpread
-                    };
-                    s.maxVelocity = {
-                        backJet.x + kPlayerJetSpread,
-                        backJet.y + kPlayerJetSpread,
-                        backJet.z + kPlayerJetSpread
-                    };
-                    s.minLifeTime = kPlayerJetLifeMin;
-                    s.maxLifeTime = kPlayerJetLifeMax;
-                    s.startScale = { kPlayerJetTrailStartScale, kPlayerJetTrailStartScale, kPlayerJetTrailStartScale };
-                    s.endScale = { kPlayerJetTrailEndScale, kPlayerJetTrailEndScale, kPlayerJetTrailEndScale };
-                    s.gravity = 0.0f; // 重力で垂れ下がらず、一直線にジェット噴射
-                    s.killAtY = -999.0f;
-                    s.spawnRatePerSec = kDefaultBulletTrailSpawnRate;
-                    s.isAutoSpawning = true;
-                    s.startColor = trailStartColor_;
-                    s.endColor = trailEndColor_;
-                } else {
+        // 自機弾は細かい粒々パーティクルを一切噴射せず、一本のシャープな光線ビームとして飛翔！
+        if (!isPlayerBullet_) {
+            auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>();
+            if (!gpuParticle) {
+                gpuParticle = owner_->AddComponent<GPUParticleComponent>();
+            }
+            if (gpuParticle) {
+                gpuParticle->ApplyPreset("BulletTrail");
+                if (auto* obj = gpuParticle->GetParticleObject()) {
+                    auto& s = obj->GetSetting();
                     constexpr Vector4 kEnemyTrailStartColor = { 1.0f, 0.2f, 0.4f, 1.0f };
                     constexpr Vector4 kEnemyTrailEndColor = { 0.8f, 0.0f, 0.2f, 0.0f };
                     s.startColor = kEnemyTrailStartColor;
                     s.endColor = kEnemyTrailEndColor;
+                }
+            }
+        } else {
+            // 自機弾の場合、既存のGPUParticleComponentがあれば自動噴射を完全停止
+            if (auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>()) {
+                gpuParticle->SetSpawnRate(0.0f);
+                if (auto* obj = gpuParticle->GetParticleObject()) {
+                    auto& s = obj->GetSetting();
+                    s.isAutoSpawning = false;
+                    s.spawnRatePerSec = 0.0f;
                 }
             }
         }
@@ -114,30 +74,6 @@ void BulletScript::SetDirection(const Vector3& direction) {
         float horizontalDist = std::sqrt(direction.x * direction.x + direction.z * direction.z);
         float pitch = std::atan2(-direction.y, horizontalDist);
         owner_->SetRotate({ pitch, yaw, 0.0f });
-
-        // 自機弾のジェット噴射方向を射出方向の真後ろ（-direction_）に同期
-        if (isPlayerBullet_) {
-            if (auto* gpuParticle = owner_->GetComponent<GPUParticleComponent>()) {
-                if (auto* obj = gpuParticle->GetParticleObject()) {
-                    auto& s = obj->GetSetting();
-                    Vector3 backJet = {
-                        -direction_.x * kPlayerJetBackwardSpeed,
-                        -direction_.y * kPlayerJetBackwardSpeed,
-                        -direction_.z * kPlayerJetBackwardSpeed
-                    };
-                    s.minVelocity = {
-                        backJet.x - kPlayerJetSpread,
-                        backJet.y - kPlayerJetSpread,
-                        backJet.z - kPlayerJetSpread
-                    };
-                    s.maxVelocity = {
-                        backJet.x + kPlayerJetSpread,
-                        backJet.y + kPlayerJetSpread,
-                        backJet.z + kPlayerJetSpread
-                    };
-                }
-            }
-        }
     }
 }
 
@@ -267,16 +203,21 @@ void BulletScript::CheckCollisions() {
                             enemyAI->TakeDamage(damage_, isCritical);
                         }
 
+                        // レティクル中央ヒットマーカー（×印）の瞬間点灯（クリティカル時は赤）
+                        ReticleControllerScript::TriggerHitMarker(isCritical);
+
                         // 命中フラグ設定と弾丸の破棄
                         isDead_ = true;
                         owner_->SetVisible(false);
 
-                        // 敵命中爆発エフェクトの発生
-                        EffectPlayParam hitParam{};
-                        hitParam.position = bulletPos;
-                        hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
-                        hitParam.isLoop = false;
+                        // 敵命中時の鮮烈な火花スパーク（GPUパーティクル）＆爆発エフェクトの発生
                         if (auto* effectMgr = EffectManager::GetInstance()) {
+                            effectMgr->PlayGPUEffect(bulletPos, kHitGpuSparkCount);
+
+                            EffectPlayParam hitParam{};
+                            hitParam.position = bulletPos;
+                            hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
+                            hitParam.isLoop = false;
                             effectMgr->PlayEffect3D(kEffectBulletHit, hitParam);
                         }
 

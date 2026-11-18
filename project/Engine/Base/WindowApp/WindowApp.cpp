@@ -26,8 +26,8 @@ bool WindowApp::Initialize(const wchar_t* title, int32_t width, int32_t height) 
  
     RegisterClass(&wc_);
  
-    // 標準のWS_OVERLAPPEDWINDOWを使用し、最大化ボタン（□）および枠ドラッグによる自由拡縮を有効化
-    UINT windowStyle = WS_OVERLAPPEDWINDOW;
+    // 枠ドラッグによるリサイズ（WS_THICKFRAME）および最大化ボタン（WS_MAXIMIZEBOX）を除外し、画面引き延ばしによるDirectX12例外を完全に防止
+    UINT windowStyle = WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX;
  
     AdjustWindowRect(&wrc_, windowStyle, false);
  
@@ -75,6 +75,20 @@ LRESULT CALLBACK WindowApp::WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARA
 #endif
 
     switch (msg) {
+    case WM_GETMINMAXINFO: {
+        // ウィンドウサイズの強制固定（最小・最大のトラッキングサイズをロック）
+        auto* minMax = reinterpret_cast<MINMAXINFO*>(lparam);
+        RECT wr = { 0, 0, kClientWidth, kClientHeight };
+        constexpr UINT kFixedStyle = WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX;
+        AdjustWindowRect(&wr, kFixedStyle, false);
+        LONG fixedWidth = wr.right - wr.left;
+        LONG fixedHeight = wr.bottom - wr.top;
+        minMax->ptMinTrackSize.x = fixedWidth;
+        minMax->ptMinTrackSize.y = fixedHeight;
+        minMax->ptMaxTrackSize.x = fixedWidth;
+        minMax->ptMaxTrackSize.y = fixedHeight;
+        return 0;
+    }
     case WM_CLOSE:
         if (closeHandler_ && !closeHandler_()) {
             return 0;

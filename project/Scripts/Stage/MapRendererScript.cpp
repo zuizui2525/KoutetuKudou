@@ -588,18 +588,34 @@ Vector3 MapRendererScript::GetBuildingPushout(const Vector3& worldPos, float rad
                         totalPushout.x += (dx / dist) * penetration;
                         totalPushout.z += (dz / dist) * penetration;
                     } else {
-                        // 完全に中心に埋没した場合はビルの外周へ押し出す
-                        float centerBx = (bMinX + bMaxX) * kHalfFactor;
-                        float centerBz = (bMinZ + bMaxZ) * kHalfFactor;
-                        float awayX = worldPos.x - centerBx;
-                        float awayZ = worldPos.z - centerBz;
-                        float awayLen = std::sqrt(awayX * awayX + awayZ * awayZ);
-                        if (awayLen > 1e-4f) {
-                            totalPushout.x += (awayX / awayLen) * radius;
-                            totalPushout.z += (awayZ / awayLen) * radius;
-                        } else {
-                            totalPushout.x += radius;
+                        // AABB内部に埋没した場合は、最短脱出面（MTV: Minimum Translation Vector）を算出し外壁＋半径分押し出す
+                        const float distToLeft  = worldPos.x - bMinX; // -X 面までの距離
+                        const float distToRight = bMaxX - worldPos.x; // +X 面までの距離
+                        const float distToBack  = worldPos.z - bMinZ; // -Z 面までの距離
+                        const float distToFront = bMaxZ - worldPos.z; // +Z 面までの距離
+
+                        float minDist = distToLeft;
+                        Vector3 pushDir = { -1.0f, 0.0f, 0.0f };
+                        float escapeDist = distToLeft;
+
+                        if (distToRight < minDist) {
+                            minDist = distToRight;
+                            pushDir = { 1.0f, 0.0f, 0.0f };
+                            escapeDist = distToRight;
                         }
+                        if (distToBack < minDist) {
+                            minDist = distToBack;
+                            pushDir = { 0.0f, 0.0f, -1.0f };
+                            escapeDist = distToBack;
+                        }
+                        if (distToFront < minDist) {
+                            minDist = distToFront;
+                            pushDir = { 0.0f, 0.0f, 1.0f };
+                            escapeDist = distToFront;
+                        }
+
+                        totalPushout.x += pushDir.x * (escapeDist + radius);
+                        totalPushout.z += pushDir.z * (escapeDist + radius);
                     }
                 }
             }

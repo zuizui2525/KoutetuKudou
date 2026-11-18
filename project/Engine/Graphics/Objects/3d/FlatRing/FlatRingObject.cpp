@@ -44,10 +44,10 @@ void FlatRingObject::Update() {
     materialData_->uvtransform = uv;
 }
 
-void FlatRingObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
+void FlatRingObject::Draw(const std::string& textureKey, const std::string& envMapKey, const std::string& psoKey) {
     // 描画処理は共通描画クラス Object3DDrawer を通して実行
     uint32_t indexCount = divide_ * kIndicesPerQuad;
-    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, envMapKey);
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, envMapKey, psoKey);
 }
 
 void FlatRingObject::CreateMesh() {

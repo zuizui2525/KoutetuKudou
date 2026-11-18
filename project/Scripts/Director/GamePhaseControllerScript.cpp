@@ -238,6 +238,11 @@ namespace {
 /// 4. 各種UIボタン（ミニマップ内RESET、GOボタン、下部RESET、Rキー、右クリック、SPACEキー）の押下判定。
 /// </summary>
 void GamePhaseControllerScript::UpdateDrawRoutePhase() {
+    // 新エリア開始時の黒フェードイン（暗転からフワッと明転）
+    if (drawPhaseFadeAlpha_ > 0.0f) {
+        drawPhaseFadeAlpha_ = (std::max)(0.0f, drawPhaseFadeAlpha_ - kBlackFadeSpeed * 1.5f);
+    }
+
     auto* input = InputResource::GetInput();
     if (!input || !routeMgr_) return;
 
@@ -372,12 +377,135 @@ void GamePhaseControllerScript::UpdateDrawRoutePhase() {
 /// 走行距離 currentDistance_ を進行させ、ルートマネージャから求めた3D座標および接線方向を自機へ反映します。
 /// </summary>
 void GamePhaseControllerScript::UpdatePlayPhase() {
+    // エリアクリア演出中の処理（カメラ背後引き・回り込み -> 飛翔プレイヤー見送り -> 空から文字降下 -> 暗転フェードアウト）
+    if (isAreaClearing_) {
+        areaClearTimer_++;
+
+        Vector3 curCamPos = sendoffCamPos_;
+        Vector3 currentTargetLookPos = goalPlayerPos_;
+
+        // --- 第1幕: カメラが一人称視点から自機斜め後方へスムーズに後退・回り込み（0 〜 kCameraPullBackDuration: 約0.9秒）---
+        if (areaClearTimer_ < kCameraPullBackDuration) {
+            float camT = static_cast<float>(areaClearTimer_) / static_cast<float>(kCameraPullBackDuration);
+            // SmoothStep で滑らかなカメラ後退補間
+            float smoothT = camT * camT * (3.0f - 2.0f * camT);
+
+            curCamPos = {
+                areaClearInitialCamPos_.x + (sendoffCamPos_.x - areaClearInitialCamPos_.x) * smoothT,
+                areaClearInitialCamPos_.y + (sendoffCamPos_.y - areaClearInitialCamPos_.y) * smoothT,
+                areaClearInitialCamPos_.z + (sendoffCamPos_.z - areaClearInitialCamPos_.z) * smoothT
+            };
+
+            // 自機は地上でゆっくり微速走行しながら減速
+            float moveSpeed = playerScript_ ? playerScript_->GetMoveSpeed() : playerMoveSpeed_;
+            float slowStep = moveSpeed * kAreaClearSlowSpeedRatio * (1.0f - camT * 0.5f);
+            goalPlayerPos_.x += goalPlayerDir_.x * slowStep;
+            goalPlayerPos_.z += goalPlayerDir_.z * slowStep;
+            goalPlayerPos_.y = kPlayerGroundYOffset;
+
+            if (auto* playerGo = playerScript_->GetOwner()) {
+                playerGo->SetPosition(goalPlayerPos_);
+                playerGo->SetVisible(true);
+            }
+            playerScript_->SetDirection(goalPlayerDir_);
+
+            // カメラ注視点: カメラが後退するにつれて前方注視から自機背中中心へ滑らかにシフト
+            currentTargetLookPos = {
+                goalPlayerPos_.x + goalPlayerDir_.x * (1.0f - smoothT) * 1.5f,
+                goalPlayerPos_.y + 0.35f,
+                goalPlayerPos_.z + goalPlayerDir_.z * (1.0f - smoothT) * 1.5f
+            };
+        }
+        // --- 第2幕: 自機のロケット急上昇・見送り（kPlayerRocketStartFrame 〜 kPlayerRocketStartFrame + kPlayerRocketDuration: 約1.1秒）---
+        else if (areaClearTimer_ < (kPlayerRocketStartFrame + kPlayerRocketDuration)) {
+            int rocketElapsed = areaClearTimer_ - kPlayerRocketStartFrame;
+            float jumpT = static_cast<float>(rocketElapsed) / static_cast<float>(kPlayerRocketDuration);
+            // 放物線急加速上昇カーブ
+            float easeY = jumpT * jumpT;
+
+            // 前方へ駆け抜けながら急上昇！
+            Vector3 flyPos = {
+                goalPlayerPos_.x + goalPlayerDir_.x * (jumpT * kPlayerFlyForwardDist),
+                kPlayerGroundYOffset + easeY * kPlayerFlyMaxHeight,
+                goalPlayerPos_.z + goalPlayerDir_.z * (jumpT * kPlayerFlyForwardDist)
+            };
+
+            if (auto* playerGo = playerScript_->GetOwner()) {
+                playerGo->SetPosition(flyPos);
+                playerGo->SetVisible(true);
+            }
+            playerScript_->SetDirection(goalPlayerDir_);
+
+            // 上昇中に自機足元から祝砲ブースタースパークを定期噴射
+            if (rocketElapsed % 6 == 0) {
+                if (auto effectMgr = EffectManager::GetInstance()) {
+                    effectMgr->PlayGPUEffect({ flyPos.x, flyPos.y - 1.2f, flyPos.z }, 600);
+                }
+            }
+
+            curCamPos = sendoffCamPos_;
+            currentTargetLookPos = flyPos;
+        }
+        // --- 第3幕 & 第4幕: 自機消滅・見上げた天空から文字降下・暗転フェード（120F〜）---
+        else {
+            // 画面上空へ飛び去ったら、自機モデルを完全に非表示化！
+            if (auto* playerGo = playerScript_->GetOwner()) {
+                playerGo->SetVisible(false);
+            }
+            // 自機が消えた後も、カメラは飛び去った遥か上空を見上げた状態をキープ！
+            curCamPos = sendoffCamPos_;
+            currentTargetLookPos = {
+                goalPlayerPos_.x + goalPlayerDir_.x * kPlayerFlyForwardDist,
+                kPlayerGroundYOffset + kPlayerFlyMaxHeight,
+                goalPlayerPos_.z + goalPlayerDir_.z * kPlayerFlyForwardDist
+            };
+        }
+
+        // カメラ位置から注視対象への視線ベクトルと回転角 (Pitch, Yaw) を算出
+        Vector3 toTarget = {
+            currentTargetLookPos.x - curCamPos.x,
+            currentTargetLookPos.y - curCamPos.y,
+            currentTargetLookPos.z - curCamPos.z
+        };
+        float distXZ = std::sqrt(toTarget.x * toTarget.x + toTarget.z * toTarget.z);
+        float yaw = std::atan2(toTarget.x, toTarget.z);
+        float pitch = -std::atan2(toTarget.y, distXZ > 0.0001f ? distXZ : 0.0001f);
+
+        // FPSCameraControllerScript および CameraComponent へ同期するための座標・回転を更新
+        areaClearCurrentCamPos_ = curCamPos;
+        areaClearCurrentCamRot_ = { pitch, yaw, 0.0f };
+
+        // 内部カメラインスタンスへ即時適用
+        if (auto* cameraMgr = CameraResource::GetCameraManager()) {
+            if (BaseCamera* camera = cameraMgr->GetActiveCamera()) {
+                camera->SetPosition(curCamPos);
+                camera->SetRotation({ pitch, yaw, 0.0f });
+            }
+        }
+
+        // ゴールドフラッシュのフェードアウト
+        areaClearFlashAlpha_ = (std::max)(0.0f, areaClearFlashAlpha_ - kAreaClearFlashFadeSpeed * (1.0f / 60.0f));
+
+        // 第4幕: 終盤の全画面黒フェードアウト（完全暗転トランジション: 準備前描画の完全隠蔽）
+        if (areaClearTimer_ >= kFadeOutStartFrame) {
+            transitionBlackFadeAlpha_ = (std::min)(1.0f, transitionBlackFadeAlpha_ + kBlackFadeSpeed);
+        }
+
+        // 演出完了（画面が100%真っ黒になった瞬間）に次エリア/クリアシーンへ安全移行！
+        if (areaClearTimer_ >= kAreaClearDuration) {
+            isAreaClearing_ = false;
+            HandleAreaClear();
+        }
+        return;
+    }
+
     float moveSpeed = playerScript_ ? playerScript_->GetMoveSpeed() : playerMoveSpeed_;
     currentDistance_ += moveSpeed;
 
-    // 自機位置と向きをルートから更新
+    // 自機位置と向きをルートから更新 (足元を地面Y=0に接地)
     Vector3 playerPos = routeMgr_->GetPositionAtDistance(currentDistance_);
     Vector3 playerDir = routeMgr_->GetTangentAtDistance(currentDistance_);
+    playerPos.y += kPlayerGroundYOffset;
 
     if (auto* playerGo = playerScript_->GetOwner()) {
         playerGo->SetPosition(playerPos);
@@ -407,9 +535,53 @@ void GamePhaseControllerScript::UpdatePlayPhase() {
         buildingDamageTimer_ = 0;
     }
 
-    // エリアゴール到達判定
+    // エリアゴール到達判定（即時切り替えず、カメラゆっくり背後回り込み＆自機見送り＆空から文字降下演出を開始！）
     if (currentDistance_ >= routeMgr_->GetTotalDistance()) {
-        HandleAreaClear();
+        isAreaClearing_ = true;
+        areaClearTimer_ = 0;
+        areaClearFlashAlpha_ = 0.25f; // まばゆすぎず視界を邪魔しない控えめな祝福光
+
+        // 前エリアの敵・弾を一括消去
+        ClearAllEnemies();
+
+        // 照準レティクルを非表示化（見送りシネマティック演出に集中）
+        SetReticleVisible(false);
+
+        // ゴール地点の自機位置と向きを確定・保存
+        goalPlayerPos_ = playerPos;
+        goalPlayerDir_ = playerDir;
+
+        // ゴール到達時のカメラ現在位置を取得 (第1幕のスムーズ後退開始座標)
+        if (auto* cameraMgr = CameraResource::GetCameraManager()) {
+            if (BaseCamera* camera = cameraMgr->GetActiveCamera()) {
+                areaClearInitialCamPos_ = camera->GetPosition();
+                areaClearCurrentCamPos_ = camera->GetPosition();
+                areaClearCurrentCamRot_ = camera->GetRotation();
+            }
+        }
+
+        // 自機の右基底ベクトル（横オフセット用）
+        Vector3 rightVec = { -goalPlayerDir_.z, 0.0f, goalPlayerDir_.x };
+        float rightLen = std::sqrt(rightVec.x * rightVec.x + rightVec.z * rightVec.z);
+        if (rightLen > 0.0001f) {
+            rightVec.x /= rightLen;
+            rightVec.z /= rightLen;
+        }
+
+        // 背後見送りカメラの位置を確定（自機後方 kSendoffCamBackDist、見上げる低さ kSendoffCamHeight）
+        sendoffCamPos_ = {
+            goalPlayerPos_.x - goalPlayerDir_.x * kSendoffCamBackDist + rightVec.x * kSendoffCamSideOffset,
+            kSendoffCamHeight,
+            goalPlayerPos_.z - goalPlayerDir_.z * kSendoffCamBackDist + rightVec.z * kSendoffCamSideOffset
+        };
+
+        // 祝砲GPUスパークを自機左右上空へ炸裂！
+        if (auto effectMgr = EffectManager::GetInstance()) {
+            Vector3 leftSparkPos = { playerPos.x - 4.5f, playerPos.y + 2.5f, playerPos.z + 6.0f };
+            Vector3 rightSparkPos = { playerPos.x + 4.5f, playerPos.y + 2.5f, playerPos.z + 6.0f };
+            effectMgr->PlayGPUEffect(leftSparkPos, 1500);
+            effectMgr->PlayGPUEffect(rightSparkPos, 1500);
+        }
     }
 }
 
@@ -423,6 +595,8 @@ void GamePhaseControllerScript::HandleAreaClear() {
     if (isSceneChanging_) {
         return;
     }
+
+    isAreaClearing_ = false;
 
     // 前エリアの残敵・残留弾を一括消去
     ClearAllEnemies();
@@ -471,8 +645,9 @@ void GamePhaseControllerScript::TransitionToDraw() {
     if (playerScript_) {
         playerScript_->SetAutoMoving(false);
         if (auto* playerGo = playerScript_->GetOwner()) {
+            playerGo->SetVisible(true); // クリア演出で消滅した自機モデルを確実に再表示
             float startZ = routeMgr_ ? routeMgr_->GetCurrentAreaStartZ() : 0.0f;
-            playerGo->SetPosition({ kDefaultPlayerPosX, kDefaultPlayerPosY, startZ });
+            playerGo->SetPosition({ kDefaultPlayerPosX, kDefaultPlayerPosY + kPlayerGroundYOffset, startZ });
         }
         playerScript_->SetDirection(kDefaultPlayerForward);
     }
@@ -488,6 +663,10 @@ void GamePhaseControllerScript::TransitionToDraw() {
             camera->SetRotation({ kDrawCameraPitch, 0.0f, 0.0f });
         }
     }
+
+    // 新エリア開始時の黒フェードイン（暗転からフワッと明転）開始
+    drawPhaseFadeAlpha_ = 1.0f;
+    transitionBlackFadeAlpha_ = 0.0f;
 }
 
 /// <summary>
@@ -516,6 +695,7 @@ void GamePhaseControllerScript::TransitionToCountdown() {
         playerScript_->SetAutoMoving(false);
         if (routeMgr_) {
             Vector3 startPos = routeMgr_->GetPositionAtDistance(0.0f);
+            startPos.y += kPlayerGroundYOffset;
             Vector3 startDir = routeMgr_->GetTangentAtDistance(0.0f);
             if (auto* go = playerScript_->GetOwner()) {
                 go->SetPosition(startPos);
@@ -600,6 +780,7 @@ void GamePhaseControllerScript::TransitionToPlay() {
         playerScript_->SetAutoMoving(true);
         if (routeMgr_) {
             Vector3 startPos = routeMgr_->GetPositionAtDistance(0.0f);
+            startPos.y += kPlayerGroundYOffset;
             Vector3 startDir = routeMgr_->GetTangentAtDistance(0.0f);
             if (auto* go = playerScript_->GetOwner()) {
                 go->SetPosition(startPos);
@@ -708,6 +889,23 @@ void GamePhaseControllerScript::Draw2D() {
         flashSprite_->GetMaterialData()->color = { 1.0f, 1.0f, 1.0f, flashAlpha_ };
         flashSprite_->Update();
         flashSprite_->Draw("white", true);
+    }
+
+    // 6. エリアクリア祝砲演出描画（ゴールドフラッシュ・バウンドバナー）
+    if (isAreaClearing_ || areaClearFlashAlpha_ > 0.005f) {
+        RenderAreaClearDirectX();
+    }
+
+    // 7. シームレス暗転黒フェード描画（準備前描画の完全隠蔽オーバーレイ）
+    float blackAlpha = (std::max)(transitionBlackFadeAlpha_, drawPhaseFadeAlpha_);
+    if (transitionBlackSprite_ && blackAlpha > 0.005f) {
+        constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+        constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+        transitionBlackSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        transitionBlackSprite_->SetSize(kRenderWidth, kRenderHeight);
+        transitionBlackSprite_->GetMaterialData()->color = { 0.0f, 0.0f, 0.0f, blackAlpha };
+        transitionBlackSprite_->Update();
+        transitionBlackSprite_->Draw("white", true);
     }
 }
 
@@ -1052,6 +1250,29 @@ void GamePhaseControllerScript::Init2DObjects() {
         }
         compassLabels_.push_back(std::move(item));
     }
+
+    // 14. エリアクリア祝砲演出用パーツ (DirectX 12)
+    areaClearBannerSprite_ = std::make_unique<SpriteObject>();
+    areaClearBannerSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(areaClearBannerSprite_.get());
+    areaClearBannerSprite_->SetSize(kAreaClearBannerWidth, kAreaClearBannerHeight);
+
+    areaClearTextObj_ = std::make_unique<TextObject2D>();
+    areaClearTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(areaClearTextObj_.get());
+    areaClearTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    areaClearSubTextObj_ = std::make_unique<TextObject2D>();
+    areaClearSubTextObj_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(areaClearSubTextObj_.get());
+    areaClearSubTextGen_ = std::make_unique<TextTextureGenerator>();
+
+    // 15. シームレス暗転フェード用スプライト (DirectX 12: 準備前描画の完全隠蔽オーバーレイ)
+    transitionBlackSprite_ = std::make_unique<SpriteObject>();
+    transitionBlackSprite_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(transitionBlackSprite_.get());
+    transitionBlackSprite_->SetSize(kRenderWidth, kRenderHeight);
+    transitionBlackSprite_->GetMaterialData()->color = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     is2DInitialized_ = true;
 }
@@ -1616,9 +1837,23 @@ void GamePhaseControllerScript::RenderPlayHUDDirectX() {
     char ammoBuf[64];
     Vector4 ammoColor = kDxTextColor;
 
+    constexpr float kBlinkBase = 0.65f;
+    constexpr float kBlinkAmp = 0.35f;
+    constexpr float kReloadBlinkFreq = 8.0f;
+    constexpr float kNoAmmoBlinkFreq = 10.0f;
+
     if (isReloading) {
-        snprintf(ammoBuf, sizeof(ammoBuf), "RELOADING...");
-        ammoColor = kDxReloadingColor;
+        int rTimer = playerScript_->GetReloadTimer();
+        int rDuration = playerScript_->GetReloadDuration();
+        float reloadProgress = (rDuration > 0) ? std::clamp(1.0f - static_cast<float>(rTimer) / static_cast<float>(rDuration), 0.0f, 1.0f) : 0.0f;
+        int reloadPercent = static_cast<int>(reloadProgress * 100.0f);
+        snprintf(ammoBuf, sizeof(ammoBuf), "RELOADING... %d%%", reloadPercent);
+        float blink = kBlinkBase + kBlinkAmp * std::sin(pulseTimer_ * kReloadBlinkFreq);
+        ammoColor = { kDxReloadingColor.x, kDxReloadingColor.y, kDxReloadingColor.z, blink };
+    } else if (ammo <= 0) {
+        snprintf(ammoBuf, sizeof(ammoBuf), "EMPTY! [R] RELOAD");
+        float blink = kBlinkBase + kBlinkAmp * std::sin(pulseTimer_ * kNoAmmoBlinkFreq);
+        ammoColor = { 1.0f, 0.25f, 0.25f, blink }; // 警告レッド点滅
     } else {
         snprintf(ammoBuf, sizeof(ammoBuf), "AMMO: %d / %d", ammo, maxAmmo);
         ammoColor = (ammo <= 5) ? kDxAmmoAlert : kDxTextColor;
@@ -1899,6 +2134,103 @@ void GamePhaseControllerScript::RenderCountdownDirectX() {
     countdownSubTextObj_->SetColor({ 1.0f, 1.0f, 1.0f, alphaFade });
     countdownSubTextObj_->Update();
     countdownSubTextObj_->Draw(countdownSubTextGen_->GetGpuHandle(), true);
+}
+
+/// <summary>
+/// エリア走破時の「AREA CLEAR!!」祝砲演出・バナー・ゴールドフラッシュをDirectX 12で描画します。
+/// </summary>
+void GamePhaseControllerScript::RenderAreaClearDirectX() {
+    constexpr float kRenderWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kRenderHeight = static_cast<float>(WindowApp::kClientHeight);
+    constexpr float kPi = 3.14159265f;
+    constexpr float kSubTextBlinkFreq = 12.0f;
+    constexpr float kSubTextBlinkBase = 0.65f;
+    constexpr float kSubTextBlinkAmp = 0.35f;
+
+    // 1. 全画面ゴールデンフラッシュ（ゴールゲート通過時のまばゆい祝福の光）
+    if (flashSprite_ && areaClearFlashAlpha_ > 0.005f) {
+        flashSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        flashSprite_->SetSize(kRenderWidth, kRenderHeight);
+        // 温かみのあるゴールデンフラッシュ (R=1.0, G=0.92, B=0.55)
+        flashSprite_->GetMaterialData()->color = { 1.0f, 0.92f, 0.55f, areaClearFlashAlpha_ };
+        flashSprite_->Update();
+        flashSprite_->Draw("white", true);
+    }
+
+    if (!isAreaClearing_) return;
+
+    // 自機が空にジャンプして消えるまでは文字を出さない
+    if (areaClearTimer_ < kTextDropStartFrame) {
+        return;
+    }
+
+    // 2. 「AREA CLEAR!!」中央バナー背景の上空滑空降下＆バウンド静止アニメーション
+    int dropElapsed = areaClearTimer_ - kTextDropStartFrame;
+    float dropT = (std::min)(1.0f, static_cast<float>(dropElapsed) / static_cast<float>(kTextDropDuration));
+
+    float targetBannerY = (kRenderHeight * kAreaClearBannerTargetY) - (kAreaClearBannerHeight * 0.5f);
+    float currentBannerY = targetBannerY;
+
+    if (dropT < 0.70f) {
+        // 上空（画面外 kAreaClearBannerDropStartY）から目標位置へ滑空降下 (イージング加速)
+        float normT = dropT / 0.70f;
+        float easeIn = normT * normT;
+        currentBannerY = kAreaClearBannerDropStartY + (targetBannerY - kAreaClearBannerDropStartY) * easeIn;
+    } else {
+        // 目標位置到達時のポヨンとしたバウンド振動（減衰サイン波）
+        float bounceNormT = (dropT - 0.70f) / 0.30f;
+        float bounceOffset = std::sin(bounceNormT * kPi) * 18.0f * (1.0f - bounceNormT);
+        currentBannerY = targetBannerY - bounceOffset;
+    }
+
+    float bannerW = kAreaClearBannerWidth;
+    float bannerH = kAreaClearBannerHeight;
+    float bannerX = (kRenderWidth - bannerW) * 0.5f;
+
+    if (areaClearBannerSprite_) {
+        areaClearBannerSprite_->SetPosition({ bannerX, currentBannerY, 0.0f });
+        areaClearBannerSprite_->SetSize(bannerW, bannerH);
+        areaClearBannerSprite_->GetMaterialData()->color = { 10.0f / 255.0f, 15.0f / 255.0f, 25.0f / 255.0f, 0.88f };
+        areaClearBannerSprite_->Update();
+        areaClearBannerSprite_->Draw("white", true);
+    }
+
+    // 3. 「AREA CLEAR!!」メインゴールドテキスト
+    std::string mainText = (currentArea_ + 1 >= kMaxAreas) ? "ALL AREAS CLEARED!!" : ("AREA " + std::to_string(currentArea_ + 1) + " CLEAR!!");
+    if (areaClearTextGen_ && areaClearTextObj_) {
+        areaClearTextGen_->Generate(mainText, "Impact", 44.0f, 2, true, false, false);
+        float tw = static_cast<float>(areaClearTextGen_->GetWidth());
+        float th = static_cast<float>(areaClearTextGen_->GetHeight());
+        float tx = (kRenderWidth - tw) * 0.5f;
+        float ty = currentBannerY + 16.0f;
+
+        areaClearTextObj_->SetPosition({ tx, ty, 0.0f });
+        areaClearTextObj_->SetSize(tw, th);
+        areaClearTextObj_->SetColor({ 1.0f, 0.88f, 0.20f, 1.0f }); // 黄金色
+        areaClearTextObj_->Update();
+        areaClearTextObj_->Draw(areaClearTextGen_->GetGpuHandle(), true);
+    }
+
+    // 4. 「NEXT AREA INITIALIZING...」サブテキスト（着地後に点滅表示）
+    if (dropT >= 0.70f) {
+        std::string subText = (currentArea_ + 1 >= kMaxAreas) ? "PREPARING VICTORY CEREMONY..." : "NEXT AREA INITIALIZING...";
+        if (areaClearSubTextGen_ && areaClearSubTextObj_) {
+            areaClearSubTextGen_->Generate(subText, "Yu Gothic UI", 16.0f, 1, true, false, false);
+            float stw = static_cast<float>(areaClearSubTextGen_->GetWidth());
+            float sth = static_cast<float>(areaClearSubTextGen_->GetHeight());
+            float stx = (kRenderWidth - stw) * 0.5f;
+            float sty = currentBannerY + bannerH - sth - 16.0f;
+
+            // 点滅アニメーション
+            float progress = static_cast<float>(areaClearTimer_) / static_cast<float>(kAreaClearDuration);
+            float blink = kSubTextBlinkBase + kSubTextBlinkAmp * std::sin(progress * kSubTextBlinkFreq);
+            areaClearSubTextObj_->SetPosition({ stx, sty, 0.0f });
+            areaClearSubTextObj_->SetSize(stw, sth);
+            areaClearSubTextObj_->SetColor({ 0.4f, 0.9f, 1.0f, blink }); // ネオンシアン
+            areaClearSubTextObj_->Update();
+            areaClearSubTextObj_->Draw(areaClearSubTextGen_->GetGpuHandle(), true);
+        }
+    }
 }
 
 

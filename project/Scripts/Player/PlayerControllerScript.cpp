@@ -1,5 +1,6 @@
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Player/BulletScript.h"
+#include "Scripts/Director/GamePhaseControllerScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/MeshRendererComponent.h"
@@ -17,6 +18,9 @@
 #include "Engine/Graphics/Objects/3d/Line/LineObject.h"
 #include "Engine/Graphics/Objects/3d/FlatRing/FlatRingObject.h"
 #include "Engine/Graphics/Objects/3d/Cone/ConeObject.h"
+#include "Engine/Graphics/Objects/3d/Cube/CubeObject.h"
+#include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
+#include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Zuizui.h"
 #include <cmath>
@@ -95,19 +99,36 @@ void PlayerControllerScript::Start() {
         }
     }
     if (owner_ && !isInitialScaleSaved_) {
+        owner_->SetScale({ kPlayerBaseScale, kPlayerBaseScale, kPlayerBaseScale });
         initialScale_ = owner_->GetScale();
         isInitialScaleSaved_ = true;
     }
 
-    if (!isSeShootLoaded_) {
-        if (auto* audio = Audio::GetInstance()) {
+    if (auto* audio = Audio::GetInstance()) {
+        if (!isSeShootLoaded_) {
             seShoot_ = audio->LoadSound(kSeShootPath);
             isSeShootLoaded_ = true;
+        }
+        if (!isSeDryFireLoaded_) {
+            seDryFire_ = audio->LoadSound(kSeDryFirePath);
+            isSeDryFireLoaded_ = true;
+        }
+        if (!isSeReloadLoaded_) {
+            seReload_ = audio->LoadSound(kSeReloadPath);
+            isSeReloadLoaded_ = true;
         }
     }
 }
 
 void PlayerControllerScript::OnUpdate() {
+    // 被弾演出（画面外周の赤い靄＆赤フラッシュ）の滑らかなフェードアウト更新
+    if (damageVignetteAlpha_ > 0.0f) {
+        damageVignetteAlpha_ = (std::max)(0.0f, damageVignetteAlpha_ - kDamageVignetteFadeSpeed);
+    }
+    if (damageFlashAlpha_ > 0.0f) {
+        damageFlashAlpha_ = (std::max)(0.0f, damageFlashAlpha_ - kDamageFlashFadeSpeed);
+    }
+
     // 死亡溶解演出の更新
     if (isMelting_) {
         UpdateDeathMeltAnimation();
@@ -189,15 +210,34 @@ void PlayerControllerScript::OnUpdate() {
 }
 
 /// <summary>
+/// リロードを開始し、メカニカル装填音の再生とリロードタイマーを設定します。
+/// </summary>
+void PlayerControllerScript::StartReload() {
+    if (reloadTimer_ > 0 || ammo_ >= maxAmmo_) return;
+
+    reloadTimer_ = reloadDuration_;
+    if (auto* audio = Audio::GetInstance()) {
+        if (isSeReloadLoaded_) {
+            audio->PlaySoundW(seReload_, kReloadVolume, false);
+        }
+    }
+}
+
+/// <summary>
 /// リロードキー（Rキー）の押下を検知し、リロードタイマーを開始します。
 /// </summary>
 void PlayerControllerScript::HandleReload() {
+    // エリアクリア演出中はリロード不可
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsAreaClearing()) return;
+    }
+
     auto* input = InputResource::GetInput();
     if (!input) return;
 
     if (reloadTimer_ <= 0 && ammo_ < maxAmmo_) {
         if (input->Trigger(kReloadKey)) {
-            reloadTimer_ = reloadDuration_;
+            StartReload();
         }
     }
 }
@@ -205,16 +245,33 @@ void PlayerControllerScript::HandleReload() {
 /// <summary>
 /// マウスの左クリック（単発）または長押し（連射）を監視し、
 /// 連射インターバルと残弾数（または無限弾フラグ）の条件を満たしている場合に射撃を実行します。
+/// 弾切れ時またはリロード中のクリック時は空撃ち演出（「カッ」という撃針クリック音＋微振動）を行います。
 /// </summary>
 void PlayerControllerScript::HandleShooting() {
+    // エリアクリア演出中は射撃不可
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsAreaClearing()) return;
+    }
+
     auto* input = InputResource::GetInput();
     if (!input) return;
 
-    bool canShoot = shotIntervalTimer_ <= 0 && (infiniteAmmo_ || (reloadTimer_ <= 0 && ammo_ > 0));
-    if (canShoot) {
-        // 左クリック（単発入力または長押し連射）
-        if (input->MouseTrigger(kShotMouseKey) || input->MousePress(kShotMouseKey)) {
+    bool isTrigger = input->MouseTrigger(kShotMouseKey);
+    bool isPress = input->MousePress(kShotMouseKey);
+
+    if (isTrigger || isPress) {
+        bool canShoot = shotIntervalTimer_ <= 0 && (infiniteAmmo_ || (reloadTimer_ <= 0 && ammo_ > 0));
+        if (canShoot) {
             Fire();
+        }
+        // 弾切れ時またはリロード中の空撃ち演出（単発クリックトリガー時のみ「カッ」と乾いた撃針クリック音を再生）
+        else if (isTrigger && !infiniteAmmo_ && (ammo_ <= 0 || reloadTimer_ > 0)) {
+            if (auto* audio = Audio::GetInstance()) {
+                if (isSeDryFireLoaded_) {
+                    audio->PlaySoundW(seDryFire_, kDryFireVolume, false);
+                }
+            }
+            dryFireShakeProgress_ = 1.0f; // 空撃ちの微小ピクッ反動
         }
     }
 }
@@ -226,6 +283,11 @@ void PlayerControllerScript::HandleShooting() {
 void PlayerControllerScript::Fire() {
     if (!infiniteAmmo_) {
         ammo_--;
+        // 30発撃ち切ったら自動でリロード開始！（オートリロード）
+        if (ammo_ <= 0) {
+            ammo_ = 0;
+            StartReload();
+        }
     }
     shotIntervalTimer_ = shotInterval_;
 
@@ -243,27 +305,45 @@ void PlayerControllerScript::Fire() {
         camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
     }
 
-    // 2. 弾丸のスポーン位置: レティクル視線軸上のカメラ前方自然位置（中央直進）
-    Vector3 bulletSpawnPos = {
-        rayStart.x + rayDir.x * kBulletCameraForwardOffset,
-        rayStart.y + rayDir.y * kBulletCameraForwardOffset,
-        rayStart.z + rayDir.z * kBulletCameraForwardOffset
-    };
+    // 2. 弾丸のスポーン位置および射出方向の計算
+    // 銃が見えている場合は手持ち銃の銃口先端（GetMuzzleWorldPosition）からレティクル目標（GetAimTargetPosition）へ射出！
+    Vector3 bulletSpawnPos;
+    Vector3 shootDir;
 
-    // 3. 弾丸プレハブの実体化（レティクル真ん中へ100%まっすぐ直進！）
+    if (isGunVisible_) {
+        bulletSpawnPos = GetMuzzleWorldPosition();
+        Vector3 aimTarget = GetAimTargetPosition();
+        Vector3 diff = { aimTarget.x - bulletSpawnPos.x, aimTarget.y - bulletSpawnPos.y, aimTarget.z - bulletSpawnPos.z };
+        float distSq = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+        if (distSq > kEpsilon) {
+            float invDist = 1.0f / std::sqrt(distSq);
+            shootDir = { diff.x * invDist, diff.y * invDist, diff.z * invDist };
+        } else {
+            shootDir = rayDir;
+        }
+    } else {
+        bulletSpawnPos = {
+            rayStart.x + rayDir.x * kBulletCameraForwardOffset,
+            rayStart.y + rayDir.y * kBulletCameraForwardOffset,
+            rayStart.z + rayDir.z * kBulletCameraForwardOffset
+        };
+        shootDir = rayDir;
+    }
+
+    // 3. 弾丸プレハブの実体化（VALORANT/APEX風の細長い曳光ビームライン）
     GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", bulletSpawnPos);
     if (bulletObj) {
         auto* bulletScript = bulletObj->GetComponent<BulletScript>();
         if (bulletScript) {
-            bulletScript->SetDirection(rayDir); // 左右どちらを向いてもレティクル真ん中に直進！
+            bulletScript->SetDirection(shootDir); // 銃口からレティクル目標地点へまっすぐ直進！
             bulletScript->SetSpeed(bulletSpeed_);
             bulletScript->SetInheritedVelocity(enableInertia_ ? currentVelocity_ : Vector3{ 0.0f, 0.0f, 0.0f }); // 自機移動慣性同期
-            bulletScript->SetVisualScale(bulletVisualScale_);         // 弾丸の見た目スケール（小型化）
+            bulletScript->SetVisualScale(bulletVisualScale_);         // 弾丸の見た目スケール（細長い曳光ビーム）
             bulletScript->SetCollisionRadius(bulletCollisionRadius_); // 見た目より広めの快適な当たり判定
             bulletScript->SetTrailColors(bulletSparkStartColor_, bulletSparkEndColor_); // 白熱ゴールド〜赤橙火花トレイル
             bulletScript->SetIsPlayerBullet(true);
         }
-        // 弾丸カラーをシックな漆黒（ガンメタルブラック）に設定
+        // 弾丸カラーを高輝度ゴールド曳光色に設定
         if (auto* mr = bulletObj->GetComponent<MeshRendererComponent>()) {
             mr->SetColor(kPlayerBulletColor);
         }
@@ -350,6 +430,10 @@ void PlayerControllerScript::TakeDamage(int amount) {
 
     hp_ -= amount;
     invincibilityTimer_ = kDefaultInvincibilityDuration;
+
+    // 被弾演出: 画面外周の赤い靄（ダメージビネット）＆ 瞬間赤フラッシュを点灯！
+    damageVignetteAlpha_ = kDamageVignetteInitialAlpha;
+    damageFlashAlpha_ = kDamageFlashInitialAlpha;
 
     if (hp_ <= 0) {
         hp_ = 0;
@@ -601,17 +685,47 @@ void PlayerControllerScript::EnsureGunModel() {
         muzzleGpuParticle_ = std::make_unique<GPUParticleObject>();
         muzzleGpuParticle_->Initialize(kDefaultMuzzleMaxParticles);
     }
+
+    // リロード時マガジン3Dモデル（CubeObject）の初期化
+    if (!magazineModel_) {
+        magazineModel_ = std::make_unique<CubeObject>();
+        magazineModel_->SetAutoRegisterHierarchy(false);
+        magazineModel_->Initialize(2); // ライティング有効
+        magazineModel_->SetSize(kMagazineSize);
+        magazineModel_->SetColor(kMagazineColor);
+    }
 }
 
 void PlayerControllerScript::UpdateGunTransform() {
     EnsureGunModel();
     if (!gunModel_) return;
 
+    // エリアクリア演出中はFPS手持ち銃およびマガジンを非表示化（三人称カメラの視界に浮遊して残るのを防止）
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsAreaClearing()) {
+            isGunVisible_ = false;
+            gunModel_->SetScale({ 0.0f, 0.0f, 0.0f });
+            gunModel_->Update();
+            if (magazineModel_) {
+                magazineModel_->SetScale({ 0.0f, 0.0f, 0.0f });
+                magazineModel_->Update();
+            }
+            return;
+        }
+    }
+
     // リコイル回復 (スムーズに0へ収束)
     if (gunRecoilProgress_ > 0.001f) {
         gunRecoilProgress_ += (0.0f - gunRecoilProgress_) * kGunRecoilRecovery;
     } else {
         gunRecoilProgress_ = 0.0f;
+    }
+
+    // 空撃ち微振動回復
+    if (dryFireShakeProgress_ > 0.001f) {
+        dryFireShakeProgress_ += (0.0f - dryFireShakeProgress_) * 0.25f;
+    } else {
+        dryFireShakeProgress_ = 0.0f;
     }
 
     // FPS視点用のアクティブカメラを取得
@@ -631,15 +745,41 @@ void PlayerControllerScript::UpdateGunTransform() {
     Vector3 camUp      = { rotMat.m[1][0], rotMat.m[1][1], rotMat.m[1][2] };
     Vector3 camForward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
 
-    // リコイルによる銃の手前への後退および銃口の跳ね上がり
+    // リコイルおよび空撃ちによる銃の手前への後退および銃口の跳ね上がり
     float recoilKick = gunRecoilProgress_ * kGunRecoilKickbackZ;
     float recoilPitch = gunRecoilProgress_ * kGunRecoilPitch;
+    float dryKick = dryFireShakeProgress_ * kDryFireKickbackZ;
+    float dryPitch = dryFireShakeProgress_ * kDryFireKickPitch;
+
+    // リロード演出モーション（マガジン抜き取り・装填・ボルト操作の滑らかな姿勢変化）
+    float reloadOffsetY = 0.0f;
+    float reloadPitch = 0.0f;
+    float reloadRoll = 0.0f;
+
+    if (reloadTimer_ > 0 && reloadDuration_ > 0) {
+        float t = 1.0f - static_cast<float>(reloadTimer_) / static_cast<float>(reloadDuration_);
+        // サイン波カーブによるマガジン交換時の下傾き
+        float curve = std::sin(t * kPi);
+        reloadOffsetY = curve * kReloadDownOffsetY;
+        reloadPitch   = curve * kReloadTiltPitch;
+        reloadRoll    = curve * kReloadTiltRoll;
+
+        // 装填完了時（t=0.55付近）の小さなカチャッという突き上げノック
+        if (t >= 0.48f && t <= 0.65f) {
+            float tapT = (t - 0.48f) / 0.17f;
+            float tapKnock = std::sin(tapT * kPi) * 0.02f;
+            reloadOffsetY += tapKnock;
+        }
+    }
+
+    float totalKick = recoilKick + dryKick;
+    float totalOffsetY = gunOffset_.y + reloadOffsetY;
 
     // カメラローカル座標からワールド座標へ変換
     Vector3 gunWorldPos = {
-        camPos.x + camRight.x * gunOffset_.x + camUp.x * gunOffset_.y + camForward.x * (gunOffset_.z + recoilKick),
-        camPos.y + camRight.y * gunOffset_.x + camUp.y * gunOffset_.y + camForward.y * (gunOffset_.z + recoilKick),
-        camPos.z + camRight.z * gunOffset_.x + camUp.z * gunOffset_.y + camForward.z * (gunOffset_.z + recoilKick)
+        camPos.x + camRight.x * gunOffset_.x + camUp.x * totalOffsetY + camForward.x * (gunOffset_.z + totalKick),
+        camPos.y + camRight.y * gunOffset_.x + camUp.y * totalOffsetY + camForward.y * (gunOffset_.z + totalKick),
+        camPos.z + camRight.z * gunOffset_.x + camUp.z * totalOffsetY + camForward.z * (gunOffset_.z + totalKick)
     };
 
     // 3. 弾の撃つ方向（レティクル視線レイ rayDir）と銃の向きを完全一致化
@@ -662,11 +802,11 @@ void PlayerControllerScript::UpdateGunTransform() {
     float bulletYaw = std::atan2(rayDir.x, rayDir.z);
     float bulletPitch = -std::atan2(rayDir.y, hLen > kEpsilon ? hLen : kEpsilon);
 
-    // 銃の回転を弾丸の射出方向（bulletPitch, bulletYaw）と完全同期
+    // 銃の回転を弾丸の射出方向（bulletPitch, bulletYaw）およびリコイル・リロード姿勢と同期
     Vector3 gunWorldRot = {
-        bulletPitch + gunRotation_.x + recoilPitch,
+        bulletPitch + gunRotation_.x + recoilPitch + dryPitch + reloadPitch,
         bulletYaw + gunRotation_.y,
-        camRot.z + gunRotation_.z
+        camRot.z + gunRotation_.z + reloadRoll
     };
 
     gunModel_->SetPosition(gunWorldPos);
@@ -674,6 +814,65 @@ void PlayerControllerScript::UpdateGunTransform() {
     gunModel_->SetScale(gunScale_);
     gunModel_->SetColor(gunColor_);
     gunModel_->Update();
+
+    // 3Dマガジン交換アニメーションの更新
+    if (magazineModel_) {
+        if (reloadTimer_ > 0 && reloadDuration_ > 0 && isGunVisible_) {
+            float t = 1.0f - static_cast<float>(reloadTimer_) / static_cast<float>(reloadDuration_);
+
+            // 銃の姿勢に応じた基底ベクトル
+            Matrix4x4 gunRotM = Math::MakeRotateMatrix(gunWorldRot.x, gunWorldRot.y, gunWorldRot.z);
+            Vector3 gunR = { gunRotM.m[0][0], gunRotM.m[0][1], gunRotM.m[0][2] };
+            Vector3 gunU = { gunRotM.m[1][0], gunRotM.m[1][1], gunRotM.m[1][2] };
+            Vector3 gunF = { gunRotM.m[2][0], gunRotM.m[2][1], gunRotM.m[2][2] };
+
+            Vector3 baseMagPos = {
+                gunWorldPos.x + gunR.x * kMagRelativeOffset.x + gunU.x * kMagRelativeOffset.y + gunF.x * kMagRelativeOffset.z,
+                gunWorldPos.y + gunR.y * kMagRelativeOffset.x + gunU.y * kMagRelativeOffset.y + gunF.y * kMagRelativeOffset.z,
+                gunWorldPos.z + gunR.z * kMagRelativeOffset.x + gunU.z * kMagRelativeOffset.y + gunF.z * kMagRelativeOffset.z
+            };
+
+            // 前半 (0.00 〜 0.38): 旧マガジンが銃底から外れて落下！
+            if (t < 0.38f) {
+                float dropT = t / 0.38f;
+                float dropDist = dropT * dropT * kMagDropDist;
+                Vector3 magPos = {
+                    baseMagPos.x - gunU.x * dropDist,
+                    baseMagPos.y - gunU.y * dropDist,
+                    baseMagPos.z - gunU.z * dropDist
+                };
+                magazineModel_->SetPosition(magPos);
+                magazineModel_->SetRotate(gunWorldRot);
+                magazineModel_->SetScale({ 1.0f, 1.0f, 1.0f });
+                magazineModel_->SetColor(kMagazineColor);
+                magazineModel_->Update();
+            }
+            // 中盤〜後半 (0.42 〜 0.68): 新マガジンが下から上がってきて銃底へ差し込まれる！
+            else if (t >= 0.42f && t < 0.68f) {
+                float insertT = (t - 0.42f) / 0.26f;
+                float easeInsert = insertT * insertT;
+                float remainDist = (1.0f - easeInsert) * kMagInsertStartDist;
+                Vector3 magPos = {
+                    baseMagPos.x - gunU.x * remainDist,
+                    baseMagPos.y - gunU.y * remainDist,
+                    baseMagPos.z - gunU.z * remainDist
+                };
+                magazineModel_->SetPosition(magPos);
+                magazineModel_->SetRotate(gunWorldRot);
+                magazineModel_->SetScale({ 1.0f, 1.0f, 1.0f });
+                magazineModel_->SetColor(kMagazineColor);
+                magazineModel_->Update();
+            }
+            // 0.68以降: 完全に銃内部に収まったため非表示
+            else {
+                magazineModel_->SetScale({ 0.0f, 0.0f, 0.0f });
+                magazineModel_->Update();
+            }
+        } else {
+            magazineModel_->SetScale({ 0.0f, 0.0f, 0.0f });
+            magazineModel_->Update();
+        }
+    }
 
     // VALORANT風マズルフラッシュのTransform更新（銃が表示されている時のみ）
     if (muzzleFlashTimer_ > 0 && isGunVisible_) {
@@ -853,6 +1052,11 @@ void PlayerControllerScript::Draw() {
         gunModel_->Draw(kGunModelKey, "white");
     }
 
+    // リロード中の3Dマガジンモデル描画
+    if (magazineModel_ && reloadTimer_ > 0 && isGunVisible_) {
+        magazineModel_->Draw("white");
+    }
+
     // 提示画像スタイル 3D円錐ジェット火炎描画（射撃瞬間のみ点灯）
     if (muzzleFlashTimer_ > 0) {
         if (muzzleFlameOuter_) muzzleFlameOuter_->Draw("white");
@@ -869,5 +1073,51 @@ void PlayerControllerScript::Draw() {
                 muzzleGpuParticle_->Draw(cmdList, "circle", ParticleBlendMode::Normal);
             }
         }
+    }
+}
+
+void PlayerControllerScript::EnsureDamageVisuals() {
+    if (!damageFlashSprite_) {
+        damageFlashSprite_ = std::make_unique<SpriteObject>();
+        damageFlashSprite_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(damageFlashSprite_.get());
+    }
+    if (!damageVignetteSprite_) {
+        damageVignetteSprite_ = std::make_unique<SpriteObject>();
+        damageVignetteSprite_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(damageVignetteSprite_.get());
+    }
+}
+
+void PlayerControllerScript::Draw2D() {
+    if (damageFlashAlpha_ <= 0.005f && damageVignetteAlpha_ <= 0.005f) {
+        return;
+    }
+
+    EnsureDamageVisuals();
+
+    constexpr float kScreenWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kScreenHeight = static_cast<float>(WindowApp::kClientHeight);
+
+    // 1. 被弾瞬間の全画面赤フラッシュ（被弾インパクトの強調）
+    if (damageFlashSprite_ && damageFlashAlpha_ > 0.005f) {
+        damageFlashSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        damageFlashSprite_->SetSize(kScreenWidth, kScreenHeight);
+        damageFlashSprite_->GetMaterialData()->color = {
+            kDamageFlashColor.x, kDamageFlashColor.y, kDamageFlashColor.z, damageFlashAlpha_
+        };
+        damageFlashSprite_->Update();
+        damageFlashSprite_->Draw("white", true);
+    }
+
+    // 2. 画面外周の赤い靄（ダメージビネット・ブラッディスクリーン）
+    if (damageVignetteSprite_ && damageVignetteAlpha_ > 0.005f) {
+        damageVignetteSprite_->SetPosition({ 0.0f, 0.0f, 0.0f });
+        damageVignetteSprite_->SetSize(kScreenWidth, kScreenHeight);
+        damageVignetteSprite_->GetMaterialData()->color = {
+            kDamageVignetteColor.x, kDamageVignetteColor.y, kDamageVignetteColor.z, damageVignetteAlpha_
+        };
+        damageVignetteSprite_->Update();
+        damageVignetteSprite_->Draw("damageVignette", true);
     }
 }

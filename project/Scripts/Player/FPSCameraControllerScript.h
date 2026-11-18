@@ -36,7 +36,7 @@ public:
 
 private:
     // マジックナンバー排除のための定数
-    static constexpr float kCameraUpHeight = 1.8f;              // 目の高さオフセット
+    static constexpr float kCameraUpHeight = 0.72f;              // 目の高さオフセット（自機中心からの高さ。モデルのトップ面1.44mにピッタリ一致）
     static constexpr float kCameraLookAhead = 8.0f;             // 注視点前方距離
     static constexpr float kCameraYawLimitHalf = 3.14159265f;   // 全周360度視点旋回制限（左右最大各180度 = π rad）
     static constexpr float kMaxPitchLimit = 1.30f;              // 上下最大見上げ・見下ろし角 (約75度 = 1.30 rad)
@@ -52,14 +52,15 @@ private:
     static constexpr float kShakeIntensity = 0.2f;              // シェイク強度
     static constexpr float kLookSmoothFactor = 0.15f;           // 平滑化係数
 
-    // 死亡シネマティック演出用の定数
-    static constexpr float kDeathCameraFrontDist = 5.2f;      // 正面カメラの前方距離（自機全体を綺麗に収める距離に拡大）
-    static constexpr float kDeathCameraFrontHeight = 1.6f;    // 正面カメラの高さ（見下ろし感を保つ自然な高さ）
-    static constexpr float kDeathCameraSideSwing = 1.4f;      // 正面へ回り込む横膨らみ量（距離に応じた優雅なアーク軌道）
+    // 死亡シネマティック演出用の定数（自機スケール0.72mに合わせた最適カメラワーク）
+    static constexpr float kDeathCameraFrontDist = 3.2f;      // 正面カメラの前方距離
+    static constexpr float kDeathCameraFrontHeight = 1.2f;    // 正面カメラの高さ
+    static constexpr float kDeathCameraSideSwing = 1.0f;      // 正面へ回り込む横膨らみ量
     static constexpr float kDeathCameraLerpSpeed = 0.08f;     // 正面回り込みのスムーズ補間係数
-    static constexpr float kDeathTargetCenterHeight = 0.8f;   // 注視対象の自機中心高さ
+    static constexpr float kDeathTargetCenterHeight = 0.72f;  // 注視対象の自機中心高さ (接地時0.72m)
 
     // メンバ変数
+    float cameraUpHeight_ = kCameraUpHeight;
     float cameraYawOffset_ = 0.0f;
     float cameraPitchOffset_ = 0.0f;
     float mouseSensitivity_ = kDefaultMouseSensitivity;

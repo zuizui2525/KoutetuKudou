@@ -102,8 +102,8 @@ private:
     // マジックナンバー排除のためのデフォルト定数
     static constexpr float kDefaultSpeed = 0.5f;
     static constexpr int kDefaultMaxLifeTime = 60;
-    static constexpr float kDefaultCollisionRadius = 0.35f; // 見た目より広めの快適な当たり判定半径 (m)
-    static constexpr Vector3 kDefaultVisualScale = { 0.55f, 0.55f, 0.55f }; // 小型化されたスマートな弾丸スケール
+    static constexpr float kDefaultCollisionRadius = 0.30f; // 見た目より広めの快適な当たり判定半径 (m)
+    static constexpr Vector3 kDefaultVisualScale = { 0.055f, 0.055f, 5.2f }; // VALORANT風ロングレーザートレーサー（太さ5.5cm、長さ5.2m）
     static constexpr int kDefaultDamage = 1;
     static constexpr float kMinSpeed = 0.01f;
     static constexpr float kMaxSpeed = 5.0f;
@@ -113,13 +113,14 @@ private:
     // 小型オレンジ・ジェット噴射エフェクト演出定数 (マジックナンバー排除)
     static inline const std::string kEffectBulletTrail = "BulletTrail";
     static inline const std::string kEffectBulletHit = "Explosion";
-    static constexpr float kPlayerJetTrailStartScale = 0.045f; // 小型でシャープなノズル口径 (m)
-    static constexpr float kPlayerJetTrailEndScale   = 0.005f; // 尖って消滅する尾部 (m)
-    static constexpr float kPlayerJetLifeMin         = 0.04f;  // 極短寿命 (約2.4フレーム)
-    static constexpr float kPlayerJetLifeMax         = 0.07f;  // 極短寿命 (約4.2フレーム)
-    static constexpr float kPlayerJetBackwardSpeed   = 1.5f;   // 弾丸背後への後退噴射初速 (m/s)
-    static constexpr float kPlayerJetSpread          = 0.015f; // 横方向の微小拡散半径 (m)
-    static constexpr float kDefaultBulletTrailSpawnRate = 180.0f; // 途切れのない濃厚な連続ジェット炎 (/秒)
+    static constexpr uint32_t kHitGpuSparkCount = 800;        // 敵命中時の鮮烈な火花スパーク粒子数
+    static constexpr float kPlayerJetTrailStartScale = 0.015f; // 小型でシャープなノズル口径 (m)
+    static constexpr float kPlayerJetTrailEndScale   = 0.002f; // 尖って消滅する尾部 (m)
+    static constexpr float kPlayerJetLifeMin         = 0.02f;  // 極短寿命 (約1.2フレーム)
+    static constexpr float kPlayerJetLifeMax         = 0.04f;  // 極短寿命 (約2.4フレーム)
+    static constexpr float kPlayerJetBackwardSpeed   = 1.0f;   // 弾丸背後への後退噴射初速 (m/s)
+    static constexpr float kPlayerJetSpread          = 0.008f; // 横方向の微小拡散半径 (m)
+    static constexpr float kDefaultBulletTrailSpawnRate = 80.0f;  // 視界を塞がないコンパクトなトレイル炎 (/秒)
     static constexpr Vector4 kDefaultBulletSparkStart = { 1.0f, 0.60f, 0.10f, 1.0f }; // 鮮烈発熱オレンジ（白熱核）
     static constexpr Vector4 kDefaultBulletSparkEnd   = { 0.85f, 0.18f, 0.02f, 0.00f }; // ディープバーントオレンジ（冷却消滅）
     static constexpr float kBulletHitScale = 1.2f;

@@ -22,6 +22,7 @@
 REGISTER_SCRIPT(EnemySpawnManagerScript)
 
 namespace {
+    constexpr float kEnemyGroundYOffset = 0.68f; // 通常敵の足元接地Y座標 (cube.obj 半径1.0 × スケール0.68m)
     constexpr float kBossHeightOffset = 2.0f; // ボス生成時の地上浮遊高さ (m)
     constexpr float kDefaultSpawnOffsetZ = 20.0f; // カメラ注視点からのデフォルト前方オフセット
     constexpr float kDefaultTriggerZDistance = 25.0f; // スポーン位置からトリガーZまでのデフォルト手前距離
@@ -140,7 +141,7 @@ void EnemySpawnManagerScript::CheckPeriodicFallback(const Vector3& playerPos) {
         float sideSign = (rand() % 2 == 0) ? 1.0f : -1.0f;
         Vector3 spawnPos = {
             playerPos.x + sideSign * kSpawnOffsetSide,
-            playerPos.y,
+            kEnemyGroundYOffset,
             playerPos.z + kSpawnOffsetBack
         };
 

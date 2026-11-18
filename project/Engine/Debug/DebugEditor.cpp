@@ -1895,8 +1895,8 @@ void DebugEditor::ToggleFullscreen(HWND hwnd) {
     }
     DWORD dwStyle = GetWindowLong(hwnd, GWL_STYLE);
 
-    // 通常時のウィンドウスタイル（最大化ボタンおよび枠ドラッグによる自由拡縮を許可・可視状態を維持）
-    const DWORD kOriginalStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+    // 通常時のウィンドウスタイル（サイズ変更ロック仕様・可視状態を維持）
+    const DWORD kOriginalStyle = (WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX) | WS_VISIBLE;
 
     if (isFullscreen_) {
         // フルスクリーン化（ボーダーレス全画面化）
@@ -2277,7 +2277,7 @@ void DebugEditor::DrawMenuBar(HWND hwnd) {
 
             // アスペクト比変更メニュー
             if (!isFullscreen_ && ImGui::BeginMenu("アスペクト比###Aspect Ratio")) {
-                const DWORD kOriginalStyle = WS_OVERLAPPEDWINDOW;
+                const DWORD kOriginalStyle = WS_OVERLAPPEDWINDOW ^ WS_THICKFRAME ^ WS_MAXIMIZEBOX;
                 
                 auto ChangeWindowSize = [&](int32_t width, int32_t height) {
                     RECT wr = { 0, 0, width, height };

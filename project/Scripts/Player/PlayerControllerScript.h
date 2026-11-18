@@ -9,6 +9,8 @@ class ModelObject;
 class FlatRingObject;
 class ConeObject;
 class GPUParticleObject;
+class SpriteObject;
+class CubeObject;
 
 /// <summary>
 /// 自機キャラクターのHP、弾数管理、射撃、リロードを制御するスクリプトコンポーネント
@@ -22,6 +24,7 @@ public:
     void Start() override;
     void OnUpdate() override;
     void Draw() override;
+    void Draw2D() override;
     void OnInspectorGUI() override;
 
     /// <summary>
@@ -66,6 +69,7 @@ public:
     /// <returns>リロード中の場合 true</returns>
     bool IsReloading() const { return reloadTimer_ > 0; }
     int GetReloadTimer() const { return reloadTimer_; }
+    int GetReloadDuration() const { return reloadDuration_; }
 
     /// <summary>
     /// レール走行上の進行方向ベクトルを設定します。射撃時の前方方向として利用されます。
@@ -126,6 +130,11 @@ private:
     void HandleReload();
 
     /// <summary>
+    /// リロードを開始し、メカニカル装填音の再生とリロードタイマーを設定します。
+    /// </summary>
+    void StartReload();
+
+    /// <summary>
     /// 画面中央のレティクル（マウス照準）へ向けて銃口から弾丸（Bulletプレハブ）を射出し、
     /// 射撃反動のカメラシェイクを誘発します。
     /// </summary>
@@ -136,8 +145,8 @@ private:
     static constexpr int kDefaultMaxHp = 10;
     static constexpr int kDefaultInvincibilityDuration = 45; // 被弾後の無敵フレーム数 (約0.75秒)
     static constexpr int kDamageFlashCycle = 6;              // 被弾点滅の周期フレーム数
-    static constexpr int kDefaultMaxAmmo = 30;
-    static constexpr int kDefaultReloadTime = 20;     // リロード待機（フレーム数）
+    static constexpr int kDefaultMaxAmmo = 50;       // 装弾数を50発に設定
+    static constexpr int kDefaultReloadTime = 75;     // リロード待機（フレーム数: 約1.25秒）
     static constexpr int kDefaultShotInterval = 3;    // 連射間隔（フレーム数）
     static constexpr float kDefaultBulletSpeed = 0.5f;
     static constexpr float kBulletSpawnDistance = 1.0f; // 銃口の前方オフセット距離
@@ -152,7 +161,23 @@ private:
     static constexpr int kMinAmmoLimit = 1;
     static constexpr int kMaxAmmoLimit = 100;
     static inline const std::string kSeShootPath = "resources/Sounds/shoot.wav";
+    static inline const std::string kSeDryFirePath = "resources/Sounds/dryfire.wav";
+    static inline const std::string kSeReloadPath = "resources/Sounds/reload.wav";
     static constexpr float kShootVolume = 0.75f;
+    static constexpr float kDryFireVolume = 0.65f;
+    static constexpr float kReloadVolume = 0.80f;
+    static constexpr float kDryFireKickbackZ = -0.015f;
+    static constexpr float kDryFireKickPitch = 0.025f;
+    static constexpr float kReloadDownOffsetY = -0.14f;
+    static constexpr float kReloadTiltPitch = -0.22f;
+    static constexpr float kReloadTiltRoll = 0.35f;
+
+    // マガジンモデル定数 (マジックナンバー排除)
+    static constexpr Vector3 kMagazineSize = { 0.032f, 0.14f, 0.065f }; // スチールマガジン寸法 (幅, 高さ, 奥行き: m)
+    static constexpr Vector4 kMagazineColor = { 0.08f, 0.08f, 0.10f, 1.0f }; // ダークガンメタルスチール
+    static constexpr Vector3 kMagRelativeOffset = { 0.0f, -0.09f, -0.03f }; // 銃グリップ底部の基準マガジン位置
+    static constexpr float kMagDropDist = 0.55f; // 旧マガジンの落下距離 (m)
+    static constexpr float kMagInsertStartDist = 0.32f; // 新マガジンの挿入開始距離 (m)
     static constexpr int kDeathMeltDuration = 100;             // 死亡演出全体フレーム数 (約1.67秒)
     static constexpr int kCameraAlignFrames = 22;             // カメラ正面回り込み待機フレーム数 (約0.36秒)
     static constexpr float kMeltHorizontalSpreadFactor = 2.0f;// 溶解時の横方向液状化拡大率
@@ -167,7 +192,7 @@ private:
     bool isOriginalColorSaved_ = false;
     int maxAmmo_ = kDefaultMaxAmmo;
     int ammo_ = kDefaultMaxAmmo;
-    bool infiniteAmmo_ = true; // デバッグ用: 残弾無限（弾切れによる不発を防止）
+    bool infiniteAmmo_ = false; // デバッグ用: 残弾無限（デフォルトはfalseで有限30発）
     int reloadDuration_ = kDefaultReloadTime;
     int reloadTimer_ = 0;
     int shotInterval_ = kDefaultShotInterval;
@@ -191,14 +216,22 @@ private:
     Vector3 initialPos_ = { 0.0f, 0.0f, 0.0f };
     bool isInitialPosSaved_ = false;
 
-    // 射撃効果音 (SE)
+    // 射撃・空撃ち・リロード効果音 (SE)
     SoundData seShoot_{};
     bool isSeShootLoaded_ = false;
+    SoundData seDryFire_{};
+    bool isSeDryFireLoaded_ = false;
+    SoundData seReload_{};
+    bool isSeReloadLoaded_ = false;
+    float dryFireShakeProgress_ = 0.0f; // 空撃ち時のピクッ微振動 (0.0〜1.0)
+
+    // 自機本体モデル関連定数 (マジックナンバー排除)
+    static constexpr float kPlayerBaseScale = 0.72f; // マップ縮尺に美しく調和する自機基本スケール (m)
 
     // 手持ちGunモデル関連定数 (マジックナンバー排除)
     static inline const std::string kGunModelKey = "gun";
     static constexpr Vector4 kGunDefaultColor = { 0.12f, 0.12f, 0.14f, 1.0f }; // シックなマットブラック塗装
-    static constexpr Vector4 kPlayerBulletColor = { 1.0f, 0.70f, 0.20f, 1.0f }; // 白熱オレンジ曳光弾頭
+    static constexpr Vector4 kPlayerBulletColor = { 1.0f, 0.96f, 0.40f, 1.0f }; // VALORANT風ロングレーザー白熱イエロー光
     static constexpr Vector3 kGunDefaultOffset = { 0.22f, -0.22f, 0.42f };      // カメラローカル手前右下（Apex風の構え）
     static constexpr Vector3 kGunDefaultRotation = { 0.0f, 0.0f, -0.04f };      // 手首のロール傾きのみ（Pitch/Yawはレティクル自動追従）
     static constexpr Vector3 kGunDefaultScale = { 0.48f, 0.48f, 0.48f };        // Apex風にしっかり見せる大型スケール
@@ -212,13 +245,13 @@ private:
     static constexpr float kDefaultZeroInDistance = 22.0f;              // 交戦レンジに合わせたゼロイン距離 (m)
     static constexpr Vector2 kDefaultAimCorrection = { 0.0f, 0.0f };   // レティクル視線と完全一致（視差バイアス不要）
     static constexpr float kBulletCameraForwardOffset = 0.5f;           // レティクル視線発射時のカメラ前方スポーン距離 (m)
-    static constexpr Vector3 kDefaultBulletVisualScale = { 0.55f, 0.55f, 0.55f }; // 自機弾の小型スマートスケール
-    static constexpr float kDefaultBulletCollisionRadius = 0.35f;       // 自機弾の快適な当たり判定半径 (m)
-    static constexpr int kMuzzleFlashDuration = 2;                      // 火炎点灯フレーム数 (瞬間スナップ点灯 約0.033秒)
-    static constexpr float kDefaultMuzzleFlameLength = 0.20f;           // 前方ジェット火炎の全長 (m)
-    static constexpr float kDefaultMuzzleFlameRadius = 0.038f;          // 火炎コーンの底面半径 (m)
-    static constexpr float kDefaultMuzzleCoreRatio = 0.62f;             // 高温インナーコアのスケール比率
-    static constexpr float kDefaultMuzzleFlashForwardOffset = 0.02f;    // 銃口の真先に突き出す前方オフセット (m)
+    static constexpr Vector3 kDefaultBulletVisualScale = { 0.055f, 0.055f, 5.2f }; // VALORANT風ロングレーザートレーサー（太さ5.5cm, 長さ5.2m）
+    static constexpr float kDefaultBulletCollisionRadius = 0.30f;       // 自機弾の快適な当たり判定半径 (m)
+    static constexpr int kMuzzleFlashDuration = 1;                      // 火炎点灯フレーム数 (瞬間スナップ点灯 約0.016秒で視界クリア)
+    static constexpr float kDefaultMuzzleFlameLength = 0.07f;           // 前方ジェット火炎の全長 (m) (銃口先端にコンパクトに集中)
+    static constexpr float kDefaultMuzzleFlameRadius = 0.016f;          // 火炎コーンの底面半径 (m)
+    static constexpr float kDefaultMuzzleCoreRatio = 0.60f;             // 高温インナーコアのスケール比率
+    static constexpr float kDefaultMuzzleFlashForwardOffset = 0.005f;   // 銃口の真先に密着させる前方オフセット (m)
     static constexpr Vector4 kDefaultFlameOuterColor = { 1.0f, 0.46f, 0.04f, 0.95f }; // 鮮烈な炎オレンジ
     static constexpr Vector4 kDefaultFlameCoreColor  = { 1.0f, 0.96f, 0.45f, 1.0f };  // 超高輝度ホワイトイエロー高温核
     static constexpr Vector4 kDefaultCoreDiscColor   = { 1.0f, 1.0f, 0.90f, 1.0f };   // 銃口リム白熱発光
@@ -226,18 +259,19 @@ private:
     static constexpr Vector4 kDefaultSmokeEndColor   = { 0.12f, 0.12f, 0.14f, 0.00f }; // 冷えたチャコール黒煙 (完全透明へ)
     static constexpr Vector4 kDefaultBulletSparkStart = { 1.0f, 0.52f, 0.05f, 1.0f }; // 鮮烈ブライトオレンジ火花
     static constexpr Vector4 kDefaultBulletSparkEnd   = { 0.85f, 0.18f, 0.02f, 0.00f }; // ディープバーントオレンジ（冷却消滅）
-    static constexpr uint32_t kDefaultMuzzleFlashGpuParticleCount = 20; // 射撃時の専用GPU硝煙ガス粒子数
+    static constexpr uint32_t kDefaultMuzzleFlashGpuParticleCount = 6;  // 射撃時の専用GPU硝煙ガス粒子数 (大幅スリム化)
     static constexpr uint32_t kDefaultMuzzleMaxParticles = 512;         // 銃口専用GPUパーティクルバッファ数
-    static constexpr float kDefaultMuzzleSmokeForwardOffset = 0.030f;   // 銃口直近の先端オフセット (m)
-    static constexpr float kDefaultMuzzleSmokeSpeed = 3.5f;             // 前方硝煙ガス噴出初速 (m/s)
-    static constexpr float kDefaultMuzzleSmokeSpread = 0.35f;           // 横拡散を極小化 (m/s)
-    static constexpr float kDefaultMuzzleSmokeLifeMin = 0.08f;          // 最小煙寿命 (秒) (約5フレーム)
-    static constexpr float kDefaultMuzzleSmokeLifeMax = 0.15f;          // 最大煙寿命 (秒) (約9フレーム)
-    static constexpr float kDefaultMuzzleSmokeScaleStart = 0.012f;      // 発生時サイズ (超小型)
-    static constexpr float kDefaultMuzzleSmokeScaleEnd = 0.050f;        // 拡散時サイズ (コンパクトに収束)
+    static constexpr float kDefaultMuzzleSmokeForwardOffset = 0.010f;   // 銃口直近の先端オフセット (m)
+    static constexpr float kDefaultMuzzleSmokeSpeed = 1.2f;             // 前方硝煙ガス噴出初速 (m/s) (拡散抑制)
+    static constexpr float kDefaultMuzzleSmokeSpread = 0.12f;           // 横拡散を極小化 (m/s)
+    static constexpr float kDefaultMuzzleSmokeLifeMin = 0.04f;          // 最小煙寿命 (秒) (約2フレーム)
+    static constexpr float kDefaultMuzzleSmokeLifeMax = 0.08f;          // 最大煙寿命 (秒) (約5フレームで即座に消滅)
+    static constexpr float kDefaultMuzzleSmokeScaleStart = 0.006f;      // 発生時サイズ (超小型)
+    static constexpr float kDefaultMuzzleSmokeScaleEnd = 0.018f;        // 拡散時サイズ (コンパクトに収束)
 
     // Gun 手持ちモデルおよびTransform設定
     std::unique_ptr<ModelObject> gunModel_;
+    std::unique_ptr<CubeObject> magazineModel_; // リロード時の3Dマガジンオブジェクト
     Vector3 gunOffset_ = kGunDefaultOffset;
     Vector3 gunRotation_ = kGunDefaultRotation;
     Vector3 gunScale_ = kGunDefaultScale;
@@ -284,6 +318,20 @@ private:
     Vector3 bulletVisualScale_ = kDefaultBulletVisualScale;
     float bulletCollisionRadius_ = kDefaultBulletCollisionRadius;
 
+    // 被弾ダメージビネット（画面外周の赤い靄）＆ 瞬間赤フラッシュ定数 (マジックナンバー排除)
+    static constexpr float kDamageVignetteInitialAlpha = 0.85f; // 被弾瞬間の靄の最大濃度
+    static constexpr float kDamageVignetteFadeSpeed = 0.022f;   // 靄の減衰速度（約38フレーム＝約0.63秒）
+    static constexpr float kDamageFlashInitialAlpha = 0.18f;    // 被弾瞬間の全画面赤フラッシュ濃度
+    static constexpr float kDamageFlashFadeSpeed = 0.015f;      // フラッシュの減衰速度
+    static constexpr Vector4 kDamageVignetteColor = { 1.0f, 0.2f, 0.2f, 1.0f }; // 鮮烈な血煙レッド
+    static constexpr Vector4 kDamageFlashColor = { 1.0f, 0.1f, 0.1f, 1.0f };    // 被弾フラッシュレッド
+
+    std::unique_ptr<SpriteObject> damageVignetteSprite_; // 画面外周の赤い靄スプライト
+    std::unique_ptr<SpriteObject> damageFlashSprite_;    // 画面全体の瞬間赤フラッシュスプライト
+    float damageVignetteAlpha_ = 0.0f;                  // 現在のダメージビネット不透明度
+    float damageFlashAlpha_ = 0.0f;                     // 現在の赤フラッシュ不透明度
+
+    void EnsureDamageVisuals();                         // 被弾演出用スプライトの初期化
     void EnsureGunModel();
     void UpdateGunTransform();
     void UpdateDeathMeltAnimation();

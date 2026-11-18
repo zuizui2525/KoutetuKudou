@@ -1,5 +1,6 @@
 #include "Scripts/Player/FPSCameraControllerScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
+#include "Scripts/Director/GamePhaseControllerScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Input/Input.h"
@@ -97,8 +98,23 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
         deathCinematicProgress_ = 0.0f;
     }
 
-    // 2. マウスおよびキー入力による首振り制御（走行戦闘中のみ有効）
+    // 2. マウスおよびキー入力による首振り制御（走行戦闘中のみ有効、エリアクリア演出中は見送りシネマティックへ委譲）
     // ルート手書き中（DrawRouteフェーズ）や発進待機中は首振りを無効化し、線引き操作に集中できるようにする
+    bool isClearing = false;
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        isClearing = phaseCtrl->IsAreaClearing();
+    }
+
+    if (isClearing) {
+        UpdateCursorLock(false);
+        // エリアクリア演出中はGamePhaseControllerScriptが算出したシネマティックカメラ座標・回転をowner_へ確実に反映
+        if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+            owner_->SetPosition(phaseCtrl->GetAreaClearCameraPosition());
+            owner_->SetRotate(phaseCtrl->GetAreaClearCameraRotation());
+        }
+        return;
+    }
+
     bool isPlaying = (!isMelting && isAutoMoving && useDirectAim_);
     UpdateCursorLock(isPlaying);
 
@@ -165,7 +181,7 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
     prevLookTangent_.z += (tangent.z - prevLookTangent_.z) * kLookSmoothFactor;
 
     // 4. 通常時の一人称カメラ座標および注視点
-    Vector3 normalCamPos = { targetPos.x, targetPos.y + kCameraUpHeight, targetPos.z };
+    Vector3 normalCamPos = { targetPos.x, targetPos.y + cameraUpHeight_, targetPos.z };
     Vector3 normalLookAt = {
         normalCamPos.x + prevLookTangent_.x * kCameraLookAhead,
         normalCamPos.y + prevLookTangent_.y * kCameraLookAhead,
@@ -254,6 +270,7 @@ void FPSCameraControllerScript::OnInspectorGUI() {
     ImGui::Separator();
 
     ImGui::Checkbox("ダイレクトエイム (APEXスタイル)##UseDirectAim", &useDirectAim_);
+    ImGui::DragFloat("カメラ目線高さ(自機中心から)##CameraUpHeight", &cameraUpHeight_, 0.02f, -1.0f, 3.0f, "%.2f m");
     ImGui::SliderFloat("マウス感度##MouseSensitivity", &mouseSensitivity_, kMinMouseSensitivity, kMaxMouseSensitivity, "%.4f");
     ImGui::Checkbox("マウス視線連動##EnableMouseTrack", &enableMouseTracking_);
     ImGui::Checkbox("キー首振り入力有効##EnableLean", &enableLean_);

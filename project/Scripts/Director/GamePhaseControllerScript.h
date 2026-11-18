@@ -57,6 +57,9 @@ public:
 
     Phase GetCurrentPhase() const { return currentPhase_; }
     int GetCurrentArea() const { return currentArea_; }
+    bool IsAreaClearing() const { return isAreaClearing_; }
+    const Vector3& GetAreaClearCameraPosition() const { return areaClearCurrentCamPos_; }
+    const Vector3& GetAreaClearCameraRotation() const { return areaClearCurrentCamRot_; }
 
     /// <summary>
     /// シーン上でアクティブな GamePhaseControllerScript のインスタンスを取得します。
@@ -139,9 +142,15 @@ private:
     /// </summary>
     void RenderCompassDirectX();
 
+    /// <summary>
+    /// エリア走破時の「AREA CLEAR!!」祝砲演出・バナー・ゴールドフラッシュをDirectX 12で描画します。
+    /// </summary>
+    void RenderAreaClearDirectX();
+
 private:
     // マジックナンバー排除のための定数
     static constexpr int kMaxAreas = 4;
+    static constexpr float kPlayerGroundYOffset = 0.72f;    // 自機接地高さオフセット (cube.obj 半径1.0 × スケール0.72m、足元をY=0に接地)
     static constexpr float kDefaultPlayerMoveSpeed = 0.15f; // 毎フレームの標準走行速度（適正値）
     static constexpr float kMinPlayerMoveSpeed = 0.01f;     // 最小速度
     static constexpr float kMaxPlayerMoveSpeed = 2.0f;      // 最大速度
@@ -151,6 +160,27 @@ private:
     static inline const std::string kClearSceneName = "Clear";
     static inline const std::string kGameOverSceneName = "GameOver";
     static inline const std::string kReticleObjectName = "ReticleUI";
+
+    // エリアクリア演出定数 (マジックナンバー排除)
+    static constexpr int kAreaClearDuration = 245;           // エリアクリア演出総フレーム数 (約4.1秒)
+    static constexpr int kCameraPullBackDuration = 55;       // 第1幕: カメラ背後引き・回り込みフレーム数 (約0.9秒)
+    static constexpr int kPlayerRocketStartFrame = 55;       // 第2幕: 自機打ち上げ開始フレーム
+    static constexpr int kPlayerRocketDuration = 65;         // 第2幕: 自機打ち上げ所要フレーム数 (約1.1秒)
+    static constexpr float kPlayerFlyForwardDist = 16.0f;    // 上空打ち上げ時の前方前進距離 (m)
+    static constexpr float kPlayerFlyMaxHeight = 28.0f;      // 上空打ち上げ到達高度 (m)
+    static constexpr float kSendoffCamBackDist = 5.2f;       // 自機後方へのカメラ配置距離 (m)
+    static constexpr float kSendoffCamHeight = 1.1f;         // 見送りカメラの基準高さ (m)（低めからダイナミックに見上げる）
+    static constexpr float kSendoffCamSideOffset = 0.6f;     // わずかに右肩越しに自機を捉える横オフセット (m)
+    static constexpr int kTextDropStartFrame = 125;          // 第3幕: 「AREA CLEAR」文字降下開始フレーム (自機消滅直後)
+    static constexpr int kTextDropDuration = 35;             // 第3幕: 文字降下・バウンド所要フレーム数
+    static constexpr int kFadeOutStartFrame = 200;           // 第4幕: 黒フェードアウト開始フレーム
+    static constexpr float kBlackFadeSpeed = 0.025f;         // 暗転フェード速度 (/frame)
+    static constexpr float kAreaClearBannerDropStartY = -180.0f; // 文字降下開始Y座標 (画面外上部)
+    static constexpr float kAreaClearBannerTargetY = 0.38f;  // 文字着地目標Y座標比率 (画面高さの38%)
+    static constexpr float kAreaClearSlowSpeedRatio = 0.20f; // スローモーション走行速度比率
+    static constexpr float kAreaClearFlashFadeSpeed = 2.0f;  // ゴールドフラッシュ減衰速度 (/秒)
+    static constexpr float kAreaClearBannerWidth = 620.0f;   // エリアクリアバナー幅 (px)
+    static constexpr float kAreaClearBannerHeight = 130.0f;  // エリアクリアバナー高さ (px)
 
     // 2D マップパネルの定数（画面左下に大きく見やすく配置）
     static constexpr float kMapPanelWidth = 300.0f;       // マップ幅 (px)
@@ -354,6 +384,27 @@ private:
     std::unique_ptr<SpriteObject> buildingBlindSprite_;
     float buildingBlindAlpha_ = 0.0f;
     int buildingDamageTimer_ = 0;
+
+    // エリアクリア祝砲演出用パーツ (DirectX 12)
+    bool isAreaClearing_ = false;
+    int areaClearTimer_ = 0;
+    float areaClearFlashAlpha_ = 0.0f;
+    Vector3 goalPlayerPos_{};
+    Vector3 goalPlayerDir_{};
+    Vector3 sendoffCamPos_{};
+    Vector3 areaClearInitialCamPos_{};   // ゴール到達時の一人称カメラ座標 (第1幕で後方引き補間用)
+    Vector3 areaClearCurrentCamPos_{};   // エリアクリア演出中の現在カメラ座標 (FPSCameraControllerScript同期用)
+    Vector3 areaClearCurrentCamRot_{};   // エリアクリア演出中の現在カメラ回転 (FPSCameraControllerScript同期用)
+    std::unique_ptr<SpriteObject> areaClearBannerSprite_;
+    std::unique_ptr<TextObject2D> areaClearTextObj_;
+    std::unique_ptr<TextTextureGenerator> areaClearTextGen_;
+    std::unique_ptr<TextObject2D> areaClearSubTextObj_;
+    std::unique_ptr<TextTextureGenerator> areaClearSubTextGen_;
+
+    // シームレス暗転フェード用パーツ (DirectX 12: 準備前描画の完全防止)
+    float transitionBlackFadeAlpha_ = 0.0f;
+    float drawPhaseFadeAlpha_ = 0.0f;
+    std::unique_ptr<SpriteObject> transitionBlackSprite_;
 
     // シングルトンインスタンス参照
     static inline GamePhaseControllerScript* sInstance_ = nullptr;

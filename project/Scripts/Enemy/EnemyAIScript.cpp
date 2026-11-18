@@ -9,6 +9,7 @@
 #include "Engine/Graphics/Objects/2d/Line/Line2DObject.h"
 #include "Engine/Graphics/Objects/2d/Ring/Ring2DObject.h"
 #include "Engine/Graphics/Objects/2d/Circle/Circle2DObject.h"
+#include "Engine/Graphics/Objects/3d/FlatRing/FlatRingObject.h"
 #include "Engine/Graphics/Objects/Effect/Manager/EffectManager.h"
 #include "Engine/Graphics/Objects/Camera/Manager/CameraManager.h"
 #include "Engine/Graphics/Objects/Camera/Base/BaseCamera.h"
@@ -27,12 +28,14 @@
 REGISTER_SCRIPT(EnemyAIScript)
 
 namespace {
-    constexpr Vector4 kFlashColor = { 1.0f, 1.0f, 0.2f, 1.0f }; // 通常被弾フラッシュ（黄色）
-    constexpr Vector4 kCriticalFlashColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // クリティカル被弾フラッシュ（純白）
+    constexpr Vector4 kFlashColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 通常被弾フラッシュ（純白発光）
+    constexpr Vector4 kCriticalFlashColor = { 1.0f, 0.25f, 0.25f, 1.0f }; // クリティカル被弾フラッシュ（鮮烈レッド）
     constexpr float kCenterXThreshold = 0.3f; // 正面回り込み完了とみなすX距離誤差 (m)
     constexpr float kEnemyCollisionRadius = 0.8f; // 敵の建物進入防止用衝突半径 (m)
     constexpr int kCriticalMultiplier = 2;    // ヘッドショット時のダメージ倍率
     constexpr float kEpsilon = 0.0001f;
+    constexpr float kPi = 3.1415926535f;
+    constexpr float kTwoPi = 6.283185307f;
 
     // トランスフォーマー風アーケードターゲットサイト＆円形HPバー用カラー定数 (RGBA: 0.0f - 1.0f)
     constexpr Vector4 kHpSegmentEmptyColor       = { 35.0f / 255.0f, 40.0f / 255.0f, 50.0f / 255.0f, 0.45f }; // 削れたHP（暗色グレー枠）
@@ -65,6 +68,12 @@ EnemyAIScript::EnemyAIScript()
 }
 
 EnemyAIScript::~EnemyAIScript() {
+    // アクティブ敵リストから自身を除外（敵同士の重なり判定用）
+    auto it = std::find(sActiveEnemies_.begin(), sActiveEnemies_.end(), this);
+    if (it != sActiveEnemies_.end()) {
+        sActiveEnemies_.erase(it);
+    }
+
     if (auto engine = EngineResource::GetEngine()) {
         if (auto dxCommon = engine->GetDxCommon()) {
             dxCommon->FlushGPU();
@@ -99,13 +108,151 @@ void EnemyAIScript::EnsureTargetSightVisuals() {
         SceneHierarchy::GetInstance()->Unregister(targetCrossLines_[i].get());
         targetCrossLines_[i]->SetThickness(kMarkerThickness);
     }
+
+    // Fortnite風 画面中央放射状目盛りサークル＆脅威インジケーター描画オブジェクトの初期化
+    for (int i = 0; i < kRadialTickCount; ++i) {
+        radialTicks_[i] = std::make_unique<Line2DObject>();
+        radialTicks_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(radialTicks_[i].get());
+    }
+
+    threatRay_ = std::make_unique<Line2DObject>();
+    threatRay_->Initialize();
+    SceneHierarchy::GetInstance()->Unregister(threatRay_.get());
+
+    for (int i = 0; i < 2; ++i) {
+        threatArrowWings_[i] = std::make_unique<Line2DObject>();
+        threatArrowWings_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(threatArrowWings_[i].get());
+    }
+
+    for (int i = 0; i < kThreatArcSegmentCount; ++i) {
+        threatArcBars_[i] = std::make_unique<Line2DObject>();
+        threatArcBars_[i]->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(threatArcBars_[i].get());
+    }
 }
 
+void EnemyAIScript::EnsureChargeRingVisuals() {
+    if (!groundChargeRing_) {
+        constexpr uint32_t kRingDivide = 32;
+        groundChargeRing_ = std::make_unique<FlatRingObject>(kRingDivide, k3DChargeRingBaseOuterRadius, k3DChargeRingBaseInnerRadius);
+        groundChargeRing_->SetAutoRegisterHierarchy(false);
+        groundChargeRing_->Initialize(0); // 自己発光マテリアル（非ライティング）
+    }
+    if (!bodyChargeRing_) {
+        constexpr uint32_t kRingDivide = 32;
+        bodyChargeRing_ = std::make_unique<FlatRingObject>(kRingDivide, k3DChargeRingBaseOuterRadius, k3DChargeRingBaseInnerRadius);
+        bodyChargeRing_->SetAutoRegisterHierarchy(false);
+        bodyChargeRing_->Initialize(0); // 自己発光マテリアル（非ライティング）
+    }
+}
+
+/// <summary>
+/// 地上溜め（AttackCharge）から空中浮遊（PounceStrike）を経て攻撃発射に至るまでの統合攻撃進行度（0.0 〜 1.0）を取得します。
+/// </summary>
+float EnemyAIScript::GetOverallAttackProgress() const {
+    if (aiState_ == AiState::AttackCharge) {
+        // 地上チャージ中: 0.0 〜 kChargePhaseRatio (0.20)
+        return std::clamp(attackGauge_, 0.0f, 1.0f) * kChargePhaseRatio;
+    } else if (aiState_ == AiState::PounceStrike) {
+        // 空中浮遊中: kChargePhaseRatio (0.20) 〜 1.00 (約5秒かけてゆっくり収縮)
+        float t = 1.0f;
+        if (kAirborneVulnerableDuration > 0) {
+            t = 1.0f - static_cast<float>(strikeVulnerableTimer_) / static_cast<float>(kAirborneVulnerableDuration);
+            t = std::clamp(t, 0.0f, 1.0f);
+        }
+        return kChargePhaseRatio + t * (1.0f - kChargePhaseRatio);
+    }
+    return 0.0f;
+}
+
+void EnemyAIScript::DrawChargeRings() {
+    bool isAttacking = (aiState_ == AiState::AttackCharge || aiState_ == AiState::PounceStrike);
+    if (!isAttacking || isDead_ || !owner_) return;
+
+    EnsureChargeRingVisuals();
+
+    float progress = GetOverallAttackProgress();
+    // スケールを k3DChargeRingStartScale (2.8m) から k3DChargeRingEndScale (0.0m: 敵中心へ完全消失) へ収縮
+    float currentScale = k3DChargeRingStartScale - (k3DChargeRingStartScale - k3DChargeRingEndScale) * progress;
+    currentScale = (std::max)(0.0f, currentScale);
+
+    // チャージ終盤（0.85以上）は白熱高速点滅
+    Vector4 ringColor = k3DChargeRingColor;
+    if (progress >= 0.85f) {
+        bool blink = (static_cast<int>(progress * 50.0f) % 2) == 0;
+        ringColor = blink ? k3DChargeRingBlinkColor : k3DChargeRingColor;
+    }
+
+    Vector3 enemyPos = owner_->GetPosition();
+
+    // 1. 3D足元地面警告サークル（地上チャージ中は足元地面に敷いて可視化・半透明アルファブレンド）
+    if (groundChargeRing_ && currentScale > 0.02f) {
+        groundChargeRing_->SetPosition({ enemyPos.x, k3DChargeRingGroundY, enemyPos.z });
+        constexpr float kHalfPi = 1.5707963f;
+        groundChargeRing_->SetRotate({ kHalfPi, 0.0f, 0.0f });
+        groundChargeRing_->SetScale({ currentScale, currentScale, 1.0f });
+        groundChargeRing_->SetColor(ringColor);
+        groundChargeRing_->Update();
+        groundChargeRing_->Draw("white", "", "Object3D_Alpha");
+    }
+
+    // 2. 3D敵胴体正面ビルボード警告サークル（敵の真ん中のちょいカメラ側手前に配置し、半透明で収束！）
+    if (bodyChargeRing_ && currentScale > 0.02f) {
+        auto* camMgr = CameraResource::GetCameraManager();
+        BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
+        if (camera) {
+            Vector3 camRot = camera->GetRotation();
+            Vector3 camPos = camera->GetPosition();
+
+            // 敵の中心（真ん中）座標
+            float centerY = enemyPos.y + (isBoss_ ? kBossTargetCenterYOffset : kNormalTargetCenterYOffset);
+            Vector3 enemyCenter = { enemyPos.x, centerY, enemyPos.z };
+
+            // 敵中心からカメラ（自機）方向への単位ベクトルを算出
+            Vector3 toCam = { camPos.x - enemyCenter.x, camPos.y - enemyCenter.y, camPos.z - enemyCenter.z };
+            float distToCam = std::sqrt(toCam.x * toCam.x + toCam.y * toCam.y + toCam.z * toCam.z);
+
+            Vector3 ringPos = enemyCenter;
+            if (distToCam > kEpsilon) {
+                // 敵中心からカメラ側へちょい手前にオフセット（敵モデルに埋もれず「ここを撃て」と明確化）
+                ringPos.x += (toCam.x / distToCam) * k3DChargeRingForwardOffset;
+                ringPos.y += (toCam.y / distToCam) * k3DChargeRingForwardOffset;
+                ringPos.z += (toCam.z / distToCam) * k3DChargeRingForwardOffset;
+            }
+
+            bodyChargeRing_->SetPosition(ringPos);
+            bodyChargeRing_->SetRotate(camRot);
+            bodyChargeRing_->SetScale({ currentScale, currentScale, 1.0f });
+            bodyChargeRing_->SetColor(ringColor);
+            bodyChargeRing_->Update();
+            bodyChargeRing_->Draw("white", "", "Object3D_Alpha");
+        }
+    }
+}
+
+/// <summary>
+/// 3D描画パス: 3D空間上の攻撃予兆サークル（収縮する地面警告リング）を描画します。
+/// </summary>
 void EnemyAIScript::Draw() {
     if (isDead_ || !owner_ || !owner_->IsVisible()) return;
 
-    // トランスフォーマー風アーケードターゲットサイト＆円形八角形HPバーを描画
+    // 3D空間攻撃予兆サークル（収縮する警告リング）を描画
+    DrawChargeRings();
+}
+
+/// <summary>
+/// 2D描画パス: トランスフォーマー風アーケードターゲットサイトおよび脅威インジケーターを描画します。
+/// </summary>
+void EnemyAIScript::Draw2D() {
+    if (isDead_ || !owner_ || !owner_->IsVisible()) return;
+
+    // トランスフォーマー風アーケードターゲットサイト＆円形八角形HPバーを描画（2Dパス）
     DrawTargetSight();
+
+    // Fortnite風 画面中央脅威インジケーターを描画（2Dパス）
+    DrawThreatIndicator();
 }
 
 bool EnemyAIScript::HasLineOfSightToPlayer() const {
@@ -128,6 +275,11 @@ bool EnemyAIScript::HasLineOfSightToPlayer() const {
         }
     }
     return true; // 射線クリア
+}
+
+bool EnemyAIScript::IsNearBuilding(const Vector3& worldPos, float radius) const {
+    Vector3 sample = { worldPos.x, worldPos.y + 0.5f, worldPos.z };
+    return MapRendererScript::IsInsideBuilding(sample, radius);
 }
 
 void EnemyAIScript::DrawTargetSight() {
@@ -166,6 +318,9 @@ void EnemyAIScript::DrawTargetSight() {
     if (aiState_ == AiState::AttackCharge) {
         // 攻撃チャージ中はエネルギー充填で小刻みに震える
         baseRadius += std::sin(markerPulseTimer_ * 2.0f) * 1.5f;
+    } else if (aiState_ == AiState::PounceStrike) {
+        // 空中滞空・隙露出中は巨大化した敵モデルに合わせてサイトリングもダイナミック拡大！
+        baseRadius *= kAirborneBaseScaleMultiplier;
     }
 
     // 1. 下地ベースリング（暗色の円形レール）
@@ -221,16 +376,17 @@ void EnemyAIScript::DrawTargetSight() {
     }
 
     // 3. 照準十字クロスヘア＆中心ドット
-    bool isCharging = (aiState_ == AiState::AttackCharge || (aiState_ == AiState::TargetLock && toCenterGauge_ >= 0.5f));
-    float attackProgress = (aiState_ == AiState::AttackCharge) ? attackGauge_ : (toCenterGauge_ * 0.4f);
-    attackProgress = std::clamp(attackProgress, 0.0f, 1.0f);
+    bool isAttackingSequence = (aiState_ == AiState::AttackCharge || aiState_ == AiState::PounceStrike);
+    float attackProgress = GetOverallAttackProgress();
 
     Vector4 crossColor = isBoss_ ? kCrosshairBossColor : kCrosshairNormalColor;
-    if (isCharging) {
-        if (attackProgress >= 0.8f) {
-            bool blink = (static_cast<int>(markerPulseTimer_ * 5.0f) % 2) == 0;
+    if (isAttackingSequence) {
+        if (attackProgress >= 0.85f) {
+            bool blink = (static_cast<int>(markerPulseTimer_ * 6.0f) % 2) == 0;
             crossColor = blink ? kMarkerRedColor : kMarkerWhiteFlash;
-        } else if (attackProgress >= 0.4f) {
+        } else if (attackProgress >= 0.40f) {
+            crossColor = kMarkerRedColor;
+        } else {
             crossColor = kMarkerYellowColor;
         }
     }
@@ -268,26 +424,212 @@ void EnemyAIScript::DrawTargetSight() {
     targetCrossLines_[3]->Update();
     targetCrossLines_[3]->Draw("white", true);
 
-    // 4. 攻撃予兆・タイミング収束リング（攻撃チャージ中のみ表示）
-    if (isCharging) {
+    // 4. 攻撃予兆・タイミング収束リング（地上溜め〜空中浮遊中を通して収縮！）
+    if (isAttackingSequence) {
         float timingRadius = kTimingMarkerStartRadius - (kTimingMarkerStartRadius - baseRadius) * attackProgress;
-        attackTimingRing_->SetRadii(timingRadius, (std::max)(1.0f, timingRadius - kMarkerThickness * 1.2f));
-        attackTimingRing_->GetMaterialData()->color = crossColor;
-        attackTimingRing_->SetPosition({ screenX - timingRadius, screenY - timingRadius, 0.0f });
-        attackTimingRing_->Update();
-        attackTimingRing_->Draw("white", true);
+        if (timingRadius > 1.0f) {
+            attackTimingRing_->SetRadii(timingRadius, (std::max)(1.0f, timingRadius - kMarkerThickness * 1.2f));
+            attackTimingRing_->GetMaterialData()->color = crossColor;
+            attackTimingRing_->SetPosition({ screenX - timingRadius, screenY - timingRadius, 0.0f });
+            attackTimingRing_->Update();
+            attackTimingRing_->Draw("white", true);
+        }
     }
+}
+
+/// <summary>
+/// Fortnite風 画面中央脅威＆サウンドビジュアライザーを描画します。
+/// 敵がいない/溜めていない通常時でも薄いベース円が常時表示され、
+/// 敵が並走・接近している時は走行音を可視化する波形ラインがホワンホワンと伸縮、
+/// 攻撃溜め・空中切り込み時は赤い鋭角警告ラインがピピピッと伸びて方角を強調表示します。
+/// </summary>
+void EnemyAIScript::DrawThreatIndicator() {
+    if (!owner_ || isDead_ || !owner_->IsVisible() || !targetObject_) return;
+
+    auto* camMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    EnsureTargetSightVisuals();
+
+    // 1. 画面中央座標
+    float centerX = kScreenWidth * 0.5f;
+    float centerY = kScreenHeight * 0.5f;
+
+    // 2. 自機（カメラ）と敵の水平相対角度（方位角）の高精度算出
+    Vector3 enemyPos = owner_->GetPosition();
+    Vector3 cameraPos = camera->GetPosition();
+
+    const Matrix4x4& vm = camera->GetViewMatrix();
+    // カメラから敵へのワールド相対ベクトル
+    Vector3 toEnemy = { enemyPos.x - cameraPos.x, enemyPos.y - cameraPos.y, enemyPos.z - cameraPos.z };
+    float enemyDist = std::sqrt(toEnemy.x * toEnemy.x + toEnemy.y * toEnemy.y + toEnemy.z * toEnemy.z);
+
+    // ビュー行列の基底を用いてカメラローカル座標系へ直接変換（100%狂いのない高精度方位角）
+    float viewX = toEnemy.x * vm.m[0][0] + toEnemy.y * vm.m[1][0] + toEnemy.z * vm.m[2][0];
+    float viewY = toEnemy.x * vm.m[0][1] + toEnemy.y * vm.m[1][1] + toEnemy.z * vm.m[2][1];
+    float viewZ = toEnemy.x * vm.m[0][2] + toEnemy.y * vm.m[1][2] + toEnemy.z * vm.m[2][2];
+
+    // カメラ前方（viewZ）と左右（viewX）によるスクリーン上の回転角（真上: 0, 右: +PI/2, 左: -PI/2, 後方: PI）
+    float screenAngle = std::atan2(viewX, viewZ);
+
+    // 3. 画面中央の放射状目盛りサークル（サンバースト型HUD・実線円なし・薄く常時表示）
+    // 提示イラスト通り、敵がいる方角の目盛りが音波イコライザーのように波打って外側に長く伸びる！
+    constexpr Vector4 kTickBaseColor = { 0.80f, 0.90f, 1.0f, kRadialTickAlpha };
+    constexpr float kSoundAngleRange = 0.62f; // 音波反応する扇角（約35度）
+
+    for (int i = 0; i < kRadialTickCount; ++i) {
+        float tickAngle = (kTwoPi / static_cast<float>(kRadialTickCount)) * static_cast<float>(i);
+        float tickDirX = std::sin(tickAngle);
+        float tickDirY = -std::cos(tickAngle);
+
+        float rIn = kThreatBaseRadius - kRadialTickInnerLen;
+        float rOut = kThreatBaseRadius + kRadialTickOuterLen;
+        Vector4 tickColor = kTickBaseColor;
+        float tickThickness = 2.0f;
+
+        // 敵の走行接近音による目盛り伸長（通常時・イラスト左上の波形表現）
+        if (aiState_ == AiState::Aiming && enemyDist <= kSoundPerceptionRange) {
+            float angleDiff = std::atan2(std::sin(tickAngle - screenAngle), std::cos(tickAngle - screenAngle));
+            float absDiff = std::abs(angleDiff);
+
+            if (absDiff < kSoundAngleRange) {
+                float proximity = 1.0f - (absDiff / kSoundAngleRange);
+                float distWeight = 1.0f - std::clamp(enemyDist / kSoundPerceptionRange, 0.0f, 1.0f);
+                float wavePulse = std::abs(std::sin(markerPulseTimer_ * 5.5f + tickAngle * 2.0f));
+                float extraLen = (kRadialTickPulseScale * proximity * distWeight) * (0.6f + 0.4f * wavePulse);
+
+                rOut += extraLen;
+                tickThickness = 2.0f + 1.5f * proximity;
+                tickColor = { 0.35f, 0.85f, 1.0f, kRadialTickAlpha + 0.45f * proximity * distWeight };
+            }
+        }
+
+        Vector2 p0 = { centerX + tickDirX * rIn, centerY + tickDirY * rIn };
+        Vector2 p1 = { centerX + tickDirX * rOut, centerY + tickDirY * rOut };
+
+        radialTicks_[i]->SetPoints(p0, p1);
+        radialTicks_[i]->SetThickness(tickThickness);
+        radialTicks_[i]->GetMaterialData()->color = tickColor;
+        radialTicks_[i]->Update();
+        radialTicks_[i]->Draw("white", true);
+    }
+
+    // 4. 攻撃チャージ中（AttackCharge）または空中切り込み中（PounceStrike）: 鮮烈な赤い警告ライン（イラスト右側）
+    if (aiState_ == AiState::AttackCharge || aiState_ == AiState::PounceStrike) {
+        float dirX = std::sin(screenAngle);
+        float dirY = -std::cos(screenAngle);
+
+        bool blink = (static_cast<int>(markerPulseTimer_ * 6.0f) % 2) == 0;
+        Vector4 rayColor = blink ? kMarkerRedColor : kMarkerWhiteFlash;
+        if (aiState_ == AiState::PounceStrike) {
+            rayColor = kMarkerRedColor; // 空中隙露出中は最大警戒（鮮烈な赤）
+        }
+
+        // 4-1. 警告円周上の赤い警戒アーク（円弧ライン: 「この方角一帯が危険」と直感認識）
+        constexpr float kArcSpan = 0.50f; // 約28度の弧
+        float halfSpan = kArcSpan * 0.5f;
+        float stepAngle = kArcSpan / static_cast<float>(kThreatArcSegmentCount);
+        for (int i = 0; i < kThreatArcSegmentCount; ++i) {
+            float a0 = screenAngle - halfSpan + stepAngle * static_cast<float>(i);
+            float a1 = a0 + stepAngle;
+            Vector2 arcP0 = { centerX + std::sin(a0) * kThreatBaseRadius, centerY - std::cos(a0) * kThreatBaseRadius };
+            Vector2 arcP1 = { centerX + std::sin(a1) * kThreatBaseRadius, centerY - std::cos(a1) * kThreatBaseRadius };
+            threatArcBars_[i]->SetPoints(arcP0, arcP1);
+            threatArcBars_[i]->SetThickness(kThreatArcThickness);
+            threatArcBars_[i]->GetMaterialData()->color = rayColor;
+            threatArcBars_[i]->Update();
+            threatArcBars_[i]->Draw("white", true);
+        }
+
+        // 4-2. 敵方角へ伸びる肉太な主警告線（イラスト右側の赤い線）
+        float r0 = kThreatBaseRadius + kThreatRayInnerGap;
+        float r1 = r0 + kThreatRayLength;
+        Vector2 p0 = { centerX + dirX * r0, centerY + dirY * r0 };
+        Vector2 p1 = { centerX + dirX * r1, centerY + dirY * r1 };
+
+        threatRay_->SetPoints(p0, p1);
+        threatRay_->SetThickness(kThreatRayThickness);
+        threatRay_->GetMaterialData()->color = rayColor;
+        threatRay_->Update();
+        threatRay_->Draw("white", true);
+
+        // 4-3. 先端のくさび型矢印両翼（アロー羽: 進行方向を力強く指し示す）
+        float leftAngle = screenAngle + kThreatArrowWingAngle;
+        float rightAngle = screenAngle - kThreatArrowWingAngle;
+        Vector2 wingLeft = { p1.x + std::sin(leftAngle) * kThreatArrowWingLength, p1.y - std::cos(leftAngle) * kThreatArrowWingLength };
+        Vector2 wingRight = { p1.x + std::sin(rightAngle) * kThreatArrowWingLength, p1.y - std::cos(rightAngle) * kThreatArrowWingLength };
+
+        threatArrowWings_[0]->SetPoints(p1, wingLeft);
+        threatArrowWings_[0]->SetThickness(kThreatRayThickness * 0.85f);
+        threatArrowWings_[0]->GetMaterialData()->color = rayColor;
+        threatArrowWings_[0]->Update();
+        threatArrowWings_[0]->Draw("white", true);
+
+        threatArrowWings_[1]->SetPoints(p1, wingRight);
+        threatArrowWings_[1]->SetThickness(kThreatRayThickness * 0.85f);
+        threatArrowWings_[1]->GetMaterialData()->color = rayColor;
+        threatArrowWings_[1]->Update();
+        threatArrowWings_[1]->Draw("white", true);
+    }
+}
+
+/// <summary>
+/// 生存している他のエネミーとの距離を判定し、衝突半径（kEnemySeparationDistance）未満であれば
+/// 互いに反対方向へ押し離す分離斥力（Boids Separation / Soft Pushout）を適用して敵同士の重なりを解消します。
+/// </summary>
+void EnemyAIScript::ApplyEnemySeparation(Vector3& pos) {
+    for (auto* other : sActiveEnemies_) {
+        if (!other || other == this || other->isDead_ || !other->owner_ || !other->owner_->IsVisible()) {
+            continue;
+        }
+
+        Vector3 otherPos = other->owner_->GetPosition();
+        float dx = pos.x - otherPos.x;
+        float dz = pos.z - otherPos.z;
+        float distSq = dx * dx + dz * dz;
+        float minSepSq = kEnemySeparationDistance * kEnemySeparationDistance;
+
+        if (distSq < minSepSq && distSq > kEpsilon) {
+            float dist = std::sqrt(distSq);
+            float overlap = (kEnemySeparationDistance - dist) * kEnemySeparationPushForce;
+            float nx = dx / dist;
+            float nz = dz / dist;
+            pos.x += nx * overlap;
+            pos.z += nz * overlap;
+        }
+    }
+}
+
+void EnemyAIScript::StartVault(float targetSideSign) {
+    if (!owner_ || !targetObject_) return;
+    isVaulting_ = true;
+    vaultTimer_ = kVaultDuration;
+    vaultStartX_ = owner_->GetPosition().x;
+    vaultTargetX_ = targetObject_->GetPosition().x + targetSideSign * kSideDistanceX;
+    sideSign_ = targetSideSign;
 }
 
 void EnemyAIScript::Awake() {
     hp_ = isBoss_ ? kDefaultBossHp : kDefaultNormalHp;
     maxHp_ = hp_;
-    aiState_ = AiState::Approach;
-    toCenterGauge_ = 0.0f;
+    aiState_ = AiState::Aiming;
     attackGauge_ = 0.0f;
     cooldownTimer_ = 0;
     hitFlashTimer_ = 0;
+    hitSquashTimer_ = 0;
+    stunTimer_ = 0;
     isDead_ = false;
+    flyByInitialized_ = false;
+    parallelCruiseTimer_ = 0;
+    strikeVulnerableTimer_ = 0;
+    attackZoneIndex_ = (sNextZoneIndex_++) % 3;
+    sideSign_ = 1.0f;
+
+    // アクティブ敵リストへ登録（重複防止）
+    if (std::find(sActiveEnemies_.begin(), sActiveEnemies_.end(), this) == sActiveEnemies_.end()) {
+        sActiveEnemies_.push_back(this);
+    }
 }
 
 void EnemyAIScript::Start() {
@@ -296,6 +638,14 @@ void EnemyAIScript::Start() {
         if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
             originalColor_ = mr->GetColor();
         }
+
+        // マップ縮尺に美しく調和する適正スケール（0.68m）を設定
+        owner_->SetScale({ kEnemyBaseScale, kEnemyBaseScale, kEnemyBaseScale });
+        originalScale_ = owner_->GetScale();
+        isOriginalScaleSaved_ = true;
+
+        // 初期X座標から右並走(+1)か左並走(-1)かを決定
+        sideSign_ = (owner_->GetPosition().x >= 0.0f) ? 1.0f : -1.0f;
     }
 }
 
@@ -341,6 +691,12 @@ void EnemyAIScript::OnUpdate() {
 void EnemyAIScript::UpdateAI() {
     if (!targetObject_) return;
 
+    if (!isOriginalScaleSaved_ && owner_) {
+        owner_->SetScale({ kEnemyBaseScale, kEnemyBaseScale, kEnemyBaseScale });
+        originalScale_ = owner_->GetScale();
+        isOriginalScaleSaved_ = true;
+    }
+
     // 自機が走行戦闘中でない場合（ルート描画フェーズ中など）はAI行動（接近・攻撃）を停止
     auto* playerScript = targetObject_->GetComponent<PlayerControllerScript>();
     if (!playerScript || !playerScript->IsAutoMoving()) {
@@ -350,7 +706,7 @@ void EnemyAIScript::UpdateAI() {
     Vector3 pos = owner_->GetPosition();
     Vector3 playerPos = targetObject_->GetPosition();
 
-    // 1. カリング判定（自機より後方に置き去りにされたら消滅）
+    // 1. カリング判定（自機より後方 kCullDistanceBack に置き去りにされたら消滅）
     if (playerPos.z - pos.z > kCullDistanceBack) {
         isDead_ = true;
         owner_->SetVisible(false);
@@ -364,66 +720,173 @@ void EnemyAIScript::UpdateAI() {
     float pitch = -std::atan2(toPlayer.y, distXZ > kEpsilon ? distXZ : kEpsilon);
     owner_->SetRotate({ pitch, yaw, 0.0f });
 
-    // 3. ステートマシンと移動制御
-    // 自機前方の理想位置（停止距離）を追従し、自機に近づきすぎないよう重なりを防止
-    float targetZ = playerPos.z + preferredDistanceZ_;
-    float minLimitZ = playerPos.z + kMinDistanceZ;
+    // 自機との直線距離（移動制御および射線判定で共用）
+    float distToPlayer = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
 
-    // 自機との絶対接近限界による重なり防止
-    if (pos.z < minLimitZ) {
-        pos.z = minLimitZ;
+    // 3. アーキタイプ別移動制御
+    if (enemyType_ == EnemyType::ParallelChaser) {
+        // 【横並走＆アーケード風飛びかかり強襲型】普段は自機の横を並走し、攻撃時は目前へダイブ（壁自動回避対応）
+        // 1. 壁検知と頭上飛び越え（Overhead Vault Leap）判定
+        Vector3 currentSidePos = { playerPos.x + sideSign_ * kSideDistanceX, playerPos.y, playerPos.z + kParallelLeadZ };
+        if (IsNearBuilding(currentSidePos, kWallCheckMargin)) {
+            // 現在の側に壁がある場合、反対側が開いているかをチェック
+            Vector3 oppositeSidePos = { playerPos.x - sideSign_ * kSideDistanceX, playerPos.y, playerPos.z + kParallelLeadZ };
+            if (!IsNearBuilding(oppositeSidePos, kWallCheckMargin) && !isVaulting_) {
+                // 地上をすり抜けるのではなく、プレイヤーの頭上を放物線で飛び越えて逆サイドへ！
+                StartVault(-sideSign_);
+            }
+        }
+
+        // 2. 各ステートにおける位置追従
+        Vector3 prevPos = pos;
+        if (aiState_ == AiState::Aiming) {
+            if (isVaulting_) {
+                // 【頭上飛び越えオーバーヘッドジャンプ】自機を地上ですり抜けず、頭上高くダイナミックに跳躍！
+                vaultTimer_--;
+                float progress = 1.0f - static_cast<float>(vaultTimer_) / static_cast<float>(kVaultDuration);
+                // X軸: スムーズなS字カーブ（SmoothStep）
+                float smoothT = progress * progress * (3.0f - 2.0f * progress);
+                pos.x = vaultStartX_ + (vaultTargetX_ - vaultStartX_) * smoothT;
+                // Y軸: プレイヤーの頭上を越える美しいサイン放物線上昇
+                pos.y = kEnemyGroundYOffset + std::sin(progress * kPi) * kVaultApexHeight;
+                // Z軸: 自機と同期して並走
+                pos.z += (playerPos.z + kParallelLeadZ - pos.z) * kParallelLerpSpeed;
+
+                // 飛び越え中のアクロバティックなロールバンク傾斜
+                float vaultRoll = -sideSign_ * std::sin(progress * kPi) * 0.45f;
+                owner_->SetRotate({ pitch, yaw, vaultRoll });
+
+                if (vaultTimer_ <= 0) {
+                    isVaulting_ = false;
+                }
+            } else {
+                // 【横並走フェーズ】自機の真横〜わずか前方（安全な側）を並走
+                // 自機より8m以上後方に取り残された場合は、ビルの角を避けるため道路中央寄りへシフト
+                float sideOffset = (playerPos.z - pos.z > kCatchUpDistanceThreshold) ? (sideSign_ * 1.5f) : (sideSign_ * kSideDistanceX);
+                Vector3 targetPos = { playerPos.x + sideOffset, kEnemyGroundYOffset, playerPos.z + kParallelLeadZ };
+
+                pos.x += (targetPos.x - pos.x) * kParallelLerpSpeed;
+                pos.y += (targetPos.y - pos.y) * kParallelLerpSpeed; // 地上高度維持
+                pos.z += (targetPos.z - pos.z) * kParallelLerpSpeed;
+
+                parallelCruiseTimer_++;
+                // 一定時間並走後、射線が通っていれば側方溜め（AttackCharge）へ移行
+                if (parallelCruiseTimer_ >= kDefaultCruiseDuration && distToPlayer <= kAmbushPerceptionRange && HasLineOfSightToPlayer()) {
+                    aiState_ = AiState::AttackCharge;
+                    attackGauge_ = 0.0f;
+                    parallelCruiseTimer_ = 0;
+                }
+            }
+        } else if (aiState_ == AiState::AttackCharge) {
+            // 【前方中距離チャージフェーズ】自機の前方斜め（Z = +15m, X = ±5.2m）へスッと先回り展開して堂々とチャージ！
+            // プレイヤーの視界が開けた正面斜めで溜めるため、「溜めている！狙い撃て！」と最高にわかりやすくなる！
+            float sideOffset = sideSign_ * kChargeSideOffsetX;
+            Vector3 targetPos = { playerPos.x + sideOffset, kEnemyGroundYOffset, playerPos.z + kChargeLeadZ };
+
+            pos.x += (targetPos.x - pos.x) * kParallelLerpSpeed;
+            pos.y += (targetPos.y - pos.y) * kParallelLerpSpeed;
+            pos.z += (targetPos.z - pos.z) * kParallelLerpSpeed;
+        } else if (aiState_ == AiState::PounceStrike) {
+            // 【扇状3アタックゾーン空中跳躍＆隙露出フェーズ】
+            // 狙う場所の固定化を防ぐため、敵ごとに「斜め前」「正面上空」「その場横ジャンプ」の3ゾーンへダイナミック分散！
+            float offsetX = kZone1OffsetX;
+            float offsetY = kZone1OffsetY;
+            float offsetZ = kZone1OffsetZ;
+
+            if (attackZoneIndex_ == 1) {
+                // Zone 2: 道路中央上空（正面高高度・ビルの間）
+                offsetX = kZone2OffsetX;
+                offsetY = kZone2OffsetY;
+                offsetZ = kZone2OffsetZ;
+            } else if (attackZoneIndex_ == 2) {
+                // Zone 3: 側方ジャンプ横オフセット (m)（視界内に収まる横幅）
+                offsetX = kZone3OffsetX;
+                offsetY = kZone3OffsetY;
+                offsetZ = kZone3OffsetZ;
+            }
+
+            Vector3 targetPos = { playerPos.x + sideSign_ * offsetX, kEnemyGroundYOffset + offsetY, playerPos.z + offsetZ };
+            if (IsNearBuilding(targetPos, kWallCheckMargin)) {
+                targetPos.x = playerPos.x + sideSign_ * 1.5f; // 壁が近ければ道路内側へシフト
+            }
+
+            // X, Y, Z を空中へダイレクト跳躍
+            pos.x += (targetPos.x - pos.x) * kAirborneLeapSpeed;
+            pos.y += (targetPos.y - pos.y) * kAirborneLeapSpeed;
+            pos.z += (targetPos.z - pos.z) * kAirborneLeapSpeed;
+
+            // 「動かなくなるではない」生き生きとした滞空：ブースター浮遊微振動（ホバリング）
+            float hoverY = std::sin(markerPulseTimer_ * kAirborneHoverFrequency) * kAirborneHoverAmplitude;
+            pos.y += hoverY;
+
+            // ゾーンに応じた空中姿勢制御
+            if (attackZoneIndex_ == 1) {
+                // 正面上空: まっすぐ見下ろすピッチ傾斜
+                owner_->SetRotate({ pitch + kAirbornePitchTilt, yaw, 0.0f });
+            } else {
+                // 斜め前 / 側方: 前傾ピッチ ＆ バンクロール傾斜
+                owner_->SetRotate({ pitch + kAirbornePitchTilt, yaw, -sideSign_ * kAirborneRollTilt });
+            }
+        } else if (aiState_ == AiState::Cooldown) {
+            // 【着地・外側離脱フェーズ】地上へ戻りながら外側へ大きく開いて離脱し、滑らかに並走位置へ復帰
+            Vector3 targetPos = { playerPos.x + sideSign_ * kRetreatSideDistanceX, kEnemyGroundYOffset, playerPos.z + kParallelLeadZ };
+            pos.x += (targetPos.x - pos.x) * kRetreatLerpSpeed;
+            pos.y += (targetPos.y - pos.y) * kRetreatLerpSpeed; // 地上へ復帰
+            pos.z += (targetPos.z - pos.z) * kRetreatLerpSpeed;
+        }
+
+        // 3. 移動速度の厳格キャップ（瞬間移動・ワープの完全防止）
+        Vector3 moveDelta = { pos.x - prevPos.x, pos.y - prevPos.y, pos.z - prevPos.z };
+        float moveDist = std::sqrt(moveDelta.x * moveDelta.x + moveDelta.y * moveDelta.y + moveDelta.z * moveDelta.z);
+        if (moveDist > kMaxEnemyFrameSpeed && moveDist > kEpsilon) {
+            float factor = kMaxEnemyFrameSpeed / moveDist;
+            pos.x = prevPos.x + moveDelta.x * factor;
+            pos.y = prevPos.y + moveDelta.y * factor;
+            pos.z = prevPos.z + moveDelta.z * factor;
+        }
+
+        // 4. 敵同士の重なり防止（Boids Separation / Soft Pushout）
+        ApplyEnemySeparation(pos);
+
+        // 5. 壁からの安全マージン押し戻し（万が一の壁めり込み完全防止）
+        Vector3 pushout = MapRendererScript::GetBuildingPushout(pos, kEnemyBodyRadius);
+        pos.x += pushout.x;
+        pos.z += pushout.z;
+    } else if (enemyType_ == EnemyType::FlyBy) {
+        // 【突撃・すれ違い型】一定速度ですれ違い直進
+        if (!flyByInitialized_) {
+            flyByDir_ = { 0.0f, 0.0f, -kFlyBySpeed };
+            flyByInitialized_ = true;
+        }
+        pos.x += flyByDir_.x;
+        pos.y += flyByDir_.y;
+        pos.z += flyByDir_.z;
+    } else {
+        // 【定点・待ち伏せ型 (Ambush)】
+        // トラップ円の周囲や物陰に陣取って迎撃。プレイヤーのルートやビルとの衝突・けいれんは物理的にゼロ！
     }
 
+    // 4. ステートマシン（Aiming → AttackCharge → PounceStrike → UnavoidableAttack → Cooldown）
     switch (aiState_) {
-    case AiState::Approach: {
-        // 自機前方の適正距離へ接近
-        if (pos.z < targetZ) {
-            pos.z += kApproachSpeedZ;
-        } else {
-            pos.z -= kDistanceAdjustSpeed;
-        }
-
-        if (pos.z >= playerPos.z + kApproachTransitionOffset) {
-            aiState_ = AiState::TargetLock;
-            toCenterGauge_ = 0.0f;
-        }
-        break;
-    }
-    case AiState::TargetLock: {
-        // 並走しながら距離をキープし、中央移動チャージ
-        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
-        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
-
-        toCenterGauge_ += kToCenterGaugeSpeed;
-        if (toCenterGauge_ >= 1.0f) {
-            aiState_ = AiState::MoveToCenter;
-        }
-        break;
-    }
-    case AiState::MoveToCenter: {
-        // 並走距離をキープしつつ、滑らかなLerpで自機のX正面へ回り込む
-        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
-        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
-
-        float diffX = playerPos.x - pos.x;
-        pos.x += diffX * kMoveLerpFactorX;
-
-        if (std::abs(diffX) <= kCenterXThreshold) {
-            aiState_ = AiState::AttackCharge;
-            attackGauge_ = 0.0f;
+    case AiState::Aiming: {
+        // Ambush型用の感知移行（ParallelChaser型は上記で並走タイマー制御）
+        if (enemyType_ != EnemyType::ParallelChaser) {
+            if (distToPlayer <= kAmbushPerceptionRange && HasLineOfSightToPlayer()) {
+                aiState_ = AiState::AttackCharge;
+                attackGauge_ = 0.0f;
+            }
         }
         break;
     }
     case AiState::AttackCharge: {
-        // 射線遮蔽チェック（自機との間に建物がある場合はチャージを中断・回り込み優先）
+        // 射線遮蔽チェック（途中で壁に遮られた場合はチャージを中断・Aimingへ復帰）
         if (!HasLineOfSightToPlayer()) {
             attackGauge_ = (std::max)(0.0f, attackGauge_ - kAttackGaugeSpeed * 0.5f);
-            aiState_ = AiState::MoveToCenter;
+            if (attackGauge_ <= 0.0f) {
+                aiState_ = AiState::Aiming;
+            }
             break;
         }
-
-        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
-        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
 
         attackGauge_ += kAttackGaugeSpeed;
 
@@ -446,12 +909,49 @@ void EnemyAIScript::UpdateAI() {
             }
         }
 
+        // チャージ完了！溜めた位置からダイレクトに空中へ跳躍し、空中で隙を晒す！
         if (attackGauge_ >= 1.0f) {
-            aiState_ = AiState::UnavoidableAttack;
+            aiState_ = AiState::PounceStrike;
+            strikeVulnerableTimer_ = kAirborneVulnerableDuration;
+        }
+        break;
+    }
+    case AiState::PounceStrike: {
+        // 空中滞空・隙の露出（プレイヤーが意識して狙い撃てる決定的なカウンターウィンドウ）
+        // 1. 敵モデルのダイナミック拡大＆脈動強調（1.35倍〜1.50倍）
+        if (owner_) {
+            float pulse = 0.5f + 0.5f * std::sin(markerPulseTimer_ * kAirborneScalePulseFrequency);
+            float scaleMultiplier = kAirborneBaseScaleMultiplier + pulse * kAirbornePulseScaleDelta;
+            owner_->SetScale({
+                originalScale_.x * scaleMultiplier,
+                originalScale_.y * scaleMultiplier,
+                originalScale_.z * scaleMultiplier
+            });
+        }
+
+        // 2. 攻撃臨界の鮮烈な赤色高速点滅
+        if (owner_ && hitFlashTimer_ == 0) {
+            if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
+                bool blink = (strikeVulnerableTimer_ % 4) < 2;
+                mr->SetColor(blink ? kMarkerWhiteFlash : kMarkerRedColor);
+            }
+        }
+
+        if (strikeVulnerableTimer_ > 0) {
+            strikeVulnerableTimer_--;
+            if (strikeVulnerableTimer_ == 0) {
+                // 隙の時間が切れたら、目前空中から弾丸発射！
+                aiState_ = AiState::UnavoidableAttack;
+            }
         }
         break;
     }
     case AiState::UnavoidableAttack: {
+        // モデルスケールを基本サイズへ復帰
+        if (owner_) {
+            owner_->SetScale(originalScale_);
+        }
+
         // 弾丸発射
         FireBullet();
         aiState_ = AiState::Cooldown;
@@ -464,24 +964,25 @@ void EnemyAIScript::UpdateAI() {
         break;
     }
     case AiState::Cooldown: {
-        // 攻撃後のクールタイム（距離を保って様子見・威嚇）
-        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed;
-        else if (pos.z > targetZ + 1.0f) pos.z -= kDistanceAdjustSpeed;
+        // 離脱中もスケールは確実に等倍維持
+        if (owner_) {
+            owner_->SetScale(originalScale_);
+        }
 
         if (cooldownTimer_ > 0) {
             cooldownTimer_--;
             if (cooldownTimer_ == 0) {
-                // クールタイム満了で次の攻撃サイクルへ
-                aiState_ = AiState::Approach;
-                toCenterGauge_ = 0.0f;
+                aiState_ = AiState::Aiming;
                 attackGauge_ = 0.0f;
             }
         }
         break;
     }
     case AiState::Stun: {
-        // 攻撃阻止スタン中（約0.75秒、大きくのけぞって完全無防備）
-        if (pos.z < targetZ) pos.z += kDistanceAdjustSpeed * 0.5f;
+        // スタン時はスケールを即座に等倍へ復帰
+        if (owner_) {
+            owner_->SetScale(originalScale_);
+        }
 
         // のけぞり姿勢（ピッチ角を後ろに倒す）
         Vector3 rot = owner_->GetRotate();
@@ -491,8 +992,7 @@ void EnemyAIScript::UpdateAI() {
         if (stunTimer_ > 0) {
             stunTimer_--;
             if (stunTimer_ == 0) {
-                aiState_ = AiState::Approach;
-                toCenterGauge_ = 0.0f;
+                aiState_ = AiState::Aiming;
                 attackGauge_ = 0.0f;
                 if (owner_ && hitFlashTimer_ == 0) {
                     if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
@@ -503,26 +1003,10 @@ void EnemyAIScript::UpdateAI() {
         }
         break;
     }
+    case AiState::Ghost: {
+        // 撃破後の幽霊状態（Step 1-4 で実装）
+        break;
     }
-
-    // 建物進入防止（建物との衝突判定＆道路・開けた通りへの押し戻し）
-    if (!hasPrevSafePos_) {
-        prevSafePos_ = pos;
-        hasPrevSafePos_ = true;
-    }
-
-    Vector3 pushout = MapRendererScript::GetBuildingPushout(pos, kEnemyCollisionRadius);
-    pos.x += pushout.x;
-    pos.z += pushout.z;
-
-    // それでもなお建物内部に入ってしまう場合は、前回の安全なX座標へ復帰
-    if (MapRendererScript::IsInsideBuilding(pos, kEnemyCollisionRadius * 0.5f)) {
-        pos.x = prevSafePos_.x;
-        Vector3 pushAgain = MapRendererScript::GetBuildingPushout(pos, kEnemyCollisionRadius);
-        pos.x += pushAgain.x;
-        pos.z += pushAgain.z;
-    } else {
-        prevSafePos_ = pos;
     }
 
     owner_->SetPosition(pos);
@@ -567,6 +1051,8 @@ void EnemyAIScript::FireBullet() {
 void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
     if (isDead_) return;
 
+    isVaulting_ = false; // 飛び越え中に被弾した場合も即座に解除
+
     int finalDamage = isCritical ? amount * kCriticalMultiplier : amount;
     hp_ -= finalDamage;
     hitFlashTimer_ = kHitFlashDuration;
@@ -575,21 +1061,50 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
         mr->SetColor(isCritical ? kCriticalFlashColor : kFlashColor);
     }
 
+    // 1. 被弾ノックバック演出（自機から敵へのベクトル方向へ衝撃押し戻し）
+    if (owner_ && targetObject_) {
+        Vector3 ePos = owner_->GetPosition();
+        Vector3 pPos = targetObject_->GetPosition();
+        Vector3 pushDir = { ePos.x - pPos.x, 0.0f, ePos.z - pPos.z };
+        float pLenSq = pushDir.x * pushDir.x + pushDir.z * pushDir.z;
+        if (pLenSq > kEpsilon) {
+            float invLen = 1.0f / std::sqrt(pLenSq);
+            ePos.x += pushDir.x * invLen * kHitKnockbackDist;
+            ePos.z += pushDir.z * invLen * kHitKnockbackDist;
+            owner_->SetPosition(ePos);
+        }
+    }
+
+    // 2. 被弾縮みバウンド変形（Squash: 弾丸がめり込んだ重厚な手応え）
+    hitSquashTimer_ = kDefaultHitSquashDuration;
+    if (owner_) {
+        owner_->SetScale({
+            originalScale_.x * kHitSquashScale.x,
+            originalScale_.y * kHitSquashScale.y,
+            originalScale_.z * kHitSquashScale.z
+        });
+    }
+
     // 攻撃阻止（カウンター / アタックキャンセル）判定
-    // 攻撃チャージ中（AttackCharge）またはロックオン中（TargetLock）に被弾した場合
-    if (aiState_ == AiState::AttackCharge || (aiState_ == AiState::TargetLock && toCenterGauge_ > 0.4f)) {
-        // チャージを強制中断
+    // 攻撃チャージ中（AttackCharge）または空中切り込み隙（PounceStrike）に被弾した場合
+    if (aiState_ == AiState::AttackCharge || aiState_ == AiState::PounceStrike) {
+        // チャージ・切り込みを強制中断
         attackGauge_ = 0.0f;
-        toCenterGauge_ = 0.0f;
+        strikeVulnerableTimer_ = 0;
         aiState_ = AiState::Stun;
         stunTimer_ = kStunDuration;
+
+        // モデルスケールを即座に基本サイズへ復帰
+        if (owner_) {
+            owner_->SetScale(originalScale_);
+        }
 
         // カウンター阻止成功の強力なカメラシェイクと被弾火花
         ShakeCamera(0.12f, 0.18f);
         if (owner_) {
             EffectPlayParam cancelParam{};
             cancelParam.position = owner_->GetPosition();
-            cancelParam.scale = { 2.2f, 2.2f, 2.2f };
+            cancelParam.scale = { 2.5f, 2.5f, 2.5f };
             cancelParam.isLoop = false;
             if (auto* effectMgr = EffectManager::GetInstance()) {
                 effectMgr->PlayEffect3D(kEffectHitImpact, cancelParam);
@@ -600,7 +1115,10 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
     if (hp_ <= 0) {
         hp_ = 0;
         isDead_ = true;
-        owner_->SetVisible(false);
+        if (owner_) {
+            owner_->SetScale(originalScale_);
+            owner_->SetVisible(false);
+        }
     }
 }
 
@@ -614,6 +1132,14 @@ void EnemyAIScript::HandleHitFlash() {
             if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
                 mr->SetColor(originalColor_);
             }
+        }
+    }
+
+    // 被弾縮みバウンドの復元（満了時に元の等倍スケールへスムーズに復帰）
+    if (hitSquashTimer_ > 0) {
+        hitSquashTimer_--;
+        if (hitSquashTimer_ == 0 && owner_ && aiState_ != AiState::PounceStrike) {
+            owner_->SetScale(originalScale_);
         }
     }
 }
@@ -630,15 +1156,23 @@ void EnemyAIScript::OnInspectorGUI() {
     ImGui::TextColored(kHeaderColor, "【敵AIスクリプト設定】");
     ImGui::Separator();
 
+    const char* typeNames[] = { "横並走＆前方強襲 (ParallelChaser)", "定点待ち伏せ (Ambush)", "突撃すれ違い (FlyBy)" };
+    int currentTypeIndex = static_cast<int>(enemyType_);
+    if (ImGui::Combo("行動タイプ##EnemyType", &currentTypeIndex, typeNames, 3)) {
+        enemyType_ = static_cast<EnemyType>(currentTypeIndex);
+    }
+
     ImGui::Checkbox("ボス属性##IsBoss", &isBoss_);
     ImGui::DragInt("最大HP##MaxHP", &maxHp_, 1, 1, 500);
     ImGui::ProgressBar(static_cast<float>(hp_) / static_cast<float>(maxHp_), ImVec2(0.0f, 0.0f),
         std::to_string(hp_).append(" / ").append(std::to_string(maxHp_)).c_str());
 
-    const char* stateNames[] = { "Approach", "TargetLock", "MoveToCenter", "AttackCharge", "UnavoidableAttack", "Cooldown", "Stun" };
+    const char* stateNames[] = { "Aiming", "AttackCharge", "PounceStrike", "UnavoidableAttack", "Cooldown", "Stun", "Ghost" };
     int currentStateIndex = static_cast<int>(aiState_);
     ImGui::Text("AIステート: %s", (currentStateIndex >= 0 && currentStateIndex < 7) ? stateNames[currentStateIndex] : "Unknown");
-    ImGui::ProgressBar(toCenterGauge_, ImVec2(0.0f, 0.0f), "LockOn Gauge");
+
+    const char* zoneNames[] = { "Zone 1 (斜め前方)", "Zone 2 (正面上空)", "Zone 3 (側方ハイジャンプ)" };
+    ImGui::Combo("跳躍ゾーン##AttackZone", &attackZoneIndex_, zoneNames, 3);
     ImGui::ProgressBar(attackGauge_, ImVec2(0.0f, 0.0f), "Attack Gauge");
     if (aiState_ == AiState::Cooldown) {
         float cdProgress = static_cast<float>(cooldownTimer_) / static_cast<float>(cooldownDuration_);
@@ -646,7 +1180,6 @@ void EnemyAIScript::OnInspectorGUI() {
     }
 
     ImGui::Separator();
-    ImGui::DragFloat("理想維持距離(Z)##PreferredDistZ", &preferredDistanceZ_, 0.5f, 5.0f, 30.0f, "%.1f m");
     ImGui::DragInt("クールタイム(F)##CooldownDuration", &cooldownDuration_, 5, 10, 300);
     ImGui::DragInt("敵弾攻撃力##EnemyDamage", &bulletDamage_, 1, 1, 10);
 #endif
