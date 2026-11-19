@@ -26,6 +26,7 @@ namespace {
     constexpr size_t kImGuiBufferLength = 128;
     const Vector3 kManualFireworkPos = { 0.0f, 15.0f, 20.0f }; // 手動発射位置 (上空)
     constexpr float kPi = 3.14159265f;
+    constexpr int kLeftMouseButton = 0;
 }
 
 ClearDirectorScript::ClearDirectorScript()
@@ -65,9 +66,9 @@ void ClearDirectorScript::OnUpdate() {
         sceneFadeInAlpha_ = (std::max)(0.0f, sceneFadeInAlpha_ - kFadeInSpeed);
     }
 
-    // スペースキー押下でタイトルシーンへ遷移
+    // スペースキーまたは左クリックでタイトルシーンへ遷移
     auto input = InputResource::GetInput();
-    if (input && input->Trigger(DIK_SPACE)) {
+    if (input && (input->Trigger(DIK_SPACE) || input->MouseTrigger(kLeftMouseButton))) {
         SceneManager::GetInstance()->ChangeScene(nextSceneName_);
         return;
     }
@@ -209,9 +210,9 @@ void ClearDirectorScript::RenderVictoryHUD() {
         victorySubTextObj_->Draw(victorySubTextGen_->GetGpuHandle(), true);
     }
 
-    // 4. 「>> PRESS SPACE TO RETURN TO TITLE <<」（パルス点滅ホワイト）
+    // 4. 「>> PRESS SPACE OR CLICK TO RETURN TO TITLE <<」（パルス点滅ホワイト）
     if (pressSpaceTextGen_ && pressSpaceTextObj_) {
-        pressSpaceTextGen_->Generate(">> PRESS SPACE TO RETURN TO TITLE <<", "Yu Gothic UI", 20.0f, 1, true, false, false);
+        pressSpaceTextGen_->Generate(">> PRESS SPACE OR CLICK TO RETURN TO TITLE <<", "Yu Gothic UI", 20.0f, 1, true, false, false);
         float ptw = static_cast<float>(pressSpaceTextGen_->GetWidth());
         float pth = static_cast<float>(pressSpaceTextGen_->GetHeight());
         float ptx = (kRenderWidth - ptw) * 0.5f;

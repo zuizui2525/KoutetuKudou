@@ -3,6 +3,7 @@
 #include "Scripts/Enemy/EnemyAIScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Director/GamePhaseControllerScript.h"
+#include "Scripts/Stage/RestraintTrapScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "App/Scene/Core/SceneManager.h"
@@ -459,6 +460,78 @@ void EnemySpawnManagerScript::SetupStage1Preset() {
                     sp->SetSpreadRadius(6.0f);
                 }
             }
+        }
+    }
+
+    // ============================================================
+    // 拘束停止円トラップ（Restraint Circle）地形準拠・戦略的配置 (Step 1-2)
+    // ※全座標を各エリアJSONの道路空白セル上に配置（ビル干渉ゼロ・迂回/突破の駆け引き設計）
+    // ============================================================
+    if (RestraintTrapScript::GetActiveTraps().empty()) {
+        struct TrapPresetDef {
+            const char* name;
+            Vector3 position;
+            int areaIndex;
+            float radius;
+            int rushCount;
+        };
+
+        // Area 0: 中盤の開けた大通り中央（左右へ迂回可能・導入体験用ラッシュ3体 -> 6.0秒停止）
+        constexpr float kArea0Trap1X = -2.0f;
+        constexpr float kArea0Trap1Z = 74.0f;
+        constexpr float kArea0Trap1Radius = 4.5f;
+        constexpr int kArea0Trap1RushCount = 3;
+
+        // Area 1-1: 大クランクのインコース（最短カットを狙うと捕まる・ラッシュ3体 -> 6.0秒停止）
+        constexpr float kArea1Trap1X = 6.0f;
+        constexpr float kArea1Trap1Z = 166.0f;
+        constexpr float kArea1Trap1Radius = 4.5f;
+        constexpr int kArea1Trap1RushCount = 3;
+
+        // Area 1-2: 左車線から中央への合流絞り込み（ラッシュ4体 -> 8.0秒停止）
+        constexpr float kArea1Trap2X = -12.0f;
+        constexpr float kArea1Trap2Z = 206.0f;
+        constexpr float kArea1Trap2Radius = 4.2f;
+        constexpr int kArea1Trap2RushCount = 4;
+
+        // Area 2-1: 二股分岐の左ルート中央（ラッシュ4体 -> 8.0秒停止）
+        constexpr float kArea2Trap1X = -24.0f;
+        constexpr float kArea2Trap1Z = 302.0f;
+        constexpr float kArea2Trap1Radius = 4.5f;
+        constexpr int kArea2Trap1RushCount = 4;
+
+        // Area 2-2: 二股合流ロータリー広場中央の関門（本格包囲ラッシュ5体 -> 10.0秒停止）
+        constexpr float kArea2Trap2X = 0.0f;
+        constexpr float kArea2Trap2Z = 326.0f;
+        constexpr float kArea2Trap2Radius = 4.8f;
+        constexpr int kArea2Trap2RushCount = 5;
+
+        // Area 3-1: 狭窄ゲートを抜けたボス決戦アリーナ入口（最終関門ラッシュ4体 -> 8.0秒停止）
+        constexpr float kArea3Trap1X = 0.0f;
+        constexpr float kArea3Trap1Z = 446.0f;
+        constexpr float kArea3Trap1Radius = 4.5f;
+        constexpr int kArea3Trap1RushCount = 4;
+
+        const TrapPresetDef trapPresets[] = {
+            { "RestraintTrap_Area1_01", { kArea0Trap1X, 0.0f, kArea0Trap1Z }, 0, kArea0Trap1Radius, kArea0Trap1RushCount },
+            { "RestraintTrap_Area2_01", { kArea1Trap1X, 0.0f, kArea1Trap1Z }, 1, kArea1Trap1Radius, kArea1Trap1RushCount },
+            { "RestraintTrap_Area2_02", { kArea1Trap2X, 0.0f, kArea1Trap2Z }, 1, kArea1Trap2Radius, kArea1Trap2RushCount },
+            { "RestraintTrap_Area3_01", { kArea2Trap1X, 0.0f, kArea2Trap1Z }, 2, kArea2Trap1Radius, kArea2Trap1RushCount },
+            { "RestraintTrap_Area3_02", { kArea2Trap2X, 0.0f, kArea2Trap2Z }, 2, kArea2Trap2Radius, kArea2Trap2RushCount },
+            { "RestraintTrap_Area4_01", { kArea3Trap1X, 0.0f, kArea3Trap1Z }, 3, kArea3Trap1Radius, kArea3Trap1RushCount }
+        };
+
+        for (const auto& preset : trapPresets) {
+            auto trapObj = std::make_unique<GameObject>();
+            trapObj->SetName(preset.name);
+            trapObj->SetPosition(preset.position);
+            if (auto* trapScript = trapObj->AddComponent<RestraintTrapScript>()) {
+                trapScript->SetTargetArea(preset.areaIndex);
+                trapScript->SetTrapRadius(preset.radius);
+                trapScript->SetTriggerRushOnActivate(true);
+                trapScript->SetRushEnemyCount(preset.rushCount); // 敵1体につき2.0秒で拘束時間を自動同期
+            }
+            scene->AddGameObject(std::move(trapObj));
         }
     }
 

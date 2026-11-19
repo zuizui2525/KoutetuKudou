@@ -98,11 +98,24 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
         deathCinematicProgress_ = 0.0f;
     }
 
-    // 2. マウスおよびキー入力による首振り制御（走行戦闘中のみ有効、エリアクリア演出中は見送りシネマティックへ委譲）
-    // ルート手書き中（DrawRouteフェーズ）や発進待機中は首振りを無効化し、線引き操作に集中できるようにする
+    // 2. マウスおよびキー入力による首振り制御（走行戦闘中のみ有効、エリアクリア演出中・ルート描画中・レベルアップ選択中は制御を委譲/停止）
     bool isClearing = false;
+    bool isDrawRoute = false;
+    bool isLevelUpChoosing = false;
     if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
         isClearing = phaseCtrl->IsAreaClearing();
+        isDrawRoute = (phaseCtrl->GetCurrentPhase() == GamePhaseControllerScript::Phase::DrawRoute);
+        isLevelUpChoosing = phaseCtrl->IsLevelUpChoosing();
+    }
+
+    if (isDrawRoute) {
+        UpdateCursorLock(false);
+        // ルート手書きフェーズ中はGamePhaseControllerScriptが算出した自動パノラマ展望カメラ座標・回転をowner_へ同期
+        if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+            owner_->SetPosition(phaseCtrl->GetDrawCameraPosition());
+            owner_->SetRotate(phaseCtrl->GetDrawCameraRotation());
+        }
+        return;
     }
 
     if (isClearing) {
@@ -112,6 +125,12 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
             owner_->SetPosition(phaseCtrl->GetAreaClearCameraPosition());
             owner_->SetRotate(phaseCtrl->GetAreaClearCameraRotation());
         }
+        return;
+    }
+
+    if (isLevelUpChoosing) {
+        // レベルアップ3択カード選択中はカーソルロックを解除し、視点回転を一時停止
+        UpdateCursorLock(false);
         return;
     }
 
@@ -157,17 +176,6 @@ void FPSCameraControllerScript::UpdateFollow(const Vector3& targetPos, const Vec
                     cameraPitchOffset_ += (targetPitch - cameraPitchOffset_) * kMouseTrackSmoothSpeed;
                 }
             }
-        }
-
-        // A/Dキーによる微調整（キー入力有効時）
-        if (enableLean_ && input) {
-            if (input->Press(DIK_A) || input->Press(DIK_LEFT)) {
-                cameraYawOffset_ -= kCameraYawSpeed;
-            } else if (input->Press(DIK_D) || input->Press(DIK_RIGHT)) {
-                cameraYawOffset_ += kCameraYawSpeed;
-            }
-            while (cameraYawOffset_ > kPi) cameraYawOffset_ -= kTwoPi;
-            while (cameraYawOffset_ < -kPi) cameraYawOffset_ += kTwoPi;
         }
     } else {
         // 走行前（線引き中）、待機中、または死亡演出中は正面へスムーズに戻す
@@ -273,7 +281,6 @@ void FPSCameraControllerScript::OnInspectorGUI() {
     ImGui::DragFloat("カメラ目線高さ(自機中心から)##CameraUpHeight", &cameraUpHeight_, 0.02f, -1.0f, 3.0f, "%.2f m");
     ImGui::SliderFloat("マウス感度##MouseSensitivity", &mouseSensitivity_, kMinMouseSensitivity, kMaxMouseSensitivity, "%.4f");
     ImGui::Checkbox("マウス視線連動##EnableMouseTrack", &enableMouseTracking_);
-    ImGui::Checkbox("キー首振り入力有効##EnableLean", &enableLean_);
     ImGui::Text("現在の首振りYaw: %.3f rad", cameraYawOffset_);
     ImGui::Text("現在の首振りPitch: %.3f rad", cameraPitchOffset_);
     if (ImGui::Button("テストシェイク発生##TriggerShake")) {

@@ -67,7 +67,7 @@ private:
     bool useDirectAim_ = true; // APEXスタイル: マウス移動量によるダイレクトエイム
     int shakeTimer_ = 0;
     Vector3 prevLookTangent_ = { 0.0f, 0.0f, 1.0f };
-    bool enableLean_ = true;
+    bool enableLean_ = false;
     bool enableMouseTracking_ = true;
 
     // 死亡シネマティック正面カメラワーク進行度 (0.0f: 通常一人称 -> 1.0f: 正面到達)

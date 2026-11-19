@@ -283,7 +283,7 @@
       "components": [
         {
           "type": "TextRenderer2D",
-          "text": "[ PRESS SPACE TO START ]",
+          "text": "[ PRESS SPACE OR CLICK TO START ]",
           "font_name": "Consolas",
           "font_size": 26,
           "color": [0.2, 0.85, 1, 0.597656],

@@ -2,6 +2,9 @@
 #include "Engine/Component/ScriptComponent.h"
 #include "Engine/Math/MathStructs.h"
 #include <string>
+#include <vector>
+
+class GameObject;
 
 /// <summary>
 /// 弾丸（自機弾・敵弾）の直進移動、寿命カウント、当たり判定を制御するスクリプトコンポーネント
@@ -86,6 +89,12 @@ public:
     int GetMaxLifeTime() const { return maxLifeTime_; }
 
     /// <summary>
+    /// 敵命中後に消滅せず貫通できる残回数（Step 1-6 貫通レーザー強化用）を設定します。
+    /// </summary>
+    void SetPierceCount(int count) { pierceCount_ = (count > 0) ? count : 0; }
+    int GetPierceCount() const { return pierceCount_; }
+
+    /// <summary>
     /// 弾丸がすでに命中または寿命で消滅状態にあるかを取得します。
     /// </summary>
     /// <returns>消滅済みの場合 true</returns>
@@ -110,10 +119,11 @@ private:
     static constexpr int kMinLifeTime = 1;
     static constexpr int kMaxLifeTimeLimit = 600;
 
-    // 小型オレンジ・ジェット噴射エフェクト演出定数 (マジックナンバー排除)
+    // 小型着弾スパーク＆ジェット噴射エフェクト演出定数 (マジックナンバー排除)
     static inline const std::string kEffectBulletTrail = "BulletTrail";
     static inline const std::string kEffectBulletHit = "Explosion";
-    static constexpr uint32_t kHitGpuSparkCount = 800;        // 敵命中時の鮮烈な火花スパーク粒子数
+    static constexpr uint32_t kHitGpuSparkCount = 12;          // 通常敵命中時の視界を塞がない極小シャープ火花数
+    static constexpr uint32_t kCriticalHitGpuSparkCount = 22;  // クリティカル命中時の控えめな増量火花数
     static constexpr float kPlayerJetTrailStartScale = 0.015f; // 小型でシャープなノズル口径 (m)
     static constexpr float kPlayerJetTrailEndScale   = 0.002f; // 尖って消滅する尾部 (m)
     static constexpr float kPlayerJetLifeMin         = 0.02f;  // 極短寿命 (約1.2フレーム)
@@ -123,7 +133,7 @@ private:
     static constexpr float kDefaultBulletTrailSpawnRate = 80.0f;  // 視界を塞がないコンパクトなトレイル炎 (/秒)
     static constexpr Vector4 kDefaultBulletSparkStart = { 1.0f, 0.60f, 0.10f, 1.0f }; // 鮮烈発熱オレンジ（白熱核）
     static constexpr Vector4 kDefaultBulletSparkEnd   = { 0.85f, 0.18f, 0.02f, 0.00f }; // ディープバーントオレンジ（冷却消滅）
-    static constexpr float kBulletHitScale = 1.2f;
+    static constexpr float kWallHitEffectScale = 0.35f;        // 建物着弾時のコンパクトな着弾エフェクトスケール (m)
     static constexpr float kTrailStepDistance = 0.5f; // 1フレームあたり1個に抑える間隔 (m)
 
     // メンバ変数
@@ -139,6 +149,8 @@ private:
     bool hasPreviousPos_ = false;
     float collisionRadius_ = kDefaultCollisionRadius;
     int damage_ = kDefaultDamage;
+    int pierceCount_ = 0;
+    std::vector<const GameObject*> hitTargets_;
     bool isPlayerBullet_ = true;
     bool isDead_ = false;
 };

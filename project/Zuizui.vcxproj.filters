@@ -203,6 +203,9 @@
     <ClCompile Include="Scripts\Stage\StageManagerScript.cpp">
       <Filter>Scripts\Stage</Filter>
     </ClCompile>
+    <ClCompile Include="Scripts\Stage\RestraintTrapScript.cpp">
+      <Filter>Scripts\Stage</Filter>
+    </ClCompile>
     <ClCompile Include="Scripts\Stage\MapRendererScript.cpp">
       <Filter>Scripts\Stage</Filter>
     </ClCompile>
@@ -470,6 +473,9 @@
       <Filter>Scripts\Route</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Stage\StageManagerScript.h">
+      <Filter>Scripts\Stage</Filter>
+    </ClInclude>
+    <ClInclude Include="Scripts\Stage\RestraintTrapScript.h">
       <Filter>Scripts\Stage</Filter>
     </ClInclude>
     <ClInclude Include="Scripts\Stage\MapData.h">

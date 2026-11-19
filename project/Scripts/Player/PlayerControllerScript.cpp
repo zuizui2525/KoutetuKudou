@@ -1,9 +1,14 @@
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Player/BulletScript.h"
+#include "Scripts/Enemy/EnemyAIScript.h"
 #include "Scripts/Director/GamePhaseControllerScript.h"
+#include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
 #include "Engine/Component/Components/MeshRendererComponent.h"
+#include "Engine/Component/Components/BoxColliderComponent.h"
+#include "App/Scene/Core/SceneManager.h"
+#include "App/Scene/Generic/GenericScene.h"
 #include "Engine/Input/Input.h"
 #include "Engine/Base/BaseResource.h"
 #include "Engine/Base/WindowApp/WindowApp.h"
@@ -20,11 +25,13 @@
 #include "Engine/Graphics/Objects/3d/Cone/ConeObject.h"
 #include "Engine/Graphics/Objects/3d/Cube/CubeObject.h"
 #include "Engine/Graphics/Objects/2d/Sprite/SpriteObject.h"
+#include "Engine/Graphics/Objects/2d/Ring/Ring2DObject.h"
 #include "Engine/Debug/SceneHierarchy.h"
 #include "Engine/Base/DxCommon/DxCommon.h"
 #include "Engine/Zuizui.h"
 #include <cmath>
 #include <algorithm>
+#include <random>
 #ifdef _USEIMGUI
 #include <imgui.h>
 #endif
@@ -54,6 +61,39 @@ namespace {
     constexpr float kMeltColorTargetRed = 0.15f;
     constexpr float kMeltColorTargetBlue = 0.25f;
     constexpr float kMeltColorGreen = 0.02f;
+
+    // 動的ゼロイン（レティクル距離計測）用キーワード＆Ray-AABB交差ヘルパー
+    const std::string kAimEnemyKeyword = "Enemy";
+    const std::string kAimBossKeyword  = "Boss";
+    const std::string kAimHeadKeyword  = "Head";
+    const std::string kAimBodyKeyword  = "Body";
+
+    bool IntersectRayAABB(const Vector3& origin, const Vector3& dir,
+                          const Vector3& boxMin, const Vector3& boxMax,
+                          float maxDist, float& outHitDist) {
+        float tMin = 0.0f;
+        float tMax = maxDist;
+
+        auto testAxis = [&](float orig, float d, float minB, float maxB) -> bool {
+            if (std::abs(d) < kEpsilon) {
+                return (orig >= minB && orig <= maxB);
+            }
+            float invD = 1.0f / d;
+            float t1 = (minB - orig) * invD;
+            float t2 = (maxB - orig) * invD;
+            if (t1 > t2) std::swap(t1, t2);
+            tMin = (std::max)(tMin, t1);
+            tMax = (std::min)(tMax, t2);
+            return tMin <= tMax;
+        };
+
+        if (!testAxis(origin.x, dir.x, boxMin.x, boxMax.x)) return false;
+        if (!testAxis(origin.y, dir.y, boxMin.y, boxMax.y)) return false;
+        if (!testAxis(origin.z, dir.z, boxMin.z, boxMax.z)) return false;
+
+        outHitDist = (tMin > 0.0f) ? tMin : tMax;
+        return (outHitDist >= 0.0f && outHitDist <= maxDist);
+    }
 }
 
 PlayerControllerScript::PlayerControllerScript()
@@ -71,11 +111,20 @@ PlayerControllerScript::~PlayerControllerScript() {
     muzzleCoreDisc_.reset();
     muzzleGpuParticle_.reset();
     gunModel_.reset();
+    for (int i = 0; i < kVacuumVortexRingCount; ++i) {
+        vacuumVortexRings_[i].reset();
+    }
+    vacuumReticleRing_.reset();
 }
 
 void PlayerControllerScript::Awake() {
+    maxHp_ = kDefaultMaxHp;
     hp_ = maxHp_;
+    maxAmmo_ = kDefaultMaxAmmo;
     ammo_ = maxAmmo_;
+    reloadDuration_ = kDefaultReloadTime;
+    shotInterval_ = kDefaultShotInterval;
+    bulletSpeed_ = kDefaultBulletSpeed;
     reloadTimer_ = 0;
     shotIntervalTimer_ = 0;
     invincibilityTimer_ = 0;
@@ -88,6 +137,29 @@ void PlayerControllerScript::Awake() {
     isGunVisible_ = true;
     hasPrevPos_ = false;
     currentVelocity_ = { 0.0f, 0.0f, 0.0f };
+    shootingSlowdownTimer_ = 0;
+    isShooting_ = false;
+    isVacuuming_ = false;
+    isCapturingGhost_ = false;
+    vacuumAnimPhase_ = 0.0f;
+    absorbedGhostCount_ = 0;
+    absorbComboCount_ = 0;
+    absorbComboExp_ = 0;
+    absorbComboTimer_ = 0;
+
+    playerLevel_ = kInitialPlayerLevel;
+    currentExp_ = 0;
+    expToNextLevel_ = kInitialExpToNextLevel;
+    pendingExpToAdd_ = 0;
+    pendingLevelUps_ = 0;
+    bulletDamage_ = kDefaultBulletDamage;
+    multiShotCount_ = kDefaultMultiShotCount;
+    bulletPierceCount_ = kDefaultPierceCount;
+    vacuumSpeedMultiplier_ = 1.0f;
+    vacuumRangeBonus_ = 0.0f;
+    vacuumConeCosBonus_ = 0.0f;
+    upgradeLevels_.fill(0);
+    ownedUpgradeOrder_.clear();
     EnsureGunModel();
 }
 
@@ -139,6 +211,27 @@ void PlayerControllerScript::OnUpdate() {
         return;
     }
 
+    // レベルアップ3択選択中は自機の入力・タイマー・移動慣性を完全一時停止
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsLevelUpChoosing()) {
+            isVacuuming_ = false;
+            isCapturingGhost_ = false;
+            return;
+        }
+    }
+
+    // 獲得済みEXPを毎フレーム1ずつゲージへ滑らかに加算（満タン到達でレベルアップ予約）
+    ProcessExpTick();
+
+    // 複数幽霊の連続吸収コンボ合算ウィンドウタイマー更新
+    if (absorbComboTimer_ > 0) {
+        absorbComboTimer_--;
+        if (absorbComboTimer_ == 0) {
+            absorbComboCount_ = 0;
+            absorbComboExp_ = 0;
+        }
+    }
+
     // 自機のフレーム移動差分（実速度ベクトル）の算出（弾丸の慣性同期・レティクル完全直進化に使用）
     Vector3 currentPos = owner_->GetPosition();
     if (isAutoMoving_) {
@@ -149,16 +242,19 @@ void PlayerControllerScript::OnUpdate() {
                 currentPos.z - prevPos_.z
             };
         } else {
+            float effectiveSpeed = GetEffectiveMoveSpeed();
             currentVelocity_ = {
-                direction_.x * moveSpeed_,
-                direction_.y * moveSpeed_,
-                direction_.z * moveSpeed_
+                direction_.x * effectiveSpeed,
+                direction_.y * effectiveSpeed,
+                direction_.z * effectiveSpeed
             };
             hasPrevPos_ = true;
         }
     } else {
         currentVelocity_ = { 0.0f, 0.0f, 0.0f };
         hasPrevPos_ = false;
+        shootingSlowdownTimer_ = 0;
+        isShooting_ = false;
     }
     prevPos_ = currentPos;
 
@@ -176,10 +272,14 @@ void PlayerControllerScript::OnUpdate() {
         }
     }
 
-    // 連射間隔タイマーの更新
+    // 連射間隔タイマーおよび射撃中減速タイマーの更新
     if (shotIntervalTimer_ > 0) {
         shotIntervalTimer_--;
     }
+    if (shootingSlowdownTimer_ > 0) {
+        shootingSlowdownTimer_--;
+    }
+    isShooting_ = (shootingSlowdownTimer_ > 0);
 
     // リロードタイマーの更新
     if (reloadTimer_ > 0) {
@@ -194,10 +294,14 @@ void PlayerControllerScript::OnUpdate() {
         muzzleFlashTimer_--;
     }
 
-    // 入力処理（リロード & 射撃: 走行中のみ実行可能とし、描画中の誤射を防止）
+    // 入力処理（リロード & 射撃 & 右クリック幽霊吸引: 走行中のみ実行可能とし、描画中の誤作動を防止）
     if (isAutoMoving_) {
         HandleReload();
         HandleShooting();
+        HandleGhostVacuum();
+    } else {
+        isVacuuming_ = false;
+        isCapturingGhost_ = false;
     }
 
     // 手持ちGunモデルのTransform更新（カメラ追従、射撃方向同期、首振り自動格納、リコイル演出）
@@ -216,6 +320,8 @@ void PlayerControllerScript::StartReload() {
     if (reloadTimer_ > 0 || ammo_ >= maxAmmo_) return;
 
     reloadTimer_ = reloadDuration_;
+    shootingSlowdownTimer_ = 0;
+    isShooting_ = false;
     if (auto* audio = Audio::GetInstance()) {
         if (isSeReloadLoaded_) {
             audio->PlaySoundW(seReload_, kReloadVolume, false);
@@ -290,6 +396,8 @@ void PlayerControllerScript::Fire() {
         }
     }
     shotIntervalTimer_ = shotInterval_;
+    shootingSlowdownTimer_ = kShootingSlowdownHoldFrames;
+    isShooting_ = true;
 
     // 1. カメラと画面中央レティクルの視線ベクトル（rayDir）を取得
     auto* cameraMgr = CameraResource::GetCameraManager();
@@ -330,22 +438,72 @@ void PlayerControllerScript::Fire() {
         shootDir = rayDir;
     }
 
-    // 3. 弾丸プレハブの実体化（VALORANT/APEX風の細長い曳光ビームライン）
-    GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", bulletSpawnPos);
-    if (bulletObj) {
-        auto* bulletScript = bulletObj->GetComponent<BulletScript>();
-        if (bulletScript) {
-            bulletScript->SetDirection(shootDir); // 銃口からレティクル目標地点へまっすぐ直進！
-            bulletScript->SetSpeed(bulletSpeed_);
-            bulletScript->SetInheritedVelocity(enableInertia_ ? currentVelocity_ : Vector3{ 0.0f, 0.0f, 0.0f }); // 自機移動慣性同期
-            bulletScript->SetVisualScale(bulletVisualScale_);         // 弾丸の見た目スケール（細長い曳光ビーム）
-            bulletScript->SetCollisionRadius(bulletCollisionRadius_); // 見た目より広めの快適な当たり判定
-            bulletScript->SetTrailColors(bulletSparkStartColor_, bulletSparkEndColor_); // 白熱ゴールド〜赤橙火花トレイル
-            bulletScript->SetIsPlayerBullet(true);
+    // 3. 弾丸プレハブの実体化（マルチショット対応：同時発射数に応じて水平扇状にレーザー展開）
+    Vector3 spreadRight = { 1.0f, 0.0f, 0.0f };
+    if (camera) {
+        Vector3 camRot = camera->GetRotation();
+        Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
+        spreadRight = { rotMat.m[0][0], rotMat.m[0][1], rotMat.m[0][2] };
+    }
+
+    // 攻撃力・貫通強化に応じたレーザービームの太さ＆発光カラー進化
+    float beamWidthMul = 1.0f + static_cast<float>((std::max)(0, bulletDamage_ - 1)) * kHighPowerBeamThicknessStep;
+    Vector3 effectiveBulletScale = {
+        bulletVisualScale_.x * beamWidthMul,
+        bulletVisualScale_.y * beamWidthMul,
+        bulletVisualScale_.z
+    };
+
+    constexpr Vector4 kPiercingBulletColor = { 0.35f, 0.96f, 1.0f, 1.0f };    // 貫通プラズマシアン
+    constexpr Vector4 kHighPowerBulletColor = { 1.0f, 0.42f, 0.16f, 1.0f };   // 高火力クリムゾンゴールド
+    constexpr Vector4 kHyperHybridBulletColor = { 1.0f, 0.50f, 1.0f, 1.0f };  // 貫通＋高火力ハイパーマゼンタ
+    Vector4 effectiveBulletColor = kPlayerBulletColor;
+    if (bulletPierceCount_ > 0 && bulletDamage_ >= 3) {
+        effectiveBulletColor = kHyperHybridBulletColor;
+    } else if (bulletPierceCount_ > 0) {
+        effectiveBulletColor = kPiercingBulletColor;
+    } else if (bulletDamage_ >= 2) {
+        effectiveBulletColor = kHighPowerBulletColor;
+    }
+
+    int totalShots = (std::max)(1, multiShotCount_);
+    for (int shotIdx = 0; shotIdx < totalShots; ++shotIdx) {
+        Vector3 finalDir = shootDir;
+        if (totalShots > 1) {
+            float centerOffset = static_cast<float>(shotIdx) - 0.5f * static_cast<float>(totalShots - 1);
+            float spreadAngle = centerOffset * kMultiShotSpreadRad;
+            float sinA = std::sin(spreadAngle);
+            float cosA = std::cos(spreadAngle);
+            finalDir = {
+                shootDir.x * cosA + spreadRight.x * sinA,
+                shootDir.y * cosA + spreadRight.y * sinA,
+                shootDir.z * cosA + spreadRight.z * sinA
+            };
+            float len = std::sqrt(finalDir.x * finalDir.x + finalDir.y * finalDir.y + finalDir.z * finalDir.z);
+            if (len > kEpsilon) {
+                finalDir.x /= len;
+                finalDir.y /= len;
+                finalDir.z /= len;
+            }
         }
-        // 弾丸カラーを高輝度ゴールド曳光色に設定
-        if (auto* mr = bulletObj->GetComponent<MeshRendererComponent>()) {
-            mr->SetColor(kPlayerBulletColor);
+
+        GameObject* bulletObj = ScriptComponent::Instantiate("Bullet", bulletSpawnPos);
+        if (bulletObj) {
+            auto* bulletScript = bulletObj->GetComponent<BulletScript>();
+            if (bulletScript) {
+                bulletScript->SetDirection(finalDir); // 銃口からレティクル目標地点（マルチショット時は扇状）へ直進！
+                bulletScript->SetSpeed(bulletSpeed_);
+                bulletScript->SetDamage(bulletDamage_);
+                bulletScript->SetPierceCount(bulletPierceCount_);
+                bulletScript->SetInheritedVelocity(enableInertia_ ? currentVelocity_ : Vector3{ 0.0f, 0.0f, 0.0f }); // 自機移動慣性同期
+                bulletScript->SetVisualScale(effectiveBulletScale);       // 強化に応じた曳光ビームスケール
+                bulletScript->SetCollisionRadius(bulletCollisionRadius_); // 見た目より広めの快適な当たり判定
+                bulletScript->SetTrailColors(bulletSparkStartColor_, bulletSparkEndColor_);
+                bulletScript->SetIsPlayerBullet(true);
+            }
+            if (auto* mr = bulletObj->GetComponent<MeshRendererComponent>()) {
+                mr->SetColor(effectiveBulletColor);
+            }
         }
     }
 
@@ -562,11 +720,27 @@ void PlayerControllerScript::OnInspectorGUI() {
     ImGui::DragFloat3("自機弾スケール##PlayerBulletScale", &bulletVisualScale_.x, 0.02f, 0.1f, 2.0f, "%.2f");
     ImGui::DragFloat("自機弾判定半径##PlayerBulletColRadius", &bulletCollisionRadius_, 0.02f, 0.05f, 1.5f, "%.2f m");
     ImGui::DragFloat("ルート走行速度##MoveSpeed", &moveSpeed_, 0.005f, kMinMoveSpeed, kMaxMoveSpeed, "%.3f");
+    ImGui::SliderFloat("射撃中速度倍率##ShootSpeedMul", &shootingMoveSpeedMultiplier_, kMinShootingSpeedMultiplier, kMaxShootingSpeedMultiplier, "%.2f倍");
+    const char* speedStateLabel = IsReloading() ? "[リロード停止中]" : (isShooting_ ? "[射撃減速中]" : "");
+    ImGui::Text("現在の実効走行速度: %.3f %s", GetEffectiveMoveSpeed(), speedStateLabel);
     ImGui::Checkbox("自機移動慣性同期 (レティクル直進化)##EnableInertia", &enableInertia_);
 
     ImGui::Separator();
     ImGui::Checkbox("自動走行中##IsAutoMoving", &isAutoMoving_);
     ImGui::Text("状態: %s", isDead_ ? "撃墜(Dead)" : "健在(Alive)");
+    ImGui::Text("幽霊吸引 (右クリック長押し): %s | 累計吸収霊魂数: %d 体",
+        isVacuuming_ ? (isCapturingGhost_ ? "★ 吸引捕捉中!" : "吸引展開中") : "待機",
+        absorbedGhostCount_);
+    ImGui::Text("LV.%d | EXP: %d / %d (保留強化: %d)", playerLevel_, currentExp_, expToNextLevel_, pendingLevelUps_);
+    ImGui::Text("火力:%d | 同時発射:%d | 貫通:%d | 吸引倍率:%.2fx",
+        bulletDamage_, multiShotCount_, bulletPierceCount_, vacuumSpeedMultiplier_);
+    if (ImGui::Button("テスト: +40 EXP##TestGainExp40")) {
+        GainExp(kExpPerGhostAbsorb);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("テスト: 即レベルアップ##TestLevelUp")) {
+        GainExp(expToNextLevel_);
+    }
 
     ImGui::Spacing();
     ImGui::TextColored(kActionColor, "【射撃テスト】");
@@ -772,8 +946,12 @@ void PlayerControllerScript::UpdateGunTransform() {
         }
     }
 
-    float totalKick = recoilKick + dryKick;
-    float totalOffsetY = gunOffset_.y + reloadOffsetY;
+    constexpr float kVacuumGunVibrationAmp = 0.0035f;
+    constexpr float kVacuumGunVibrationFreq = 4.0f;
+    float vacuumVib = isVacuuming_ ? (std::sin(vacuumAnimPhase_ * kTwoPi * kVacuumGunVibrationFreq) * kVacuumGunVibrationAmp) : 0.0f;
+
+    float totalKick = recoilKick + dryKick + vacuumVib;
+    float totalOffsetY = gunOffset_.y + reloadOffsetY + vacuumVib * 0.5f;
 
     // カメラローカル座標からワールド座標へ変換
     Vector3 gunWorldPos = {
@@ -1026,11 +1204,68 @@ Vector3 PlayerControllerScript::GetAimTargetPosition() const {
     Vector3 rayDir = direction_;
     camera->CreateRay(Vector2{ clientW * 0.5f, clientH * 0.5f }, clientW, clientH, rayStart, rayDir);
 
-    // 照準レイ前方 zeroInDistance_ をエイム目標地点の基準とする
+    // 動的ゼロイン（Dynamic Zeroing）:
+    // カメラ中央の視線レイから敵・建物までの正確な距離をリアルタイム計測し、
+    // 右側の銃口から放たれた弾がちょうど目標位置（レティクルど真ん中）で一点収束するようにする！
+    float targetDist = zeroInDistance_;
+    bool hasRaycastHit = false;
+    float closestDist = kMaxAimRaycastDist;
+
+    // 1. シーン上の可視な敵コライダー（AABB）との最近接交差距離を計測
+    if (auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene())) {
+        for (const auto& obj : scene->GetGameObjects()) {
+            if (!obj || obj.get() == owner_ || !obj->IsVisible()) continue;
+            auto* boxCol = obj->GetComponent<BoxColliderComponent>();
+            if (!boxCol) continue;
+
+            const std::string& objName = obj->GetName();
+            bool isEnemyTarget = (objName.find(kAimEnemyKeyword) != std::string::npos ||
+                                  objName.find(kAimBossKeyword)  != std::string::npos ||
+                                  objName.find(kAimHeadKeyword)  != std::string::npos ||
+                                  objName.find(kAimBodyKeyword)  != std::string::npos);
+            if (!isEnemyTarget) continue;
+
+            // 幽霊化（AiState::Ghost）している個体はゼロイン距離計測から除外し、奥の生存敵へ正確に照準を合わせる
+            if (auto* enemyAI = obj->GetComponent<EnemyAIScript>()) {
+                if (enemyAI->IsGhost() || enemyAI->IsDead()) continue;
+            }
+
+            AABB aabb = boxCol->GetWorldAABB();
+            Vector3 paddedMin = { aabb.min.x - kAimRayEnemyPadding, aabb.min.y - kAimRayEnemyPadding, aabb.min.z - kAimRayEnemyPadding };
+            Vector3 paddedMax = { aabb.max.x + kAimRayEnemyPadding, aabb.max.y + kAimRayEnemyPadding, aabb.max.z + kAimRayEnemyPadding };
+
+            float hitDist = 0.0f;
+            if (IntersectRayAABB(rayStart, rayDir, paddedMin, paddedMax, closestDist, hitDist)) {
+                if (hitDist < closestDist) {
+                    closestDist = hitDist;
+                    hasRaycastHit = true;
+                }
+            }
+        }
+    }
+
+    // 2. 建物との最近接交差距離をレイマーチで計測（敵より手前に壁があれば壁までの距離へ収束）
+    for (float d = kMinAimConvergenceDist; d < closestDist; d += kAimRayBuildingStep) {
+        Vector3 samplePos = {
+            rayStart.x + rayDir.x * d,
+            rayStart.y + rayDir.y * d,
+            rayStart.z + rayDir.z * d
+        };
+        if (MapRendererScript::IsInsideBuilding(samplePos, 0.0f)) {
+            closestDist = d;
+            hasRaycastHit = true;
+            break;
+        }
+    }
+
+    if (hasRaycastHit) {
+        targetDist = (std::max)(kMinAimConvergenceDist, closestDist);
+    }
+
     Vector3 rawTargetPos = {
-        rayStart.x + rayDir.x * zeroInDistance_,
-        rayStart.y + rayDir.y * zeroInDistance_,
-        rayStart.z + rayDir.z * zeroInDistance_
+        rayStart.x + rayDir.x * targetDist,
+        rayStart.y + rayDir.y * targetDist,
+        rayStart.z + rayDir.z * targetDist
     };
 
     // カメラ基準のオフセット補正（デフォルト 0 でレティクル中心軸と完全一致）
@@ -1039,6 +1274,178 @@ Vector3 PlayerControllerScript::GetAimTargetPosition() const {
         rawTargetPos.y + camRight.y * aimCorrection_.x + camUp.y * aimCorrection_.y,
         rawTargetPos.z + camRight.z * aimCorrection_.x + camUp.z * aimCorrection_.y
     };
+}
+
+void PlayerControllerScript::EnsureVacuumVisuals() {
+    for (int i = 0; i < kVacuumVortexRingCount; ++i) {
+        if (!vacuumVortexRings_[i]) {
+            vacuumVortexRings_[i] = std::make_unique<FlatRingObject>(
+                kVacuumRingDivideCount, kVacuumRingBaseOuterR, kVacuumRingBaseInnerR);
+            vacuumVortexRings_[i]->SetAutoRegisterHierarchy(false);
+            vacuumVortexRings_[i]->Initialize(0); // 非ライティング発光
+        }
+    }
+    if (!vacuumReticleRing_) {
+        vacuumReticleRing_ = std::make_unique<Ring2DObject>();
+        vacuumReticleRing_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(vacuumReticleRing_.get());
+    }
+}
+
+void PlayerControllerScript::HandleGhostVacuum() {
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsAreaClearing()) {
+            isVacuuming_ = false;
+            isCapturingGhost_ = false;
+            return;
+        }
+    }
+
+    auto* input = InputResource::GetInput();
+    if (!input) {
+        isVacuuming_ = false;
+        isCapturingGhost_ = false;
+        return;
+    }
+
+    isVacuuming_ = input->MousePress(kVacuumMouseKey);
+    isCapturingGhost_ = false;
+    if (!isVacuuming_) {
+        return;
+    }
+
+    EnsureVacuumVisuals();
+
+    constexpr float kCycleMax = 1.0f;
+    vacuumAnimPhase_ += kVacuumAnimSpeed;
+    if (vacuumAnimPhase_ >= kCycleMax) {
+        vacuumAnimPhase_ -= kCycleMax;
+    }
+
+    auto* cameraMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = cameraMgr ? cameraMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    Vector3 camPos = camera->GetPosition();
+    Vector3 muzzlePos = GetMuzzleWorldPosition();
+    Vector3 aimPos = GetAimTargetPosition();
+
+    Vector3 aimDir = { aimPos.x - camPos.x, aimPos.y - camPos.y, aimPos.z - camPos.z };
+    float aimLen = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y + aimDir.z * aimDir.z);
+    if (aimLen > kEpsilon) {
+        aimDir.x /= aimLen;
+        aimDir.y /= aimLen;
+        aimDir.z /= aimLen;
+    } else {
+        aimDir = direction_;
+    }
+
+    // 1. シーン上の全GameObjectを直接走査し、吸引範囲内または吸引開始済みの全幽霊（AiState::Ghost）を漏れなく同時捕捉・成仏
+    float effectiveMaxRange = kVacuumMaxRange + vacuumRangeBonus_;
+    float effectiveConeCos = (std::max)(kMinVacuumConeCos, kVacuumConeCosThreshold - vacuumConeCosBonus_);
+    float effectiveCharge = kVacuumChargePerFrame * vacuumSpeedMultiplier_;
+
+    int exorcisedThisFrame = 0;
+    if (auto* scene = dynamic_cast<GenericScene*>(SceneManager::GetInstance()->GetCurrentScene())) {
+        const auto& gameObjects = scene->GetGameObjects();
+        for (const auto& obj : gameObjects) {
+            if (!obj || !obj->IsVisible()) {
+                continue;
+            }
+            auto* enemy = obj->GetComponent<EnemyAIScript>();
+            if (!enemy || !enemy->IsGhost()) {
+                continue;
+            }
+
+            Vector3 ghostPos = obj->GetPosition();
+            Vector3 toGhost = { ghostPos.x - camPos.x, ghostPos.y - camPos.y, ghostPos.z - camPos.z };
+            float distToCam = std::sqrt(toGhost.x * toGhost.x + toGhost.y * toGhost.y + toGhost.z * toGhost.z);
+            bool alreadyLocked = (enemy->GetVacuumProgress() > 0.01f);
+
+            if (!alreadyLocked && (distToCam > effectiveMaxRange || distToCam < kEpsilon)) {
+                continue;
+            }
+
+            float dot = (distToCam > kEpsilon)
+                ? ((toGhost.x * aimDir.x + toGhost.y * aimDir.y + toGhost.z * aimDir.z) / distToCam)
+                : 1.0f;
+
+            if (alreadyLocked || distToCam <= kVacuumNearAutoCatchDist || dot >= effectiveConeCos) {
+                isCapturingGhost_ = true;
+                bool exorcised = enemy->ApplyVacuumPull(muzzlePos, effectiveCharge);
+                if (exorcised) {
+                    absorbedGhostCount_++;
+                    exorcisedThisFrame++;
+                    GainExp(kExpPerGhostAbsorb);
+                }
+            }
+        }
+    }
+
+    if (exorcisedThisFrame > 0) {
+        gunRecoilProgress_ = (std::max)(gunRecoilProgress_, kExorciseRecoilBoost);
+        ShakeCamera(kExorciseShakeIntensity, kExorciseShakeDuration);
+
+        // 同時・連続吸収した全幽霊分のEXPを合算してHUDポップアップ表示
+        absorbComboCount_ += exorcisedThisFrame;
+        absorbComboExp_ += exorcisedThisFrame * kExpPerGhostAbsorb;
+        absorbComboTimer_ = kAbsorbComboWindowFrames;
+
+        if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+            constexpr Vector4 kSoulPopupColor = { 0.35f, 0.98f, 1.0f, 1.0f };
+            char popBuf[96];
+            if (absorbComboCount_ <= 1) {
+                snprintf(popBuf, sizeof(popBuf), "+%d EXP  SOUL ABSORBED!", absorbComboExp_);
+            } else {
+                snprintf(popBuf, sizeof(popBuf), "+%d EXP  (x%d SOULS ABSORBED!)", absorbComboExp_, absorbComboCount_);
+            }
+            phaseCtrl->TriggerHudPopup(popBuf, kSoulPopupColor);
+        }
+    }
+
+    // 2. 銃口前方に展開する3連3D吸引ボルテックスリング（外から銃口へ連続収縮）のTransform更新
+    Vector3 muzzleToAim = { aimPos.x - muzzlePos.x, aimPos.y - muzzlePos.y, aimPos.z - muzzlePos.z };
+    float mLen = std::sqrt(muzzleToAim.x * muzzleToAim.x + muzzleToAim.y * muzzleToAim.y + muzzleToAim.z * muzzleToAim.z);
+    if (mLen > kEpsilon) {
+        muzzleToAim.x /= mLen;
+        muzzleToAim.y /= mLen;
+        muzzleToAim.z /= mLen;
+    } else {
+        muzzleToAim = aimDir;
+    }
+
+    float hLen = std::sqrt(muzzleToAim.x * muzzleToAim.x + muzzleToAim.z * muzzleToAim.z);
+    float ringYaw = std::atan2(muzzleToAim.x, muzzleToAim.z);
+    float ringPitch = -std::atan2(muzzleToAim.y, hLen > kEpsilon ? hLen : kEpsilon);
+
+    constexpr float kRingPhaseStep = 1.0f / static_cast<float>(kVacuumVortexRingCount);
+    for (int i = 0; i < kVacuumVortexRingCount; ++i) {
+        if (!vacuumVortexRings_[i]) continue;
+
+        // t: 0.0 (前方出現) -> 1.0 (銃口先端へ吸い込まれ収束)
+        float t = std::fmod(vacuumAnimPhase_ + static_cast<float>(i) * kRingPhaseStep, kCycleMax);
+        float invT = 1.0f - t;
+
+        float dist = kVacuumVortexMinDist + (kVacuumVortexMaxDist - kVacuumVortexMinDist) * invT;
+        float scale = kVacuumVortexMinScale + (kVacuumVortexMaxScale - kVacuumVortexMinScale) * invT;
+        float alpha = std::sin(t * kPi) * (isCapturingGhost_ ? 0.85f : 0.52f);
+
+        Vector3 ringPos = {
+            muzzlePos.x + muzzleToAim.x * dist,
+            muzzlePos.y + muzzleToAim.y * dist,
+            muzzlePos.z + muzzleToAim.z * dist
+        };
+
+        Vector4 ringColor = isCapturingGhost_
+            ? Vector4{ 0.45f, 1.0f, 1.0f, alpha }
+            : Vector4{ 0.25f, 0.85f, 1.0f, alpha };
+
+        vacuumVortexRings_[i]->SetPosition(ringPos);
+        vacuumVortexRings_[i]->SetRotate({ ringPitch, ringYaw, t * kTwoPi });
+        vacuumVortexRings_[i]->SetScale({ scale, scale, 1.0f });
+        vacuumVortexRings_[i]->SetColor(ringColor);
+        vacuumVortexRings_[i]->Update();
+    }
 }
 
 void PlayerControllerScript::Draw() {
@@ -1063,8 +1470,26 @@ void PlayerControllerScript::Draw() {
         if (muzzleFlameCore_) muzzleFlameCore_->Draw("white");
         if (muzzleCoreDisc_) muzzleCoreDisc_->Draw("white");
     }
+}
 
-    // 銃口専用GPU硝煙（マズルガス）パーティクルの描画
+/// <summary>
+/// 全ビル・床などの不透明オブジェクト描画完了後（GamePhaseControllerScript::Draw）に呼び出し、
+/// 半透明の吸引ボルテックスリングおよびマズル硝煙パーティクルを正しい描画順で合成描画します。
+/// </summary>
+void PlayerControllerScript::DrawVacuumVortex3D() {
+    if (isDead_ || isMelting_) return;
+    if (!isAutoMoving_ || !isGunVisible_) return;
+
+    // 1. Step 1-5: 右クリック長押し中の銃口3D吸引ボルテックスリング描画 (半透明 Object3D_Alpha)
+    if (isVacuuming_) {
+        for (int i = 0; i < kVacuumVortexRingCount; ++i) {
+            if (vacuumVortexRings_[i]) {
+                vacuumVortexRings_[i]->Draw("white", "", "Object3D_Alpha");
+            }
+        }
+    }
+
+    // 2. 銃口専用GPU硝煙（マズルガス）パーティクルの描画
     if (muzzleGpuParticle_) {
         if (auto engine = EngineResource::GetEngine()) {
             if (auto dxCommon = engine->GetDxCommon()) {
@@ -1090,14 +1515,43 @@ void PlayerControllerScript::EnsureDamageVisuals() {
 }
 
 void PlayerControllerScript::Draw2D() {
+    // レベルアップ3択選択中は戦闘用2D演出（吸引リング・ダメージ演出）を非表示にしてUI重なりを防止
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsLevelUpChoosing()) {
+            return;
+        }
+    }
+
+    constexpr float kScreenWidth = static_cast<float>(WindowApp::kClientWidth);
+    constexpr float kScreenHeight = static_cast<float>(WindowApp::kClientHeight);
+
+    // Step 1-5: 右クリック吸引中の2Dレティクル外周サクションリング描画
+    if (isAutoMoving_ && isVacuuming_) {
+        EnsureVacuumVisuals();
+        if (vacuumReticleRing_) {
+            constexpr float kHalf = 0.5f;
+            float centerX = kScreenWidth * kHalf;
+            float centerY = kScreenHeight * kHalf;
+            float outerR = kVacuumReticleBaseRadius + (1.0f - vacuumAnimPhase_) * kVacuumReticlePulseAmp;
+            float innerR = (std::max)(1.0f, outerR - kVacuumReticleThickness);
+
+            Vector4 suctionColor = isCapturingGhost_
+                ? Vector4{ 0.45f, 1.0f, 1.0f, 0.88f }
+                : Vector4{ 0.25f, 0.85f, 1.0f, 0.48f };
+
+            vacuumReticleRing_->SetRadii(outerR, innerR);
+            vacuumReticleRing_->GetMaterialData()->color = suctionColor;
+            vacuumReticleRing_->SetPosition({ centerX - outerR, centerY - outerR, 0.0f });
+            vacuumReticleRing_->Update();
+            vacuumReticleRing_->Draw("white", true);
+        }
+    }
+
     if (damageFlashAlpha_ <= 0.005f && damageVignetteAlpha_ <= 0.005f) {
         return;
     }
 
     EnsureDamageVisuals();
-
-    constexpr float kScreenWidth = static_cast<float>(WindowApp::kClientWidth);
-    constexpr float kScreenHeight = static_cast<float>(WindowApp::kClientHeight);
 
     // 1. 被弾瞬間の全画面赤フラッシュ（被弾インパクトの強調）
     if (damageFlashSprite_ && damageFlashAlpha_ > 0.005f) {
@@ -1119,5 +1573,199 @@ void PlayerControllerScript::Draw2D() {
         };
         damageVignetteSprite_->Update();
         damageVignetteSprite_->Draw("damageVignette", true);
+    }
+}
+
+void PlayerControllerScript::GainExp(int amount) {
+    if (amount <= 0) return;
+
+    // 一気に増やさず待機キューへ積み、毎フレーム1ずつゲージへ加算する
+    pendingExpToAdd_ += amount;
+}
+
+void PlayerControllerScript::ProcessExpTick() {
+    if (pendingExpToAdd_ <= 0 || pendingLevelUps_ > 0) {
+        return;
+    }
+
+    int addStep = (std::min)(pendingExpToAdd_, kExpTickAddPerFrame);
+    currentExp_ += addStep;
+    pendingExpToAdd_ -= addStep;
+
+    if (currentExp_ >= expToNextLevel_) {
+        currentExp_ -= expToNextLevel_;
+        playerLevel_++;
+        if (expToNextLevel_ <= kMaxExpToNextLevel / kExpNextLevelMultiplier) {
+            expToNextLevel_ *= kExpNextLevelMultiplier;
+        } else {
+            expToNextLevel_ = kMaxExpToNextLevel;
+        }
+        pendingLevelUps_++;
+    }
+}
+
+int PlayerControllerScript::GetUpgradeLevel(UpgradeType type) const {
+    int idx = static_cast<int>(type);
+    if (idx < 0 || idx >= kUpgradeTypeCount) return 0;
+    return upgradeLevels_[idx];
+}
+
+int PlayerControllerScript::GetUpgradeMaxLevel(UpgradeType type) const {
+    switch (type) {
+    case UpgradeType::MultiShot:       return kMaxLvMultiShot;
+    case UpgradeType::PiercingLaser:   return kMaxLvPiercing;
+    case UpgradeType::HighPower:       return kMaxLvHighPower;
+    case UpgradeType::RapidFire:       return kMaxLvRapidFire;
+    case UpgradeType::ExtendedMag:     return kMaxLvExtendedMag;
+    case UpgradeType::QuickReload:     return kMaxLvQuickReload;
+    case UpgradeType::ArmorRepair:     return kMaxLvArmorRepair;
+    case UpgradeType::SoulVacuumBoost: return kMaxLvSoulVacuum;
+    default:                           return 1;
+    }
+}
+
+PlayerControllerScript::UpgradeCardInfo PlayerControllerScript::GetUpgradeCardInfo(UpgradeType type) const {
+    constexpr Vector4 kWeaponGold   = { 1.00f, 0.82f, 0.22f, 1.0f };
+    constexpr Vector4 kPowerRed     = { 1.00f, 0.30f, 0.26f, 1.0f };
+    constexpr Vector4 kRapidOrange  = { 1.00f, 0.58f, 0.16f, 1.0f };
+    constexpr Vector4 kHandleCyan   = { 0.22f, 0.88f, 1.00f, 1.0f };
+    constexpr Vector4 kSurviveGreen = { 0.26f, 0.94f, 0.48f, 1.0f };
+    constexpr Vector4 kVacuumPurple = { 0.82f, 0.36f, 1.00f, 1.0f };
+
+    UpgradeCardInfo info{};
+    info.type = type;
+    info.currentLevel = GetUpgradeLevel(type);
+    info.maxLevel = GetUpgradeMaxLevel(type);
+
+    switch (type) {
+    case UpgradeType::MultiShot:
+        info.title = "マルチショット";
+        info.categoryLabel = "武器変化";
+        info.description = "同時発射弾数 +1 発\n扇状レーザーショットへ進化";
+        info.themeColor = kWeaponGold;
+        break;
+    case UpgradeType::PiercingLaser:
+        info.title = "貫通レーザー";
+        info.categoryLabel = "武器変化";
+        info.description = "敵貫通回数 +1\n命中しても奥の敵まで連続貫通";
+        info.themeColor = kWeaponGold;
+        break;
+    case UpgradeType::HighPower:
+        info.title = "ハイパワー弾";
+        info.categoryLabel = "火力強化";
+        info.description = "弾丸ダメージ +1 (HS2倍)\n高出力レーザーへ強化";
+        info.themeColor = kPowerRed;
+        break;
+    case UpgradeType::RapidFire:
+        info.title = "ラピッドファイア";
+        info.categoryLabel = "連射強化";
+        info.description = "連射速度UP ＆ 弾速 +15%\n超高速レーザーシャワー化";
+        info.themeColor = kRapidOrange;
+        break;
+    case UpgradeType::ExtendedMag:
+        info.title = "拡張マガジン";
+        info.categoryLabel = "取り回し";
+        info.description = "最大装弾数 +20 発\nさらに即座に全弾フル装填";
+        info.themeColor = kHandleCyan;
+        break;
+    case UpgradeType::QuickReload:
+        info.title = "クイックリロード";
+        info.categoryLabel = "取り回し";
+        info.description = "リロード時間 -22% 短縮\n停止リスクを大幅に軽減";
+        info.themeColor = kHandleCyan;
+        break;
+    case UpgradeType::ArmorRepair:
+        info.title = "アーマー＆リペア";
+        info.categoryLabel = "生存強化";
+        info.description = "最大HP +3 ＆ HP +5 回復\n耐久力を上げて即戦線復帰";
+        info.themeColor = kSurviveGreen;
+        break;
+    case UpgradeType::SoulVacuumBoost:
+        info.title = "ソウルバキューム改";
+        info.categoryLabel = "吸引特化";
+        info.description = "幽霊吸引速度 +45% ＆ 射程拡大\n除霊とEXP回収を一気に加速";
+        info.themeColor = kVacuumPurple;
+        break;
+    default:
+        break;
+    }
+    return info;
+}
+
+std::vector<PlayerControllerScript::UpgradeType> PlayerControllerScript::RollUpgradeChoices() const {
+    std::vector<UpgradeType> candidates;
+    candidates.reserve(kUpgradeTypeCount);
+    for (int i = 0; i < kUpgradeTypeCount; ++i) {
+        UpgradeType t = static_cast<UpgradeType>(i);
+        if (GetUpgradeLevel(t) < GetUpgradeMaxLevel(t)) {
+            candidates.push_back(t);
+        }
+    }
+
+    // すべてMAXレベル到達済みの場合のフォールバック（繰り返し回復・火力枠）
+    if (candidates.empty()) {
+        candidates = { UpgradeType::ArmorRepair, UpgradeType::HighPower, UpgradeType::ExtendedMag };
+    }
+
+    static std::mt19937 sRng(std::random_device{}());
+    std::shuffle(candidates.begin(), candidates.end(), sRng);
+
+    if (static_cast<int>(candidates.size()) > kUpgradeChoiceCount) {
+        candidates.resize(kUpgradeChoiceCount);
+    }
+    return candidates;
+}
+
+void PlayerControllerScript::ApplyUpgradeChoice(UpgradeType type) {
+    if (pendingLevelUps_ > 0) {
+        pendingLevelUps_--;
+    }
+
+    int idx = static_cast<int>(type);
+    if (idx < 0 || idx >= kUpgradeTypeCount) return;
+
+    int maxLv = GetUpgradeMaxLevel(type);
+    if (upgradeLevels_[idx] == 0) {
+        ownedUpgradeOrder_.push_back(type);
+    }
+    if (upgradeLevels_[idx] < maxLv) {
+        upgradeLevels_[idx]++;
+    }
+
+    switch (type) {
+    case UpgradeType::MultiShot:
+        multiShotCount_ = kDefaultMultiShotCount + upgradeLevels_[idx];
+        break;
+    case UpgradeType::PiercingLaser:
+        bulletPierceCount_ = kDefaultPierceCount + upgradeLevels_[idx];
+        break;
+    case UpgradeType::HighPower:
+        bulletDamage_ = kDefaultBulletDamage + upgradeLevels_[idx];
+        break;
+    case UpgradeType::RapidFire:
+        shotInterval_ = (std::max)(kMinShotIntervalFrames, kDefaultShotInterval - upgradeLevels_[idx]);
+        bulletSpeed_ *= kRapidFireBulletSpeedBoost;
+        break;
+    case UpgradeType::ExtendedMag:
+        maxAmmo_ += kExtendedMagBonusAmmo;
+        ammo_ = maxAmmo_;
+        reloadTimer_ = 0;
+        break;
+    case UpgradeType::QuickReload:
+        reloadDuration_ = (std::max)(
+            kMinReloadDurationFrames,
+            static_cast<int>(static_cast<float>(reloadDuration_) * kQuickReloadTimeFactor));
+        break;
+    case UpgradeType::ArmorRepair:
+        maxHp_ += kArmorRepairMaxHpBonus;
+        hp_ = (std::min)(maxHp_, hp_ + kArmorRepairHealAmount);
+        break;
+    case UpgradeType::SoulVacuumBoost:
+        vacuumSpeedMultiplier_ = 1.0f + static_cast<float>(upgradeLevels_[idx]) * kVacuumSpeedBoostStep;
+        vacuumRangeBonus_ = static_cast<float>(upgradeLevels_[idx]) * kVacuumRangeBoostStep;
+        vacuumConeCosBonus_ = static_cast<float>(upgradeLevels_[idx]) * kVacuumConeCosReductionStep;
+        break;
+    default:
+        break;
     }
 }

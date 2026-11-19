@@ -38,10 +38,10 @@ void CylinderObject::Update() {
     materialData_->uvtransform = uv;
 }
 
-void CylinderObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
+void CylinderObject::Draw(const std::string& textureKey, const std::string& envMapKey, const std::string& psoKey) {
     // 描画処理は共通描画クラス Object3DDrawer を通して実行
     uint32_t indexCount = subdivision_ * kIndicesPerSegment;
-    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, envMapKey);
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, indexCount, textureKey, envMapKey, psoKey);
 }
 
 void CylinderObject::CreateMesh() {

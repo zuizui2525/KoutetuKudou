@@ -1,6 +1,7 @@
 #include "Scripts/Enemy/EnemyAIScript.h"
 #include "Scripts/Player/BulletScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
+#include "Scripts/Director/GamePhaseControllerScript.h"
 #include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Component/GameObject.h"
 #include "Engine/Component/ScriptRegistry.h"
@@ -247,6 +248,19 @@ void EnemyAIScript::Draw() {
 /// </summary>
 void EnemyAIScript::Draw2D() {
     if (isDead_ || !owner_ || !owner_->IsVisible()) return;
+
+    // レベルアップ3択選択中はターゲットサイト・脅威レーダー・幽霊ジャミングを非表示にしてUI重なりを防止
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsLevelUpChoosing()) {
+            return;
+        }
+    }
+
+    // 幽霊化（AiState::Ghost）中はターゲットサイト・HPバーを消し、照準を塞ぐ視界ジャミング演出を描画
+    if (IsGhost()) {
+        DrawGhostJamming2D();
+        return;
+    }
 
     // トランスフォーマー風アーケードターゲットサイト＆円形八角形HPバーを描画（2Dパス）
     DrawTargetSight();
@@ -579,8 +593,15 @@ void EnemyAIScript::DrawThreatIndicator() {
 /// 互いに反対方向へ押し離す分離斥力（Boids Separation / Soft Pushout）を適用して敵同士の重なりを解消します。
 /// </summary>
 void EnemyAIScript::ApplyEnemySeparation(Vector3& pos) {
+    float sepDist = IsGhost() ? kGhostSeparationDistance : kEnemySeparationDistance;
+    float minSepSq = sepDist * sepDist;
+
     for (auto* other : sActiveEnemies_) {
         if (!other || other == this || other->isDead_ || !other->owner_ || !other->owner_->IsVisible()) {
+            continue;
+        }
+        // 生存敵と幽霊は互いに干渉しない（同状態同士のみ分離）
+        if (other->IsGhost() != this->IsGhost()) {
             continue;
         }
 
@@ -588,11 +609,10 @@ void EnemyAIScript::ApplyEnemySeparation(Vector3& pos) {
         float dx = pos.x - otherPos.x;
         float dz = pos.z - otherPos.z;
         float distSq = dx * dx + dz * dz;
-        float minSepSq = kEnemySeparationDistance * kEnemySeparationDistance;
 
         if (distSq < minSepSq && distSq > kEpsilon) {
             float dist = std::sqrt(distSq);
-            float overlap = (kEnemySeparationDistance - dist) * kEnemySeparationPushForce;
+            float overlap = (sepDist - dist) * kEnemySeparationPushForce;
             float nx = dx / dist;
             float nz = dz / dist;
             pos.x += nx * overlap;
@@ -654,6 +674,13 @@ void EnemyAIScript::OnUpdate() {
         return;
     }
 
+    // レベルアップ3択選択中は敵AI・攻撃チャージ・幽霊寿命タイマーを完全一時停止
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsLevelUpChoosing()) {
+            return;
+        }
+    }
+
     // 被弾フラッシュの更新
     HandleHitFlash();
 
@@ -700,6 +727,12 @@ void EnemyAIScript::UpdateAI() {
     // 自機が走行戦闘中でない場合（ルート描画フェーズ中など）はAI行動（接近・攻撃）を停止
     auto* playerScript = targetObject_->GetComponent<PlayerControllerScript>();
     if (!playerScript || !playerScript->IsAutoMoving()) {
+        return;
+    }
+
+    // 幽霊化（AiState::Ghost）している場合は専用のカメラ前方浮遊追従を実行
+    if (IsGhost()) {
+        UpdateGhostState();
         return;
     }
 
@@ -861,6 +894,64 @@ void EnemyAIScript::UpdateAI() {
         pos.x += flyByDir_.x;
         pos.y += flyByDir_.y;
         pos.z += flyByDir_.z;
+    } else if (enemyType_ == EnemyType::RushSurround) {
+        // 【拘束ラッシュ360度包囲型 (RushSurround)】
+        // 湧いた方位（前方・側方・背後）を保ったまま自機周囲を緩やかに旋回包囲し、その場の上空へ跳躍して攻撃！
+        Vector3 prevPos = pos;
+
+        // 待機・チャージ中は包囲円上をゆっくりストレイフ旋回（壁にぶつかりそうなら旋回方向を反転）
+        if (aiState_ == AiState::Aiming || aiState_ == AiState::AttackCharge || aiState_ == AiState::Cooldown) {
+            float nextAngle = surroundAngle_ + kRushSurroundStrafeSpeed * surroundStrafeDir_;
+            Vector3 probePos = {
+                playerPos.x + std::sin(nextAngle) * kRushSurroundIdealDist,
+                kEnemyGroundYOffset,
+                playerPos.z + std::cos(nextAngle) * kRushSurroundIdealDist
+            };
+            if (IsNearBuilding(probePos, kWallCheckMargin)) {
+                surroundStrafeDir_ = -surroundStrafeDir_;
+            } else {
+                surroundAngle_ = nextAngle;
+            }
+        }
+
+        float targetY = kEnemyGroundYOffset;
+        float lerpSpeed = kRushSurroundLerpSpeed;
+        if (aiState_ == AiState::PounceStrike) {
+            targetY = kEnemyGroundYOffset + kRushSurroundAirborneHeight;
+            lerpSpeed = kAirborneLeapSpeed;
+        }
+
+        Vector3 targetPos = {
+            playerPos.x + std::sin(surroundAngle_) * kRushSurroundIdealDist,
+            targetY,
+            playerPos.z + std::cos(surroundAngle_) * kRushSurroundIdealDist
+        };
+
+        pos.x += (targetPos.x - pos.x) * lerpSpeed;
+        pos.y += (targetPos.y - pos.y) * lerpSpeed;
+        pos.z += (targetPos.z - pos.z) * lerpSpeed;
+
+        if (aiState_ == AiState::PounceStrike) {
+            float hoverY = std::sin(markerPulseTimer_ * kAirborneHoverFrequency) * kAirborneHoverAmplitude;
+            pos.y += hoverY;
+            owner_->SetRotate({ pitch + kAirbornePitchTilt, yaw, 0.0f });
+        }
+
+        // 移動速度キャップ（ワープ防止）
+        Vector3 moveDelta = { pos.x - prevPos.x, pos.y - prevPos.y, pos.z - prevPos.z };
+        float moveDist = std::sqrt(moveDelta.x * moveDelta.x + moveDelta.y * moveDelta.y + moveDelta.z * moveDelta.z);
+        if (moveDist > kMaxEnemyFrameSpeed && moveDist > kEpsilon) {
+            float factor = kMaxEnemyFrameSpeed / moveDist;
+            pos.x = prevPos.x + moveDelta.x * factor;
+            pos.y = prevPos.y + moveDelta.y * factor;
+            pos.z = prevPos.z + moveDelta.z * factor;
+        }
+
+        // 敵同士の重なり防止＆壁からの押し戻し
+        ApplyEnemySeparation(pos);
+        Vector3 pushout = MapRendererScript::GetBuildingPushout(pos, kEnemyBodyRadius);
+        pos.x += pushout.x;
+        pos.z += pushout.z;
     } else {
         // 【定点・待ち伏せ型 (Ambush)】
         // トラップ円の周囲や物陰に陣取って迎撃。プレイヤーのルートやビルとの衝突・けいれんは物理的にゼロ！
@@ -869,8 +960,16 @@ void EnemyAIScript::UpdateAI() {
     // 4. ステートマシン（Aiming → AttackCharge → PounceStrike → UnavoidableAttack → Cooldown）
     switch (aiState_) {
     case AiState::Aiming: {
-        // Ambush型用の感知移行（ParallelChaser型は上記で並走タイマー制御）
-        if (enemyType_ != EnemyType::ParallelChaser) {
+        // RushSurround型は出現直後のわずかな猶予後に速やかにチャージ開始
+        if (enemyType_ == EnemyType::RushSurround) {
+            rushAimDelayTimer_++;
+            if (rushAimDelayTimer_ >= kRushSurroundAimDelayFrames && distToPlayer <= kAmbushPerceptionRange && HasLineOfSightToPlayer()) {
+                aiState_ = AiState::AttackCharge;
+                attackGauge_ = 0.0f;
+            }
+        }
+        // Ambush / FlyBy 型用の感知移行（ParallelChaser型は並走タイマー制御）
+        else if (enemyType_ != EnemyType::ParallelChaser) {
             if (distToPlayer <= kAmbushPerceptionRange && HasLineOfSightToPlayer()) {
                 aiState_ = AiState::AttackCharge;
                 attackGauge_ = 0.0f;
@@ -1049,7 +1148,7 @@ void EnemyAIScript::FireBullet() {
 /// <param name="amount">基礎ダメージ量</param>
 /// <param name="isCritical">弱点部位判定</param>
 void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
-    if (isDead_) return;
+    if (isDead_ || IsGhost()) return;
 
     isVaulting_ = false; // 飛び越え中に被弾した場合も即座に解除
 
@@ -1099,12 +1198,15 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
             owner_->SetScale(originalScale_);
         }
 
-        // カウンター阻止成功の強力なカメラシェイクと被弾火花
-        ShakeCamera(0.12f, 0.18f);
+        // カウンター阻止成功のカメラシェイクとコンパクトな阻止エフェクト（周囲の敵を隠さないサイズ）
+        constexpr float kCancelShakeIntensity = 0.12f;
+        constexpr float kCancelShakeDuration = 0.18f;
+        constexpr float kCancelImpactScale = 0.65f;
+        ShakeCamera(kCancelShakeIntensity, kCancelShakeDuration);
         if (owner_) {
             EffectPlayParam cancelParam{};
             cancelParam.position = owner_->GetPosition();
-            cancelParam.scale = { 2.5f, 2.5f, 2.5f };
+            cancelParam.scale = { kCancelImpactScale, kCancelImpactScale, kCancelImpactScale };
             cancelParam.isLoop = false;
             if (auto* effectMgr = EffectManager::GetInstance()) {
                 effectMgr->PlayEffect3D(kEffectHitImpact, cancelParam);
@@ -1114,10 +1216,16 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
 
     if (hp_ <= 0) {
         hp_ = 0;
-        isDead_ = true;
-        if (owner_) {
-            owner_->SetScale(originalScale_);
-            owner_->SetVisible(false);
+        if (isBoss_) {
+            // ボス敵は撃破と同時に消滅
+            isDead_ = true;
+            if (owner_) {
+                owner_->SetScale(originalScale_);
+                owner_->SetVisible(false);
+            }
+        } else {
+            // 通常敵・ラッシュ敵は撃破後に幽霊化（AiState::Ghost）してカメラ前方へ取り憑く！
+            EnterGhostState();
         }
     }
 }
@@ -1126,6 +1234,8 @@ void EnemyAIScript::TakeDamage(int amount, bool isCritical) {
 /// 被弾時点滅タイマーをカウントダウンし、満了時にメッシュの色を元のマテリアルカラーへ戻します。
 /// </summary>
 void EnemyAIScript::HandleHitFlash() {
+    if (IsGhost()) return;
+
     if (hitFlashTimer_ > 0) {
         hitFlashTimer_--;
         if (hitFlashTimer_ == 0 && owner_) {
@@ -1144,9 +1254,388 @@ void EnemyAIScript::HandleHitFlash() {
     }
 }
 
+/// <summary>
+/// 敵撃破時に呼び出され、半透明ゴースト状態（AiState::Ghost）へ遷移させます。
+/// </summary>
+void EnemyAIScript::EnterGhostState() {
+    aiState_ = AiState::Ghost;
+    attackGauge_ = 0.0f;
+    strikeVulnerableTimer_ = 0;
+    hitFlashTimer_ = 0;
+    hitSquashTimer_ = 0;
+    isVaulting_ = false;
+
+    ghostLifeTimer_ = kGhostLifeDuration;
+    ghostAnimTimer_ = 0.0f;
+    ghostSlotIndex_ = (sNextGhostSlot_++) % 5;
+    constexpr float kSlotPhaseStep = 1.256637f; // 2*PI / 5
+    ghostPhaseOffset_ = static_cast<float>(ghostSlotIndex_) * kSlotPhaseStep;
+    vacuumProgress_ = 0.0f;
+    isBeingVacuumed_ = false;
+    vacuumActiveFrames_ = 0;
+
+    if (owner_) {
+        // 幽霊化瞬間の魂離脱スパーク
+        if (auto* effectMgr = EffectManager::GetInstance()) {
+            effectMgr->PlayGPUEffect(owner_->GetPosition(), kGhostSpawnSparkCount);
+        }
+
+        // 半透明シアンパープル発光マテリアル（CubeObject::Draw が自動で Object3D_Alpha へ切替）
+        if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
+            mr->SetLightingMode(0);
+            mr->SetColor(kGhostColorCyan);
+        }
+
+        float ghostScale = kEnemyBaseScale * kGhostBaseScaleRatio;
+        owner_->SetScale({ ghostScale, ghostScale, ghostScale });
+    }
+}
+
+bool EnemyAIScript::ApplyVacuumPull(const Vector3& muzzlePos, float chargeAmount) {
+    if (!IsGhost() || !owner_) return false;
+
+    constexpr int kActiveHoldFrames = 2;
+    vacuumActiveFrames_ = kActiveHoldFrames;
+    isBeingVacuumed_ = true;
+    vacuumTargetMuzzlePos_ = muzzlePos;
+    vacuumProgress_ = std::clamp(vacuumProgress_ + chargeAmount, 0.0f, 1.0f);
+
+    // 吸引中は一定フレーム間隔で霊魂から収束スパークを発生
+    if (static_cast<int>(ghostAnimTimer_) % kGhostVacuumSparkInterval == 0) {
+        if (auto* effectMgr = EffectManager::GetInstance()) {
+            effectMgr->PlayGPUEffect(owner_->GetPosition(), kGhostVacuumStreamSparkCount);
+        }
+    }
+
+    // 吸引ゲージ満タンで銃口へ吸い込まれ成仏・完全消滅
+    if (vacuumProgress_ >= 1.0f) {
+        if (auto* effectMgr = EffectManager::GetInstance()) {
+            effectMgr->PlayGPUEffect(muzzlePos, kGhostExorciseBurstCount);
+        }
+        isDead_ = true;
+        owner_->SetVisible(false);
+        return true;
+    }
+
+    return false;
+}
+
+/// <summary>
+/// 幽霊状態（AiState::Ghost）中のカメラ前方8の字浮遊追従、右クリック吸引時の銃口スパイラル引き寄せ、および霊魂ゆらぎアニメーションを更新します。
+/// </summary>
+void EnemyAIScript::UpdateGhostState() {
+    if (!owner_) return;
+
+    // 吸引中は自然消滅タイマーの進行を止め、吸引解除時はゲージを緩やかに減衰
+    if (vacuumActiveFrames_ > 0) {
+        vacuumActiveFrames_--;
+        isBeingVacuumed_ = true;
+    } else {
+        isBeingVacuumed_ = false;
+        if (vacuumProgress_ > 0.0f) {
+            vacuumProgress_ = (std::max)(0.0f, vacuumProgress_ - kGhostVacuumDecaySpeed);
+        }
+        ghostLifeTimer_--;
+        if (ghostLifeTimer_ <= 0) {
+            // 自然成仏して消滅
+            isDead_ = true;
+            owner_->SetVisible(false);
+            return;
+        }
+    }
+
+    ghostAnimTimer_ += 1.0f;
+
+    auto* camMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    Vector3 camPos = camera->GetPosition();
+    Vector3 camRot = camera->GetRotation();
+    Matrix4x4 rotMat = Math::MakeRotateMatrix(camRot.x, camRot.y, camRot.z);
+    Vector3 camRight   = { rotMat.m[0][0], rotMat.m[0][1], rotMat.m[0][2] };
+    Vector3 camUp      = { rotMat.m[1][0], rotMat.m[1][1], rotMat.m[1][2] };
+    Vector3 camForward = { rotMat.m[2][0], rotMat.m[2][1], rotMat.m[2][2] };
+
+    // 8の字リサージュ曲線でカメラ前方の視界をゆらゆら横切るターゲット座標
+    float swayX = std::sin(ghostAnimTimer_ * kGhostSwayFreqX + ghostPhaseOffset_) * kGhostSwayAmpX;
+    float swayY = std::sin(ghostAnimTimer_ * kGhostSwayFreqY + ghostPhaseOffset_) * kGhostSwayAmpY;
+    float forwardDist = kGhostHauntDist + static_cast<float>(ghostSlotIndex_ % 3) * kGhostHauntDistStep;
+
+    Vector3 hauntPos = {
+        camPos.x + camForward.x * forwardDist + camRight.x * swayX + camUp.x * swayY,
+        camPos.y + camForward.y * forwardDist + camRight.y * swayX + camUp.y * swayY,
+        camPos.z + camForward.z * forwardDist + camRight.z * swayX + camUp.z * swayY
+    };
+
+    Vector3 pos = owner_->GetPosition();
+    if (isBeingVacuumed_ || vacuumProgress_ > 0.01f) {
+        // 吸引ゲージに応じて本来の浮遊位置から銃口（vacuumTargetMuzzlePos_）へ渦巻き状に引き寄せる
+        float swirlAngle = ghostAnimTimer_ * kGhostVacuumSwirlSpeed + ghostPhaseOffset_;
+        float swirlR = kGhostVacuumSwirlRadius * (1.0f - vacuumProgress_);
+        Vector3 pullTarget = {
+            vacuumTargetMuzzlePos_.x + (camRight.x * std::cos(swirlAngle) + camUp.x * std::sin(swirlAngle)) * swirlR,
+            vacuumTargetMuzzlePos_.y + (camRight.y * std::cos(swirlAngle) + camUp.y * std::sin(swirlAngle)) * swirlR,
+            vacuumTargetMuzzlePos_.z + (camRight.z * std::cos(swirlAngle) + camUp.z * std::sin(swirlAngle)) * swirlR
+        };
+        Vector3 targetPos = {
+            hauntPos.x + (pullTarget.x - hauntPos.x) * vacuumProgress_,
+            hauntPos.y + (pullTarget.y - hauntPos.y) * vacuumProgress_,
+            hauntPos.z + (pullTarget.z - hauntPos.z) * vacuumProgress_
+        };
+        float pullLerp = kGhostVacuumPullLerpBase + (kGhostVacuumPullLerpMax - kGhostVacuumPullLerpBase) * vacuumProgress_;
+        pos.x += (targetPos.x - pos.x) * pullLerp;
+        pos.y += (targetPos.y - pos.y) * pullLerp;
+        pos.z += (targetPos.z - pos.z) * pullLerp;
+    } else {
+        pos.x += (hauntPos.x - pos.x) * kGhostFollowLerpSpeed;
+        pos.y += (hauntPos.y - pos.y) * kGhostFollowLerpSpeed;
+        pos.z += (hauntPos.z - pos.z) * kGhostFollowLerpSpeed;
+        // 他の幽霊と完全に1点へ重ならないよう緩やかに分離
+        ApplyEnemySeparation(pos);
+    }
+    owner_->SetPosition(pos);
+
+    // 不気味な自転＆吸引時の高速スピン・縮小変形
+    Vector3 rot = owner_->GetRotate();
+    float spinBoost = isBeingVacuumed_ ? (kGhostVacuumSpinBoost * (0.4f + vacuumProgress_)) : 0.0f;
+    rot.y += kGhostSpinSpeed + spinBoost;
+    rot.z = std::sin(ghostAnimTimer_ * kGhostSwayFreqX + ghostPhaseOffset_) * 0.35f;
+    owner_->SetRotate(rot);
+
+    float shrinkFactor = 1.0f - vacuumProgress_ * kGhostVacuumShrinkRatio;
+    float baseGhostScale = kEnemyBaseScale * kGhostBaseScaleRatio * shrinkFactor;
+    float stretch = std::sin(ghostAnimTimer_ * kGhostSwayFreqY + ghostPhaseOffset_) * kGhostWispStretchAmp;
+    owner_->SetScale({
+        baseGhostScale * (1.0f - stretch * 0.5f),
+        baseGhostScale * (1.0f + stretch),
+        baseGhostScale * (1.0f - stretch * 0.5f)
+    });
+
+    // シアン⇔パープル間の霊魂カラー明滅（吸引中は高輝度エレクトリックシアンホワイトへ発光）
+    if (auto* mr = owner_->GetComponent<MeshRendererComponent>()) {
+        constexpr float kColorWaveSpeed = 0.08f;
+        float blend = 0.5f + 0.5f * std::sin(ghostAnimTimer_ * kColorWaveSpeed + ghostPhaseOffset_);
+        Vector4 ghostColor = {
+            kGhostColorCyan.x + (kGhostColorPurple.x - kGhostColorCyan.x) * blend,
+            kGhostColorCyan.y + (kGhostColorPurple.y - kGhostColorCyan.y) * blend,
+            kGhostColorCyan.z + (kGhostColorPurple.z - kGhostColorCyan.z) * blend,
+            kGhostColorCyan.w + (kGhostColorPurple.w - kGhostColorCyan.w) * blend
+        };
+        if (vacuumProgress_ > 0.01f) {
+            constexpr Vector4 kVacuumGlowColor = { 0.65f, 1.0f, 1.0f, 0.78f };
+            ghostColor.x += (kVacuumGlowColor.x - ghostColor.x) * vacuumProgress_;
+            ghostColor.y += (kVacuumGlowColor.y - ghostColor.y) * vacuumProgress_;
+            ghostColor.z += (kVacuumGlowColor.z - ghostColor.z) * vacuumProgress_;
+            ghostColor.w += (kVacuumGlowColor.w - ghostColor.w) * vacuumProgress_;
+        }
+        if (ghostLifeTimer_ < kGhostFadeOutFrames) {
+            float fadeRatio = static_cast<float>(ghostLifeTimer_) / static_cast<float>(kGhostFadeOutFrames);
+            ghostColor.w *= fadeRatio;
+        }
+        mr->SetColor(ghostColor);
+    }
+}
+
+void EnemyAIScript::EnsureGhostJammingVisuals() {
+    if (!ghostJamDisc_) {
+        ghostJamDisc_ = std::make_unique<Circle2DObject>();
+        ghostJamDisc_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(ghostJamDisc_.get());
+    }
+    if (!ghostJamRing_) {
+        ghostJamRing_ = std::make_unique<Ring2DObject>();
+        ghostJamRing_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(ghostJamRing_.get());
+    }
+    for (int i = 0; i < kGhostGlitchLineCount; ++i) {
+        if (!ghostGlitchLines_[i]) {
+            ghostGlitchLines_[i] = std::make_unique<Line2DObject>();
+            ghostGlitchLines_[i]->Initialize();
+            SceneHierarchy::GetInstance()->Unregister(ghostGlitchLines_[i].get());
+        }
+    }
+    if (!vacuumGaugeRing_) {
+        vacuumGaugeRing_ = std::make_unique<Ring2DObject>();
+        vacuumGaugeRing_->Initialize();
+        SceneHierarchy::GetInstance()->Unregister(vacuumGaugeRing_.get());
+    }
+    for (int i = 0; i < kVacuumStreamLineCount; ++i) {
+        if (!vacuumStreamLines_[i]) {
+            vacuumStreamLines_[i] = std::make_unique<Line2DObject>();
+            vacuumStreamLines_[i]->Initialize();
+            SceneHierarchy::GetInstance()->Unregister(vacuumStreamLines_[i].get());
+        }
+    }
+}
+
+/// <summary>
+/// カメラ前方に取り憑いた幽霊による2D視界ジャミング（霊障シルエット＆グリッチノイズ走査線）を描画します。
+/// </summary>
+void EnemyAIScript::DrawGhostJamming2D() {
+    if (!owner_ || !IsGhost()) return;
+
+    auto* camMgr = CameraResource::GetCameraManager();
+    BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
+    if (!camera) return;
+
+    Vector3 ghostPos = owner_->GetPosition();
+    Vector3 camPos = camera->GetPosition();
+    Vector3 diff = { ghostPos.x - camPos.x, ghostPos.y - camPos.y, ghostPos.z - camPos.z };
+    float distToCam = std::sqrt(diff.x * diff.x + diff.y * diff.y + diff.z * diff.z);
+
+    // カメラ前方に取り憑いている距離（kGhostJamActivationDist 以内）のときのみ視界ジャミング発動
+    if (distToCam > kGhostJamActivationDist) return;
+
+    Matrix4x4 viewProj = Math::Multiply(camera->GetViewMatrix(), camera->GetProjectionMatrix());
+    float w = ghostPos.x * viewProj.m[0][3] + ghostPos.y * viewProj.m[1][3] + ghostPos.z * viewProj.m[2][3] + viewProj.m[3][3];
+    if (w <= kNearClipW) return;
+
+    float invW = 1.0f / w;
+    float ndcX = (ghostPos.x * viewProj.m[0][0] + ghostPos.y * viewProj.m[1][0] + ghostPos.z * viewProj.m[2][0] + viewProj.m[3][0]) * invW;
+    float ndcY = (ghostPos.x * viewProj.m[0][1] + ghostPos.y * viewProj.m[1][1] + ghostPos.z * viewProj.m[2][1] + viewProj.m[3][1]) * invW;
+
+    float screenX = (ndcX * kHalf + kHalf) * kScreenWidth;
+    float screenY = (-ndcY * kHalf + kHalf) * kScreenHeight;
+
+    if (screenX < -kScreenCullMargin || screenX > kScreenWidth + kScreenCullMargin ||
+        screenY < -kScreenCullMargin || screenY > kScreenHeight + kScreenCullMargin) {
+        return;
+    }
+
+    EnsureGhostJammingVisuals();
+
+    // 距離と寿命に応じたジャミング強度 (0.0 〜 1.0、吸引進行に伴いジャミング濃度を軽減)
+    float proximityFactor = std::clamp(1.0f - (distToCam - kGhostHauntDist) / (kGhostJamActivationDist - kGhostHauntDist), 0.25f, 1.0f);
+    float fadeFactor = (ghostLifeTimer_ < kGhostFadeOutFrames)
+        ? (static_cast<float>(ghostLifeTimer_) / static_cast<float>(kGhostFadeOutFrames))
+        : 1.0f;
+    float vacuumClearRatio = 1.0f - vacuumProgress_ * 0.72f;
+    float intensity = proximityFactor * fadeFactor * vacuumClearRatio;
+
+    constexpr float kPulseFreq = 0.14f;
+    constexpr float kPulseRadiusAmp = 8.0f;
+    constexpr float kDiscBaseAlpha = 0.34f;
+    constexpr float kRingBaseAlpha = 0.58f;
+    constexpr float kGlitchAlpha = 0.68f;
+
+    float pulse = std::sin(ghostAnimTimer_ * kPulseFreq + ghostPhaseOffset_);
+    float jamRadius = (kGhostJamDiscRadius + pulse * kPulseRadiusAmp) * (1.0f - vacuumProgress_ * 0.55f);
+
+    // 1. 照準・視界をボヤッと遮る霊障ダークパープルシルエット円盤
+    if (ghostJamDisc_) {
+        ghostJamDisc_->SetRadius(jamRadius);
+        ghostJamDisc_->GetMaterialData()->color = { 0.14f, 0.04f, 0.24f, kDiscBaseAlpha * intensity };
+        ghostJamDisc_->SetPosition({ screenX - jamRadius, screenY - jamRadius, 0.0f });
+        ghostJamDisc_->Update();
+        ghostJamDisc_->Draw("white", true);
+    }
+
+    // 2. 不気味に脈動する霊障オーラ外周リング
+    if (ghostJamRing_) {
+        ghostJamRing_->SetRadii(jamRadius, (std::max)(1.0f, jamRadius - kGhostJamRingThickness));
+        ghostJamRing_->GetMaterialData()->color = { 0.45f, 0.90f, 1.0f, kRingBaseAlpha * intensity };
+        ghostJamRing_->SetPosition({ screenX - jamRadius, screenY - jamRadius, 0.0f });
+        ghostJamRing_->Update();
+        ghostJamRing_->Draw("white", true);
+    }
+
+    // 3. 照準周辺をチカチカと走る霊障グリッチノイズ走査線
+    int glitchTick = static_cast<int>(ghostAnimTimer_ * 0.5f) + ghostSlotIndex_ * 7;
+    for (int i = 0; i < kGhostGlitchLineCount; ++i) {
+        if (!ghostGlitchLines_[i]) continue;
+
+        // 擬似ハッシュでフレームごとに不規則な水平グリッチ線を生成
+        int seed = (glitchTick * 31 + i * 17) & 0xFF;
+        float normA = static_cast<float>(seed) / 255.0f;
+        float normB = static_cast<float>((seed * 73) & 0xFF) / 255.0f;
+
+        float offsetY = (normA - 0.5f) * 2.0f * kGhostGlitchSpreadY;
+        float halfLen = (0.35f + 0.65f * normB) * kGhostGlitchHalfWidth;
+        float centerShiftX = (normB - 0.5f) * 32.0f;
+
+        Vector2 p0 = { screenX + centerShiftX - halfLen, screenY + offsetY };
+        Vector2 p1 = { screenX + centerShiftX + halfLen, screenY + offsetY };
+
+        bool isCyanLine = ((seed + i) % 2) == 0;
+        Vector4 lineColor = isCyanLine
+            ? Vector4{ 0.35f, 0.98f, 1.0f, kGlitchAlpha * intensity }
+            : Vector4{ 0.88f, 0.32f, 1.0f, kGlitchAlpha * intensity };
+
+        ghostGlitchLines_[i]->SetPoints(p0, p1);
+        ghostGlitchLines_[i]->SetThickness(kGhostGlitchThickness);
+        ghostGlitchLines_[i]->GetMaterialData()->color = lineColor;
+        ghostGlitchLines_[i]->Update();
+        ghostGlitchLines_[i]->Draw("white", true);
+    }
+
+    // 4. Step 1-5: 右クリック吸引中の2D収束ゲージリング＆銃口への霊魂ストリームライン描画
+    if (vacuumProgress_ > 0.01f) {
+        // 幽霊の中心へ向かってキュッと収縮する高輝度シアン吸引ゲージリング
+        if (vacuumGaugeRing_) {
+            float gaugeR = kVacuumGaugeRingStartRadius + (kVacuumGaugeRingEndRadius - kVacuumGaugeRingStartRadius) * vacuumProgress_;
+            float gaugeInnerR = (std::max)(1.0f, gaugeR - kVacuumGaugeRingThickness);
+            vacuumGaugeRing_->SetRadii(gaugeR, gaugeInnerR);
+            vacuumGaugeRing_->GetMaterialData()->color = { 0.40f, 1.0f, 1.0f, 0.92f };
+            vacuumGaugeRing_->SetPosition({ screenX - gaugeR, screenY - gaugeR, 0.0f });
+            vacuumGaugeRing_->Update();
+            vacuumGaugeRing_->Draw("white", true);
+        }
+
+        // 銃口ワールド座標をスクリーンへ投影（画面外やニアクリップ時は画面右下銃口基準位置へフォールバック）
+        constexpr float kDefaultMuzzleScreenX = 880.0f;
+        constexpr float kDefaultMuzzleScreenY = 580.0f;
+        float muzzleScreenX = kDefaultMuzzleScreenX;
+        float muzzleScreenY = kDefaultMuzzleScreenY;
+
+        float mw = vacuumTargetMuzzlePos_.x * viewProj.m[0][3] + vacuumTargetMuzzlePos_.y * viewProj.m[1][3] +
+                   vacuumTargetMuzzlePos_.z * viewProj.m[2][3] + viewProj.m[3][3];
+        if (mw > kNearClipW) {
+            float invMw = 1.0f / mw;
+            float mNdcX = (vacuumTargetMuzzlePos_.x * viewProj.m[0][0] + vacuumTargetMuzzlePos_.y * viewProj.m[1][0] +
+                           vacuumTargetMuzzlePos_.z * viewProj.m[2][0] + viewProj.m[3][0]) * invMw;
+            float mNdcY = (vacuumTargetMuzzlePos_.x * viewProj.m[0][1] + vacuumTargetMuzzlePos_.y * viewProj.m[1][1] +
+                           vacuumTargetMuzzlePos_.z * viewProj.m[2][1] + viewProj.m[3][1]) * invMw;
+            muzzleScreenX = (mNdcX * kHalf + kHalf) * kScreenWidth;
+            muzzleScreenY = (-mNdcY * kHalf + kHalf) * kScreenHeight;
+        }
+
+        constexpr float kStreamSpreadRadius = 26.0f;
+        constexpr float kStreamAngleStep = 2.0943951f; // 2*PI / 3
+        for (int i = 0; i < kVacuumStreamLineCount; ++i) {
+            if (!vacuumStreamLines_[i]) continue;
+
+            float angle = ghostAnimTimer_ * kGhostVacuumSwirlSpeed + static_cast<float>(i) * kStreamAngleStep;
+            float spread = kStreamSpreadRadius * (1.0f - vacuumProgress_ * 0.7f);
+            Vector2 startPt = {
+                screenX + std::cos(angle) * spread,
+                screenY + std::sin(angle) * spread
+            };
+            Vector2 endPt = { muzzleScreenX, muzzleScreenY };
+
+            float streamAlpha = (0.45f + 0.50f * vacuumProgress_);
+            Vector4 streamColor = (i % 2 == 0)
+                ? Vector4{ 0.35f, 0.98f, 1.0f, streamAlpha }
+                : Vector4{ 0.85f, 0.96f, 1.0f, streamAlpha };
+
+            vacuumStreamLines_[i]->SetPoints(startPt, endPt);
+            vacuumStreamLines_[i]->SetThickness(kVacuumStreamThickness);
+            vacuumStreamLines_[i]->GetMaterialData()->color = streamColor;
+            vacuumStreamLines_[i]->Update();
+            vacuumStreamLines_[i]->Draw("white", true);
+        }
+    }
+}
+
 void EnemyAIScript::SetBoss(bool isBoss) {
     isBoss_ = isBoss;
     maxHp_ = isBoss ? kDefaultBossHp : kDefaultNormalHp;
+    hp_ = maxHp_;
+}
+
+void EnemyAIScript::SetCustomMaxHp(int hp) {
+    constexpr int kMinHp = 1;
+    maxHp_ = (std::max)(kMinHp, hp);
     hp_ = maxHp_;
 }
 
@@ -1156,9 +1645,14 @@ void EnemyAIScript::OnInspectorGUI() {
     ImGui::TextColored(kHeaderColor, "【敵AIスクリプト設定】");
     ImGui::Separator();
 
-    const char* typeNames[] = { "横並走＆前方強襲 (ParallelChaser)", "定点待ち伏せ (Ambush)", "突撃すれ違い (FlyBy)" };
+    const char* typeNames[] = {
+        "横並走＆前方強襲 (ParallelChaser)",
+        "定点待ち伏せ (Ambush)",
+        "突撃すれ違い (FlyBy)",
+        "拘束ラッシュ包囲 (RushSurround)"
+    };
     int currentTypeIndex = static_cast<int>(enemyType_);
-    if (ImGui::Combo("行動タイプ##EnemyType", &currentTypeIndex, typeNames, 3)) {
+    if (ImGui::Combo("行動タイプ##EnemyType", &currentTypeIndex, typeNames, 4)) {
         enemyType_ = static_cast<EnemyType>(currentTypeIndex);
     }
 

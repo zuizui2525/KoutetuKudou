@@ -40,6 +40,27 @@ namespace {
     constexpr float kScreenHeight = 720.0f;              // 基準スクリーン高さ
     constexpr float kNearClipW = 0.001f;                 // クリップ判定閾値
 
+    // 敵エリア「外向き拡散＆湧き上がり」アニメーション定数（拘束トラップの内向き吸引と真逆の直感表現）
+    const std::string kAlphaPsoKey = "Object3D_Alpha";
+    const std::string kWhiteTexKey = "white";
+    constexpr float kWaveInnerRadiusRatio = 0.88f;       // 外向き拡散ソナーリングの内径比率
+    constexpr float kRisingInnerRadiusRatio = 0.90f;     // 湧き上がり浮上リングの内径比率
+    constexpr float kWaveZBias = 0.015f;                 // 拡散波紋のZ-Fighting防止バイアス
+    constexpr float kEnemyWaveBaseSpeed = 0.014f;        // 外向き拡散ソナーの基本速度 (/frame)
+    constexpr float kEnemyWaveCountSpeedBoost = 0.003f;  // 敵数に応じた波紋テンポ加算係数
+    constexpr float kEnemyBossWaveSpeedBonus = 0.008f;   // ボス時の波紋テンポ加算
+    constexpr float kEnemyWaveStartScaleRatio = 0.15f;   // 外向き拡散リングの開始スケール比率
+    constexpr float kEnemyRisingBaseHeight = 2.0f;       // 湧き上がり浮上リングの基本到達高度 (m)
+    constexpr float kEnemyRisingCountHeightStep = 0.45f; // 敵数1体ごとの上昇高度加算 (m)
+    constexpr float kEnemyBossRisingHeight = 4.5f;       // ボス時の湧き上がり到達高度 (m)
+    constexpr float kEnemyRisingStartScale = 0.72f;      // 浮上開始時のリングスケール比率
+    constexpr float kEnemyRisingEndScale = 1.05f;        // 浮上到達時のリングスケール比率
+    constexpr float kWaveAlphaPeak = 0.78f;              // 波紋の最大アルファ値
+    constexpr float kRisingAlphaPeak = 0.72f;            // 浮上リングの最大アルファ値
+    constexpr float kHalfCycleOffset = 0.5f;             // 拡散と浮上の位相差 (0.5周期ずらしで途切れない動き)
+    constexpr float kCylinderSoftAlphaRatio = 0.45f;     // 警戒シリンダーの控えめな半透明係数
+    constexpr float kWaveCycleMax = 1.0f;
+
     // カラーパレット (敵種類別: エディタ時 / ゲーム中視認性向上半透明)
     // 1. 通常敵 (Enemy): 鮮烈オレンジ
     constexpr Vector4 kNormalRingEditorColor = { 1.0f, 0.45f, 0.1f, 0.85f };
@@ -131,11 +152,14 @@ EnemySpawnPointScript::~EnemySpawnPointScript() {
     }
     groundDisc_.reset();
     groundRing_.reset();
+    expandWaveRing_.reset();
+    risingAuraRing_.reset();
     warningCylinder_.reset();
 }
 
 void EnemySpawnPointScript::Awake() {
     hasTriggered_ = false;
+    triggerFadeAlpha_ = kFullVisibleAlpha;
 
     // Transformの初期Z座標からトリガーZの初期値を自動計算（未設定の場合）
     if (owner_ && autoSyncTriggerZWithPosition_ && triggerZ_ == 0.0f) {
@@ -154,6 +178,21 @@ void EnemySpawnPointScript::Start() {
 void EnemySpawnPointScript::OnUpdate() {
     // シリンダー自転アニメーション
     visualRotationAngle_ += kRotationSpeed;
+
+    // 敵数・ボス属性に応じた外向き拡散ソナー＆湧き上がりアニメーション位相更新
+    float waveSpeed = kEnemyWaveBaseSpeed + static_cast<float>(count_) * kEnemyWaveCountSpeedBoost;
+    if (isBoss_) {
+        waveSpeed += kEnemyBossWaveSpeedBonus;
+    }
+    waveAnimPhase_ += waveSpeed;
+    if (waveAnimPhase_ >= kWaveCycleMax) {
+        waveAnimPhase_ -= kWaveCycleMax;
+    }
+
+    // ギミック作動後は即座に消さず、透明度を徐々に下げて滑らかにフェードアウトさせる
+    if (hasTriggered_ && triggerFadeAlpha_ > 0.0f) {
+        triggerFadeAlpha_ = (std::max)(0.0f, triggerFadeAlpha_ - kTriggerFadeOutSpeed);
+    }
 }
 
 void EnemySpawnPointScript::EnsureVisuals() {
@@ -173,7 +212,23 @@ void EnemySpawnPointScript::EnsureVisuals() {
         groundRing_->SetRotate({ std::numbers::pi_v<float> * 0.5f, 0.0f, 0.0f }); // 地面(XZ)に寝かせる
     }
 
-    // 3. 立ち上がる警戒円柱（しっかりとした完全な立体円柱メッシュ: 側面・上面・底面を完備）
+    // 2-b. 外向き拡散ソナーリング（中心→外周へ広がる「敵出現」の直感表現）
+    if (!expandWaveRing_) {
+        expandWaveRing_ = std::make_unique<FlatRingObject>(kRingDivideCount, kUnitBaseRadius, kUnitBaseRadius * kWaveInnerRadiusRatio);
+        expandWaveRing_->SetAutoRegisterHierarchy(false);
+        expandWaveRing_->Initialize(0);
+        expandWaveRing_->SetRotate({ std::numbers::pi_v<float> * 0.5f, 0.0f, 0.0f });
+    }
+
+    // 2-c. 湧き上がり浮上リング（地面→上空へ湧き出る立体モーション）
+    if (!risingAuraRing_) {
+        risingAuraRing_ = std::make_unique<FlatRingObject>(kRingDivideCount, kUnitBaseRadius, kUnitBaseRadius * kRisingInnerRadiusRatio);
+        risingAuraRing_->SetAutoRegisterHierarchy(false);
+        risingAuraRing_->Initialize(0);
+        risingAuraRing_->SetRotate({ std::numbers::pi_v<float> * 0.5f, 0.0f, 0.0f });
+    }
+
+    // 3. 立ち上がる警戒円柱（半透明オーラ柱）
     if (!warningCylinder_) {
         warningCylinder_ = std::make_unique<CylinderObject>();
         warningCylinder_->SetAutoRegisterHierarchy(false);
@@ -209,126 +264,116 @@ void EnemySpawnPointScript::UpdateVisuals(bool isGamePlay) {
     EnsureVisuals();
 
     Vector3 ownerPos = owner_->GetPosition();
+    constexpr float kHalfPi = std::numbers::pi_v<float> * 0.5f;
 
     // 出現数と分散半径に基づく可視化外径の取得 (判定半径と完全同期)
     float effectiveRadius = GetEffectiveRadius();
     HazardZoneColorTheme theme = GetVisualColorTheme();
+    float fadeMul = (isGamePlay && hasTriggered_) ? triggerFadeAlpha_ : kFullVisibleAlpha;
 
-    // 1. 地面塗りつぶし円盤の更新（内径0.0fで中を均一に塗りつぶし、ゲーム進行中もエリア面を明瞭に可視化）
+    // 1. 地面塗りつぶし円盤の更新（半透明ベース面）
     if (groundDisc_) {
         groundDisc_->SetPosition({ ownerPos.x, kGroundRingElevation, ownerPos.z });
         groundDisc_->SetScale({ effectiveRadius, effectiveRadius, 1.0f });
-        groundDisc_->SetRotate({ std::numbers::pi_v<float> * 0.5f, 0.0f, 0.0f });
+        groundDisc_->SetRotate({ kHalfPi, 0.0f, 0.0f });
 
         Vector4 discColor = isGamePlay ? theme.discPlay : theme.discEditor;
+        discColor.w *= 0.65f * fadeMul;
         groundDisc_->SetColor(discColor);
-        groundDisc_->Update(); // 行列のみ更新（超高速）
+        groundDisc_->Update();
     }
 
-    // 2. 地面外周リングの更新（縁取りとしてディスクの直上に重ねて明瞭な境界線を描画）
+    // 2. 地面外周リングの更新
     if (groundRing_) {
         groundRing_->SetPosition({ ownerPos.x, kGroundRingElevation + kRingZBias, ownerPos.z });
         groundRing_->SetScale({ effectiveRadius, effectiveRadius, 1.0f });
-        groundRing_->SetRotate({ std::numbers::pi_v<float> * 0.5f, 0.0f, 0.0f });
+        groundRing_->SetRotate({ kHalfPi, 0.0f, 0.0f });
 
         Vector4 ringColor = isGamePlay ? theme.ringPlay : theme.ringEditor;
+        ringColor.w *= fadeMul;
         groundRing_->SetColor(ringColor);
-        groundRing_->Update(); // 行列のみ更新（超高速）
+        groundRing_->Update();
     }
 
-    // 3. 警戒円柱の更新（底面が地面にピタッと接地するよう高さをオフセット配置。エディタ時のみ）
+    // 3. 外向き拡散ソナーリング（中心→外周へ広がる「敵が湧き出す」モーション）
+    if (expandWaveRing_) {
+        float waveScale = effectiveRadius * (kEnemyWaveStartScaleRatio + (1.0f - kEnemyWaveStartScaleRatio) * waveAnimPhase_);
+        float waveAlpha = (1.0f - waveAnimPhase_) * kWaveAlphaPeak * fadeMul;
+        Vector4 waveColor = { theme.ringEditor.x, theme.ringEditor.y, theme.ringEditor.z, waveAlpha };
+
+        expandWaveRing_->SetPosition({ ownerPos.x, kGroundRingElevation + kWaveZBias, ownerPos.z });
+        expandWaveRing_->SetScale({ waveScale, waveScale, 1.0f });
+        expandWaveRing_->SetRotate({ kHalfPi, 0.0f, 0.0f });
+        expandWaveRing_->SetColor(waveColor);
+        expandWaveRing_->Update();
+    }
+
+    // 4. 湧き上がり浮上リング（地面→上空へ湧き出る立体モーション・敵数/ボスで到達高度が変化）
+    if (risingAuraRing_) {
+        float risePhase = std::fmod(waveAnimPhase_ + kHalfCycleOffset, kWaveCycleMax);
+        float maxRiseHeight = isBoss_
+            ? kEnemyBossRisingHeight
+            : (kEnemyRisingBaseHeight + static_cast<float>(count_) * kEnemyRisingCountHeightStep);
+        float riseY = kGroundRingElevation + risePhase * maxRiseHeight;
+        float riseScale = effectiveRadius * (kEnemyRisingStartScale + (kEnemyRisingEndScale - kEnemyRisingStartScale) * risePhase);
+        // 出現直後と消滅直前を滑らかにフェード
+        float riseAlpha = std::sin(risePhase * std::numbers::pi_v<float>) * kRisingAlphaPeak * fadeMul;
+        Vector4 riseColor = { theme.textColor.x, theme.textColor.y, theme.textColor.z, riseAlpha };
+
+        risingAuraRing_->SetPosition({ ownerPos.x, riseY, ownerPos.z });
+        risingAuraRing_->SetScale({ riseScale, riseScale, 1.0f });
+        risingAuraRing_->SetRotate({ kHalfPi, 0.0f, 0.0f });
+        risingAuraRing_->SetColor(riseColor);
+        risingAuraRing_->Update();
+    }
+
+    // 5. 控えめな半透明オーラ円柱（DrawRoute/待機時のみ・敵数に応じた高さ）
     if (!isGamePlay && warningCylinder_) {
-        float halfHeight = cylinderHeight_ * 0.5f;
+        float softHeight = isBoss_
+            ? kEnemyBossRisingHeight
+            : (kEnemyRisingBaseHeight + static_cast<float>(count_) * kEnemyRisingCountHeightStep * 0.6f);
+        float halfHeight = softHeight * 0.5f;
+        Vector4 cylColor = theme.cylinderEditor;
+        cylColor.w *= kCylinderSoftAlphaRatio;
+
         warningCylinder_->SetPosition({ ownerPos.x, ownerPos.y + halfHeight + kGroundRingElevation, ownerPos.z });
-        warningCylinder_->SetScale({ effectiveRadius, cylinderHeight_, effectiveRadius });
+        warningCylinder_->SetScale({ effectiveRadius, softHeight, effectiveRadius });
         warningCylinder_->SetRotate({ 0.0f, visualRotationAngle_, 0.0f });
-        warningCylinder_->SetColor(theme.cylinderEditor);
-        warningCylinder_->Update(); // 行列のみ更新（超高速）
+        warningCylinder_->SetColor(cylColor);
+        warningCylinder_->Update();
     }
 }
 
 void EnemySpawnPointScript::DrawVisuals(bool isGamePlay) {
     if (!showHazardZone_) return;
 
-    // ゲーム進行中で、すでに敵が出現済みの場合は表示を終了（制圧解除）
-    if (isGamePlay && hasTriggered_) return;
+    // ゲーム進行中で、すでに敵が出現しフェードアウトが完了した場合は表示を終了
+    if (isGamePlay && hasTriggered_ && triggerFadeAlpha_ <= kMinVisibleAlpha) return;
 
-    // 地面塗りつぶし円盤・外周リング描画（ゲーム中・エディタ中双方）
+    // すべて Object3D_Alpha による半透明ホログラム描画へ統一
     if (groundDisc_) {
-        groundDisc_->Draw("white");
+        groundDisc_->Draw(kWhiteTexKey, "", kAlphaPsoKey);
     }
     if (groundRing_) {
-        groundRing_->Draw("white");
+        groundRing_->Draw(kWhiteTexKey, "", kAlphaPsoKey);
     }
-
-    // エディタ編集時のみ：警戒シリンダーを描画
+    if (expandWaveRing_) {
+        expandWaveRing_->Draw(kWhiteTexKey, "", kAlphaPsoKey);
+    }
+    if (risingAuraRing_) {
+        risingAuraRing_->Draw(kWhiteTexKey, "", kAlphaPsoKey);
+    }
     if (!isGamePlay && warningCylinder_) {
-        warningCylinder_->Draw("white");
+        warningCylinder_->Draw(kWhiteTexKey, "", kAlphaPsoKey);
     }
 }
 
 void EnemySpawnPointScript::UpdateText2D(bool isGamePlay) {
-    if (!text2D_ || !owner_) return;
+    (void)isGamePlay;
+    if (!text2D_) return;
 
-    // ゲーム進行中（走行戦闘フェーズ）は視界を遮らないよう文字を完全非表示。
-    // エディタ編集時またはルート手書きフェーズのみ表示
-    if (!showHazardZone_ || isGamePlay) {
-        text2D_->SetActive(false);
-        return;
-    }
-
-    // 表示文字列の構築（定性的な「少・普・多」、ボスは [★BOSS]）
-    std::string infoText = GetSpawnCountLevelText();
-    text2D_->SetText(infoText);
-
-    HazardZoneColorTheme theme = GetVisualColorTheme();
-    text2D_->SetColor(theme.textColor);
-    text2D_->SetScreenSpace(true);
-
-    // スポーン上空の3Dワールド座標
-    Vector3 ownerPos = owner_->GetPosition();
-    Vector3 headWorldPos = { ownerPos.x, ownerPos.y + cylinderHeight_ + kTextElevationOffset, ownerPos.z };
-
-    // カメラ座標変換によるスクリーン座標の計算
-    auto* camMgr = CameraResource::GetCameraManager();
-    BaseCamera* camera = camMgr ? camMgr->GetActiveCamera() : nullptr;
-    if (!camera) {
-        text2D_->SetActive(false);
-        return;
-    }
-
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
-    Matrix4x4 viewProj = Math::Multiply(viewMat, projMat);
-
-    // クリップ座標計算
-    float w = headWorldPos.x * viewProj.m[0][3] + headWorldPos.y * viewProj.m[1][3] + headWorldPos.z * viewProj.m[2][3] + viewProj.m[3][3];
-    if (w <= kNearClipW) {
-        text2D_->SetActive(false); // カメラ背後のため非表示
-        return;
-    }
-
-    float invW = 1.0f / w;
-    float ndcX = (headWorldPos.x * viewProj.m[0][0] + headWorldPos.y * viewProj.m[1][0] + headWorldPos.z * viewProj.m[2][0] + viewProj.m[3][0]) * invW;
-    float ndcY = (headWorldPos.x * viewProj.m[0][1] + headWorldPos.y * viewProj.m[1][1] + headWorldPos.z * viewProj.m[2][1] + viewProj.m[3][1]) * invW;
-
-    // スクリーンピクセル座標へマッピング
-    constexpr float kHalf = 0.5f;
-    float screenX = (ndcX * kHalf + kHalf) * kScreenWidth;
-    float screenY = (-ndcY * kHalf + kHalf) * kScreenHeight;
-
-    // 画面内判定
-    constexpr float kScreenMargin = 200.0f;
-    if (screenX < -kScreenMargin || screenX > kScreenWidth + kScreenMargin ||
-        screenY < -kScreenMargin || screenY > kScreenHeight + kScreenMargin) {
-        text2D_->SetActive(false);
-        return;
-    }
-
-    text2D_->SetActive(true);
-    // テキスト中央揃えのオフセット補正 (ScreenSpaceモードのため、親の3DワールドZによるファークリップを受けず純粋な2Dピクセル平面に配置)
-    float textWidth = text2D_->GetWidth();
-    text2D_->GetOffset().translate = { screenX - textWidth * kHalf, screenY, 0.0f };
+    // 3Dマップ上では文字表示を撤廃し、色・形・アニメーション（外向き拡散＆湧き上がり）で直感識別する設計へ統一
+    text2D_->SetActive(false);
 }
 
 void EnemySpawnPointScript::Draw() {

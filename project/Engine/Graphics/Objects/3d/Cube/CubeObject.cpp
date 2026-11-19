@@ -39,8 +39,10 @@ void CubeObject::Update() {
 }
 
 void CubeObject::Draw(const std::string& textureKey, const std::string& envMapKey) {
-    // 描画処理は共通描画クラス Object3DDrawer を通して実行
-    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, kIndexCount, textureKey, envMapKey);
+    // アルファ値が1.0未満（半透明ゴースト等）の場合は Object3D_Alpha PSO を自動選択
+    constexpr float kOpaqueAlphaThreshold = 0.99f;
+    const std::string psoKey = (GetAlpha() < kOpaqueAlphaThreshold) ? "Object3D_Alpha" : "Object3D";
+    Object3DDrawer::GetInstance()->DrawIndexed(this, vbView_, ibView_, kIndexCount, textureKey, envMapKey, psoKey);
 }
 
 void CubeObject::CreateMesh() {

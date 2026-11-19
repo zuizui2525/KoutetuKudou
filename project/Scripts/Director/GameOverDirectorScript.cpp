@@ -10,6 +10,7 @@
 
 namespace {
     constexpr size_t kImGuiBufferLength = 128;
+    constexpr int kLeftMouseButton = 0;
 }
 
 GameOverDirectorScript::GameOverDirectorScript()
@@ -32,12 +33,12 @@ void GameOverDirectorScript::Start() {
 }
 
 /// <summary>
-/// スペースキー入力を監視し、押下された場合はタイトルシーンへ遷移します。
+/// スペースキーまたはマウス左クリック入力を監視し、タイトルシーンへ遷移します。
 /// </summary>
 void GameOverDirectorScript::OnUpdate() {
-    // スペースキー押下でタイトルシーンへ遷移
+    // スペースキーまたは左クリックでタイトルシーンへ遷移
     auto input = InputResource::GetInput();
-    if (input && input->Trigger(DIK_SPACE)) {
+    if (input && (input->Trigger(DIK_SPACE) || input->MouseTrigger(kLeftMouseButton))) {
         SceneManager::GetInstance()->ChangeScene(nextSceneName_);
         return;
     }

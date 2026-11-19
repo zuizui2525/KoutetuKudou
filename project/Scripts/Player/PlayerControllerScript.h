@@ -4,6 +4,8 @@
 #include "Engine/Audio/AudioStructs.h"
 #include <string>
 #include <memory>
+#include <vector>
+#include <array>
 
 class ModelObject;
 class FlatRingObject;
@@ -11,6 +13,7 @@ class ConeObject;
 class GPUParticleObject;
 class SpriteObject;
 class CubeObject;
+class Ring2DObject;
 
 /// <summary>
 /// 自機キャラクターのHP、弾数管理、射撃、リロードを制御するスクリプトコンポーネント
@@ -92,6 +95,21 @@ public:
     float GetMoveSpeed() const { return moveSpeed_; }
 
     /// <summary>
+    /// リロード中の完全停止（速度0）および射撃中の減速（通常の3分の1）を反映した現在の実効レール走行速度を取得します。
+    /// </summary>
+    float GetEffectiveMoveSpeed() const {
+        if (IsReloading()) {
+            return kReloadingMoveSpeed;
+        }
+        return isShooting_ ? (moveSpeed_ * shootingMoveSpeedMultiplier_) : moveSpeed_;
+    }
+
+    /// <summary>
+    /// 現在射撃中（減速適用中）であるかを取得します。
+    /// </summary>
+    bool IsShooting() const { return isShooting_; }
+
+    /// <summary>
     /// 自機のルート走行速度を設定します。
     /// </summary>
     void SetMoveSpeed(float speed) { moveSpeed_ = speed; }
@@ -118,7 +136,79 @@ public:
     /// </summary>
     Vector3 GetAimTargetPosition() const;
 
+    /// <summary>
+    /// 現在右クリック長押しによる幽霊吸引（Ghost Vacuum）を実行中かを取得します。
+    /// </summary>
+    bool IsVacuuming() const { return isVacuuming_; }
+
+    /// <summary>
+    /// ビル群や床の不透明描画完了後に呼び出し、半透明3D吸引ボルテックスリングおよびマズル硝煙を
+    /// 深度バッファと正しく合成して描画します（ビルの裏に隠れる描画順不具合を根絶）。
+    /// </summary>
+    void DrawVacuumVortex3D();
+
+    /// <summary>
+    /// Step 1-6: ダダサバイバー風 3択アップグレード種別（全8種）
+    /// </summary>
+    enum class UpgradeType {
+        MultiShot = 0,       // 武器変化: 同時発射弾数 +1（扇状レーザー）
+        PiercingLaser = 1,   // 武器変化: 敵貫通回数 +1
+        HighPower = 2,       // 火力強化: 弾丸威力 +1
+        RapidFire = 3,       // 連射強化: 連射間隔短縮＆弾速UP
+        ExtendedMag = 4,     // 取り回し: 最大装弾数 +20＆即フル装填
+        QuickReload = 5,     // 取り回し: リロード時間 -22%短縮
+        ArmorRepair = 6,     // 生存強化: 最大HP +3＆HP +5回復
+        SoulVacuumBoost = 7, // 吸引特化: 幽霊吸引速度 +45%＆射程拡大
+        Count = 8
+    };
+
+    static constexpr int kUpgradeTypeCount = static_cast<int>(UpgradeType::Count);
+    static constexpr int kUpgradeChoiceCount = 3;
+
+    struct UpgradeCardInfo {
+        UpgradeType type = UpgradeType::MultiShot;
+        std::string title;
+        std::string categoryLabel;
+        std::string description;
+        Vector4 themeColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        int currentLevel = 0;
+        int maxLevel = 3;
+    };
+
+    /// <summary>
+    /// これまでに吸引・成仏させた幽霊の累計数を取得します（Step 1-6 EXPシステム連携用）。
+    /// </summary>
+    int GetAbsorbedGhostCount() const { return absorbedGhostCount_; }
+
+    /// <summary>
+    /// 経験値（EXP）を待機キューへ加算し、毎フレーム1ずつゲージへ反映します。
+    /// 必要値に到達した場合はレベルアップと3択強化権利を予約します。
+    /// </summary>
+    void GainExp(int amount);
+
+    int GetPlayerLevel() const { return playerLevel_; }
+    int GetCurrentExp() const { return currentExp_; }
+    int GetExpToNextLevel() const { return expToNextLevel_; }
+    int GetPendingExpToAdd() const { return pendingExpToAdd_; }
+    bool HasPendingLevelUp() const { return pendingLevelUps_ > 0; }
+    int GetPendingLevelUpCount() const { return pendingLevelUps_; }
+
+    int GetUpgradeLevel(UpgradeType type) const;
+    int GetUpgradeMaxLevel(UpgradeType type) const;
+    UpgradeCardInfo GetUpgradeCardInfo(UpgradeType type) const;
+    std::vector<UpgradeType> RollUpgradeChoices() const;
+    void ApplyUpgradeChoice(UpgradeType type);
+
+    int GetBulletDamage() const { return bulletDamage_; }
+    int GetMultiShotCount() const { return multiShotCount_; }
+    int GetBulletPierceCount() const { return bulletPierceCount_; }
+    const std::vector<UpgradeType>& GetOwnedUpgradeOrder() const { return ownedUpgradeOrder_; }
+
 private:
+    /// <summary>
+    /// マウス右クリック長押しによる幽霊吸収（Ghost Vacuum）の入力監視・捕捉吸引・3Dボルテックス更新を行います。
+    /// </summary>
+    void HandleGhostVacuum();
     /// <summary>
     /// マウス入力（左クリックまたは長押し連射）を監視し、射撃間隔や弾数制限を満たしている場合に Fire() を呼び出します。
     /// </summary>
@@ -153,6 +243,11 @@ private:
     static constexpr float kDefaultMoveSpeed = 0.15f;   // 標準ルート走行速度
     static constexpr float kMinMoveSpeed = 0.01f;       // 最小走行速度
     static constexpr float kMaxMoveSpeed = 2.0f;        // 最大走行速度
+    static constexpr float kReloadingMoveSpeed = 0.0f;  // リロード中のレール移動速度（完全停止）
+    static constexpr float kShootingMoveSpeedMultiplier = 1.0f / 3.0f; // 射撃中のレール移動速度倍率（通常の3分の1）
+    static constexpr float kMinShootingSpeedMultiplier = 0.05f;        // 射撃中速度倍率の最小値
+    static constexpr float kMaxShootingSpeedMultiplier = 1.0f;         // 射撃中速度倍率の最大値
+    static constexpr int kShootingSlowdownHoldFrames = 6;              // 連射フレーム間で速度がガタつかない減速保持フレーム数
     static constexpr int kShotMouseKey = 0;           // 左クリック
     static constexpr float kShootShakeIntensity = 0.06f; // 射撃時の反動カメラシェイク振幅
     static constexpr float kShootShakeDuration = 0.10f;  // 射撃時の反動カメラシェイク持続時間
@@ -199,6 +294,9 @@ private:
     int shotIntervalTimer_ = 0;
     float bulletSpeed_ = kDefaultBulletSpeed;
     float moveSpeed_ = kDefaultMoveSpeed;
+    float shootingMoveSpeedMultiplier_ = kShootingMoveSpeedMultiplier;
+    int shootingSlowdownTimer_ = 0;
+    bool isShooting_ = false;
 
     bool isAutoMoving_ = false;
     Vector3 direction_ = { 0.0f, 0.0f, 1.0f };
@@ -242,7 +340,11 @@ private:
     static constexpr float kGunRecoilRecovery = 0.20f;    // 反動回復速度 (Lerp係数)
 
     // 照準補正およびマズルフラッシュ関連定数 (マジックナンバー排除)
-    static constexpr float kDefaultZeroInDistance = 22.0f;              // 交戦レンジに合わせたゼロイン距離 (m)
+    static constexpr float kDefaultZeroInDistance = 15.0f;              // 空撃ち時の自然な標準収束距離 (m)
+    static constexpr float kMinAimConvergenceDist = 2.5f;               // 極近距離での過度な角度折れを防ぐ最小収束距離 (m)
+    static constexpr float kMaxAimRaycastDist = 80.0f;                  // レティクル中央視線レイの最大計測距離 (m)
+    static constexpr float kAimRayBuildingStep = 1.0f;                  // 建物との距離計測レイマーチ刻み幅 (m)
+    static constexpr float kAimRayEnemyPadding = 0.25f;                 // 敵輪郭付近でも敵距離へスムーズに収束するAABB拡張マージン (m)
     static constexpr Vector2 kDefaultAimCorrection = { 0.0f, 0.0f };   // レティクル視線と完全一致（視差バイアス不要）
     static constexpr float kBulletCameraForwardOffset = 0.5f;           // レティクル視線発射時のカメラ前方スポーン距離 (m)
     static constexpr Vector3 kDefaultBulletVisualScale = { 0.055f, 0.055f, 5.2f }; // VALORANT風ロングレーザートレーサー（太さ5.5cm, 長さ5.2m）
@@ -332,7 +434,89 @@ private:
     float damageFlashAlpha_ = 0.0f;                     // 現在の赤フラッシュ不透明度
 
     void EnsureDamageVisuals();                         // 被弾演出用スプライトの初期化
+    void EnsureVacuumVisuals();                         // 幽霊吸引（Ghost Vacuum）用3D/2Dオブジェクト初期化
     void EnsureGunModel();
     void UpdateGunTransform();
     void UpdateDeathMeltAnimation();
+
+    // Step 1-5: 右クリック長押しによる幽霊吸収（Ghost Vacuum）定数＆メンバ変数 (マジックナンバー排除)
+    static constexpr int kVacuumMouseKey = 1;                   // マウス右クリック
+    static constexpr float kVacuumMaxRange = 18.0f;             // 吸引ビームの最大有効射程 (m)
+    static constexpr float kVacuumNearAutoCatchDist = 7.5f;     // カメラ前方付近に取り憑いている全幽霊を漏れなく捕捉する距離 (m)
+    static constexpr float kVacuumConeCosThreshold = 0.55f;     // 前方照準コーン角度閾値 (cos ≈ 56度)
+    static constexpr float kVacuumChargePerFrame = 0.030f;      // 1フレームあたり吸引ゲージ蓄積量 (約0.55秒ホールドで成仏)
+    static constexpr int kVacuumVortexRingCount = 3;            // 銃口前方に展開する3D吸引ボルテックスリング数
+    static constexpr uint32_t kVacuumRingDivideCount = 24;      // 3D吸引リングの分割数
+    static constexpr float kVacuumRingBaseOuterR = 1.0f;        // 3D吸引リングの基準外径 (m)
+    static constexpr float kVacuumRingBaseInnerR = 0.82f;       // 3D吸引リングの基準内径 (m)
+    static constexpr float kVacuumVortexMaxDist = 0.90f;        // 3D吸引リングの出現前方距離 (m)
+    static constexpr float kVacuumVortexMinDist = 0.04f;        // 3D吸引リングの銃口収束距離 (m)
+    static constexpr float kVacuumVortexMaxScale = 0.24f;       // 3D吸引リングの出現時半径スケール (m)
+    static constexpr float kVacuumVortexMinScale = 0.025f;      // 3D吸引リングの銃口収束時スケール (m)
+    static constexpr float kVacuumAnimSpeed = 0.045f;           // 吸引ボルテックスの収束サイクル速度 (/frame)
+    static constexpr float kVacuumReticleBaseRadius = 42.0f;    // 2Dレティクル外周サクションリング基準半径 (px)
+    static constexpr float kVacuumReticlePulseAmp = 10.0f;      // 2Dサクションリングの収縮パルス幅 (px)
+    static constexpr float kVacuumReticleThickness = 2.8f;      // 2Dサクションリングの線の太さ (px)
+    static constexpr float kExorciseShakeIntensity = 0.08f;     // 幽霊成仏瞬間の爽快カメラシェイク振幅
+    static constexpr float kExorciseShakeDuration = 0.14f;      // 幽霊成仏瞬間のカメラシェイク時間 (秒)
+    static constexpr float kExorciseRecoilBoost = 0.55f;        // 幽霊成仏瞬間の銃キックバック反動量
+    static constexpr int kAbsorbComboWindowFrames = 90;         // 複数幽霊の連続吸収を合算ポップアップする猶予フレーム数 (約1.5秒)
+
+    bool isVacuuming_ = false;                                  // 右クリック吸引ホールド中フラグ
+    bool isCapturingGhost_ = false;                             // 現在1体以上の幽霊を吸引捕捉中か
+    float vacuumAnimPhase_ = 0.0f;                              // 吸引ボルテックスアニメーション位相 (0.0〜1.0)
+    int absorbedGhostCount_ = 0;                                // 累計成仏・吸収霊魂カウント
+    int absorbComboCount_ = 0;                                  // 連続吸収コンボ体数（ポップアップ合算表示用）
+    int absorbComboExp_ = 0;                                    // 連続吸収コンボ合計EXP（ポップアップ合算表示用）
+    int absorbComboTimer_ = 0;                                  // 連続吸収コンボ維持タイマー
+    std::unique_ptr<FlatRingObject> vacuumVortexRings_[kVacuumVortexRingCount]; // 銃口3D吸引ボルテックスリング
+    std::unique_ptr<Ring2DObject> vacuumReticleRing_;           // 2Dレティクル外周サクションリング
+
+    // Step 1-6: 経験値（EXP）・レベルアップ・全8種アップグレード定数＆メンバ変数 (マジックナンバー排除)
+    static constexpr int kInitialPlayerLevel = 1;               // 初期プレイヤーレベル
+    static constexpr int kInitialExpToNextLevel = 100;          // Lv1->2 必要経験値 (以降レベルアップごとに2倍)
+    static constexpr int kExpNextLevelMultiplier = 2;           // レベルアップごとの必要経験値倍率 (100 -> 200 -> 400 -> 800...)
+    static constexpr int kMaxExpToNextLevel = 1000000;          // 必要経験値の安全上限キャップ
+    static constexpr int kExpTickAddPerFrame = 1;               // 1フレームあたりにゲージへ加算するEXP量 (1ずつ40まで加算)
+    static constexpr int kExpPerGhostAbsorb = 40;               // 幽霊1体吸収時の獲得EXP
+    static constexpr int kDefaultBulletDamage = 1;              // 初期弾丸威力
+    static constexpr int kDefaultMultiShotCount = 1;            // 初期同時発射数
+    static constexpr int kDefaultPierceCount = 0;               // 初期敵貫通数
+    static constexpr float kMultiShotSpreadRad = 0.045f;        // マルチショット1発あたりの水平拡散角 (rad ≈ 2.6度)
+    static constexpr float kHighPowerBeamThicknessStep = 0.14f; // 攻撃力Lvごとのレーザー太さ強調率
+    static constexpr int kExtendedMagBonusAmmo = 20;            // 拡張マガジン1Lvあたりの最大装弾数加算
+    static constexpr float kQuickReloadTimeFactor = 0.78f;      // クイックリロード1Lvあたりのリロード時間倍率 (-22%)
+    static constexpr int kMinReloadDurationFrames = 21;         // リロード時間の下限フレーム数 (約0.35秒)
+    static constexpr int kMinShotIntervalFrames = 2;            // 連射間隔の下限フレーム数
+    static constexpr float kRapidFireBulletSpeedBoost = 1.15f;  // ラピッドファイア1Lvあたりの弾速上昇倍率
+    static constexpr int kArmorRepairMaxHpBonus = 3;            // アーマー＆リペア1Lvあたりの最大HP加算
+    static constexpr int kArmorRepairHealAmount = 5;            // アーマー＆リペア取得時のHP回復量
+    static constexpr float kVacuumSpeedBoostStep = 0.45f;       // ソウルバキューム改1Lvあたりの吸引速度加算 (+45%)
+    static constexpr float kVacuumRangeBoostStep = 3.0f;        // ソウルバキューム改1Lvあたりの射程延長 (m)
+    static constexpr float kVacuumConeCosReductionStep = 0.06f; // ソウルバキューム改1Lvあたりのコーン角拡大
+    static constexpr float kMinVacuumConeCos = 0.50f;           // 吸引コーン角コサイン下限 (最大60度コーン)
+
+    static constexpr int kMaxLvMultiShot = 3;
+    static constexpr int kMaxLvPiercing = 3;
+    static constexpr int kMaxLvHighPower = 5;
+    static constexpr int kMaxLvRapidFire = 3;
+    static constexpr int kMaxLvExtendedMag = 5;
+    static constexpr int kMaxLvQuickReload = 4;
+    static constexpr int kMaxLvArmorRepair = 5;
+    static constexpr int kMaxLvSoulVacuum = 3;
+
+    int playerLevel_ = kInitialPlayerLevel;
+    int currentExp_ = 0;
+    int expToNextLevel_ = kInitialExpToNextLevel;
+    int pendingExpToAdd_ = 0;
+    int pendingLevelUps_ = 0;
+    void ProcessExpTick();
+    int bulletDamage_ = kDefaultBulletDamage;
+    int multiShotCount_ = kDefaultMultiShotCount;
+    int bulletPierceCount_ = kDefaultPierceCount;
+    float vacuumSpeedMultiplier_ = 1.0f;
+    float vacuumRangeBonus_ = 0.0f;
+    float vacuumConeCosBonus_ = 0.0f;
+    std::array<int, kUpgradeTypeCount> upgradeLevels_{};
+    std::vector<UpgradeType> ownedUpgradeOrder_;
 };

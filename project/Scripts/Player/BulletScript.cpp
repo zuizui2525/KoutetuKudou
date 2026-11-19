@@ -1,6 +1,7 @@
 #include "Scripts/Player/BulletScript.h"
 #include "Scripts/Player/PlayerControllerScript.h"
 #include "Scripts/Player/ReticleControllerScript.h"
+#include "Scripts/Director/GamePhaseControllerScript.h"
 #include "Scripts/Enemy/EnemyAIScript.h"
 #include "Scripts/Stage/MapRendererScript.h"
 #include "Engine/Component/GameObject.h"
@@ -19,6 +20,7 @@
 #endif
 
 #include <cmath>
+#include <algorithm>
 
 REGISTER_SCRIPT(BulletScript)
 
@@ -30,6 +32,8 @@ void BulletScript::Awake() {
     currentLifeTimer_ = 0;
     isDead_ = false;
     hasPreviousPos_ = false;
+    pierceCount_ = 0;
+    hitTargets_.clear();
 }
 
 void BulletScript::Start() {
@@ -98,6 +102,13 @@ void BulletScript::OnUpdate() {
         return;
     }
 
+    // レベルアップ3択選択中は弾丸の寿命・移動・当たり判定を完全一時停止
+    if (auto* phaseCtrl = GamePhaseControllerScript::GetInstance()) {
+        if (phaseCtrl->IsLevelUpChoosing()) {
+            return;
+        }
+    }
+
     // 1. 寿命タイマーの更新
     currentLifeTimer_++;
     if (currentLifeTimer_ >= maxLifeTime_) {
@@ -152,13 +163,9 @@ void BulletScript::CheckCollisions() {
         isDead_ = true;
         owner_->SetVisible(false);
 
-        // 着弾火花エフェクトの再生
-        EffectPlayParam hitParam{};
-        hitParam.position = bulletPos;
-        hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
-        hitParam.isLoop = false;
+        // 建物着弾時も敵命中時と統一したシャープな小粒火花スパーク（kHitGpuSparkCount）を発生
         if (auto* effectMgr = EffectManager::GetInstance()) {
-            effectMgr->PlayEffect3D(kEffectBulletHit, hitParam);
+            effectMgr->PlayGPUEffect(bulletPos, kHitGpuSparkCount);
         }
 
         ShakeCamera(kHitShakeIntensity * 0.5f, kHitShakeDuration);
@@ -192,38 +199,50 @@ void BulletScript::CheckCollisions() {
                                     name.find(kBodyKeyword) != std::string::npos);
 
                 if (isEnemyPart) {
+                    // 貫通弾が同じ敵へ連続多段ヒットするのを防止
+                    if (std::find(hitTargets_.begin(), hitTargets_.end(), targetObj.get()) != hitTargets_.end()) {
+                        continue;
+                    }
+
+                    // 幽霊化（AiState::Ghost）または死亡済みの個体は通常弾がすり抜け、奥の敵を狙い撃てるようにする
+                    EnemyAIScript* enemyAI = targetObj->GetComponent<EnemyAIScript>();
+                    if (enemyAI && (enemyAI->IsGhost() || enemyAI->IsDead())) {
+                        continue;
+                    }
+
                     AABB targetAABB = boxCol->GetWorldAABB();
                     if (IsCollision(targetAABB, bulletSphere)) {
                         // 部位別判定（頭部ならヘッドショットクリティカル）
                         bool isCritical = (name.find(kHeadKeyword) != std::string::npos);
 
-                        // 敵AIコンポーネントを対象オブジェクトから探索
-                        EnemyAIScript* enemyAI = targetObj->GetComponent<EnemyAIScript>();
                         if (enemyAI) {
                             enemyAI->TakeDamage(damage_, isCritical);
                         }
 
+                        hitTargets_.push_back(targetObj.get());
+
                         // レティクル中央ヒットマーカー（×印）の瞬間点灯（クリティカル時は赤）
                         ReticleControllerScript::TriggerHitMarker(isCritical);
 
-                        // 命中フラグ設定と弾丸の破棄
-                        isDead_ = true;
-                        owner_->SetVisible(false);
-
-                        // 敵命中時の鮮烈な火花スパーク（GPUパーティクル）＆爆発エフェクトの発生
+                        // 敵命中時の視界を塞がないシャープな小粒火花スパークのみ発生（Explosion爆発は撤廃して他の敵を見やすく維持）
                         if (auto* effectMgr = EffectManager::GetInstance()) {
-                            effectMgr->PlayGPUEffect(bulletPos, kHitGpuSparkCount);
-
-                            EffectPlayParam hitParam{};
-                            hitParam.position = bulletPos;
-                            hitParam.scale = { kBulletHitScale, kBulletHitScale, kBulletHitScale };
-                            hitParam.isLoop = false;
-                            effectMgr->PlayEffect3D(kEffectBulletHit, hitParam);
+                            uint32_t sparkCount = isCritical ? kCriticalHitGpuSparkCount : kHitGpuSparkCount;
+                            effectMgr->PlayGPUEffect(bulletPos, sparkCount);
                         }
 
                         float shakeIntensity = isCritical ? kCriticalShakeIntensity : kHitShakeIntensity;
                         float shakeDuration = isCritical ? kCriticalShakeDuration : kHitShakeDuration;
                         ShakeCamera(shakeIntensity, shakeDuration);
+
+                        // 貫通回数が残っている場合は弾丸を破棄せず奥の敵まで貫通継続
+                        if (pierceCount_ > 0) {
+                            pierceCount_--;
+                            continue;
+                        }
+
+                        // 命中フラグ設定と弾丸の破棄
+                        isDead_ = true;
+                        owner_->SetVisible(false);
                         Destroy(owner_);
                         break;
                     }

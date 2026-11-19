@@ -155,7 +155,7 @@
           "type": "SpriteRenderer",
           "shape_type": 0,
           "texture_key": "reticle",
-          "size": [128, 128],
+          "size": [52, 52],
           "radius": 10,
           "inner_radius": 0,
           "line_start": [0, 0],

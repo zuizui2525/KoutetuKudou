@@ -20,7 +20,8 @@ public:
     enum class EnemyType {
         ParallelChaser, // 【横並走＆前方強襲型】自機の横を並走し、攻撃時は前に飛び出す（壁自動回避対応）
         Ambush,         // 【定点・待ち伏せ型】物陰や指定位置に陣取り、自機を迎撃
-        FlyBy           // 【突撃・すれ違い型】一定速度ですれ違いざまに攻撃して後方へ離脱
+        FlyBy,          // 【突撃・すれ違い型】一定速度ですれ違いざまに攻撃して後方へ離脱
+        RushSurround    // 【拘束ラッシュ包囲型】湧いた方位を保ち360度包囲旋回しながらその場上空へ跳躍攻撃
     };
 
     enum class AiState {
@@ -62,7 +63,24 @@ public:
     /// <summary>
     /// 敵が幽霊状態（視界妨害・右クリ吸収可能）であるかを取得します。
     /// </summary>
-    bool IsGhost() const { return aiState_ == AiState::Ghost; }
+    bool IsGhost() const { return aiState_ == AiState::Ghost && !isDead_; }
+
+    /// <summary>
+    /// 右クリック吸引ビームによる引き寄せ・吸引ゲージ蓄積を適用します。
+    /// ゲージが 1.0f に達してゴーストが成仏・完全消滅した瞬間に true を返します。
+    /// </summary>
+    /// <param name="muzzlePos">吸い込み先となる銃口先端の3Dワールド座標</param>
+    /// <param name="chargeAmount">このフレームで加算する吸引ゲージ進行量 (0.0〜1.0)</param>
+    /// <returns>吸引完了（成仏消滅）した瞬間 true</returns>
+    bool ApplyVacuumPull(const Vector3& muzzlePos, float chargeAmount);
+
+    float GetVacuumProgress() const { return vacuumProgress_; }
+    bool IsBeingVacuumed() const { return isBeingVacuumed_; }
+
+    /// <summary>
+    /// シーン上に存在するすべてのアクティブ敵・幽霊インスタンス一覧を取得します。
+    /// </summary>
+    static const std::vector<EnemyAIScript*>& GetActiveEnemies() { return sActiveEnemies_; }
 
     /// <summary>
     /// ボス属性を設定し、最大HPを高耐久値（kDefaultBossHp）に更新します。
@@ -72,6 +90,17 @@ public:
 
     EnemyType GetEnemyType() const { return enemyType_; }
     void SetEnemyType(EnemyType type) { enemyType_ = type; }
+
+    /// <summary>
+    /// ラッシュ専用敵などのカスタム最大HPおよび現在HPを設定します。
+    /// </summary>
+    void SetCustomMaxHp(int hp);
+
+    /// <summary>
+    /// RushSurround型（360度包囲型）の包囲方位角（rad）および旋回方向を設定します。
+    /// </summary>
+    void SetSurroundAngle(float angleRad) { surroundAngle_ = angleRad; }
+    void SetSurroundStrafeDir(float dirSign) { surroundStrafeDir_ = (dirSign >= 0.0f) ? 1.0f : -1.0f; }
 
     AiState GetAiState() const { return aiState_; }
     void SetAiState(AiState state) { aiState_ = state; }
@@ -203,6 +232,7 @@ private:
     static constexpr float kMaxEnemyFrameSpeed = 0.35f;        // 1フレームあたりの最大移動速度キャップ (m/frame)
     static constexpr float kCatchUpDistanceThreshold = 8.0f;   // 自機より後方に取り残されたと判定する距離 (m)
     static constexpr float kEnemySeparationDistance = 2.2f;    // 敵同士が重ならないための最小安全距離 (m)
+    static constexpr float kGhostSeparationDistance = 0.85f;   // 幽霊同士のコンパクトな分離距離 (m: カメラ前方視界から押し出されない適正幅)
     static constexpr float kEnemySeparationPushForce = 0.5f;   // 敵同士の重なり反発押し戻し係数
 
     // 頭上飛び越えオーバーヘッドジャンプ定数 (マジックナンバー排除)
@@ -259,6 +289,16 @@ private:
     Vector3 flyByDir_ = { 0.0f, 0.0f, -1.0f };
     bool flyByInitialized_ = false;
 
+    // RushSurround型（拘束ラッシュ360度包囲型）定数＆制御変数
+    static constexpr float kRushSurroundIdealDist = 10.5f;       // 包囲時の理想交戦距離 (m)
+    static constexpr float kRushSurroundLerpSpeed = 0.08f;       // 包囲位置への滑らかな追従Lerp係数
+    static constexpr float kRushSurroundAirborneHeight = 1.5f;   // 空中跳躍時のホバリング高度 (m)
+    static constexpr float kRushSurroundStrafeSpeed = 0.012f;    // 包囲旋回（ストレイフ）角速度 (rad/frame)
+    static constexpr int kRushSurroundAimDelayFrames = 24;       // 出現直後の猶予フレーム数（約0.4秒姿を見せてからチャージ開始）
+    float surroundAngle_ = 0.0f;                                 // 自機中心の包囲方位角 (rad)
+    float surroundStrafeDir_ = 1.0f;                             // 包囲旋回方向 (+1.0 / -1.0)
+    int rushAimDelayTimer_ = 0;                                  // 出現直後猶予タイマー
+
     Vector4 originalColor_ = { 1.0f, 0.1f, 0.1f, 1.0f }; // 敵基本色（赤）
     Vector3 originalScale_ = { 1.0f, 1.0f, 1.0f };       // 敵基本スケール
     bool isOriginalScaleSaved_ = false;                  // 初期スケール退避フラグ
@@ -292,4 +332,66 @@ private:
     static inline std::vector<EnemyAIScript*> sActiveEnemies_;  // シーン上の全アクティブ敵インスタンス
     static inline int sNextZoneIndex_ = 0;                      // スポーン敵へのゾーン交互割り当てカウンター
     void ApplyEnemySeparation(Vector3& pos);                    // 敵同士の重なり反発押し出し処理
+
+    // Step 1-4: 敵撃破時の幽霊化（AiState::Ghost）＆カメラ前方浮遊追従・視界ジャミング演出
+    static constexpr int kGhostLifeDuration = 720;              // 自然成仏までの最大持続フレーム数 (約12.0秒)
+    static constexpr int kGhostFadeOutFrames = 60;              // 消滅前1秒間のフェードアウトフレーム数
+    static constexpr float kGhostHauntDist = 2.8f;              // カメラ前方への取り憑き基準距離 (m)
+    static constexpr float kGhostHauntDistStep = 0.25f;         // 複数幽霊の奥行き分散幅 (m)
+    static constexpr float kGhostFollowLerpSpeed = 0.09f;       // カメラ前方への浮遊追従Lerp係数
+    static constexpr float kGhostSwayAmpX = 0.85f;              // 8の字リサージュ浮遊の横振幅 (m)
+    static constexpr float kGhostSwayAmpY = 0.48f;              // 8の字リサージュ浮遊の縦振幅 (m)
+    static constexpr float kGhostSwayFreqX = 0.045f;            // 8の字浮遊の横周波数 (rad/frame)
+    static constexpr float kGhostSwayFreqY = 0.09f;             // 8の字浮遊の縦周波数 (rad/frame)
+    static constexpr float kGhostBaseScaleRatio = 0.52f;        // 幽霊化時の霊魂サイズ比率
+    static constexpr float kGhostWispStretchAmp = 0.14f;        // 霊魂の縦横ゆらぎ変形振幅
+    static constexpr float kGhostSpinSpeed = 0.055f;            // 霊魂の自転速度 (rad/frame)
+    static constexpr uint32_t kGhostSpawnSparkCount = 24;       // 幽霊化瞬間の魂離脱スパーク粒子数
+    static constexpr Vector4 kGhostColorCyan   = { 0.28f, 0.95f, 1.0f, 0.42f }; // 半透明シアン霊魂色
+    static constexpr Vector4 kGhostColorPurple = { 0.76f, 0.28f, 1.0f, 0.48f }; // 半透明パープル霊魂色
+    static constexpr float kGhostJamActivationDist = 5.2f;      // 2D視界ジャミングを発動するカメラ距離閾値 (m)
+    static constexpr float kGhostJamDiscRadius = 54.0f;         // 照準付近を遮る霊障ダークシルエット円の基準半径 (px)
+    static constexpr float kGhostJamRingThickness = 3.0f;       // 霊障外周リングの太さ (px)
+    static constexpr int kGhostGlitchLineCount = 4;             // 霊障グリッチノイズ走査線の本数
+    static constexpr float kGhostGlitchHalfWidth = 72.0f;       // グリッチ走査線の最大半幅 (px)
+    static constexpr float kGhostGlitchSpreadY = 48.0f;         // グリッチ走査線の縦分散幅 (px)
+    static constexpr float kGhostGlitchThickness = 2.2f;        // グリッチ走査線の太さ (px)
+
+    int ghostLifeTimer_ = 0;
+    float ghostAnimTimer_ = 0.0f;
+    float ghostPhaseOffset_ = 0.0f;
+    int ghostSlotIndex_ = 0;
+    static inline int sNextGhostSlot_ = 0;
+    std::unique_ptr<Circle2DObject> ghostJamDisc_;
+    std::unique_ptr<Ring2DObject> ghostJamRing_;
+    std::unique_ptr<Line2DObject> ghostGlitchLines_[kGhostGlitchLineCount];
+
+    // Step 1-5: 右クリック長押しによる幽霊吸収（Ghost Vacuum）定数＆メンバ変数 (マジックナンバー排除)
+    static constexpr float kGhostVacuumDecaySpeed = 0.015f;     // 右クリック解除時の吸引ゲージ自然減衰速度 (/frame)
+    static constexpr float kGhostVacuumPullLerpBase = 0.14f;    // 吸引開始時の銃口引き寄せ基本Lerp係数
+    static constexpr float kGhostVacuumPullLerpMax = 0.42f;     // 吸引完了直前の銃口引き寄せ最大Lerp係数
+    static constexpr float kGhostVacuumSwirlRadius = 0.36f;     // 銃口へ吸い込まれる際の渦巻き半径 (m)
+    static constexpr float kGhostVacuumSwirlSpeed = 0.26f;      // 渦巻き回転速度 (rad/frame)
+    static constexpr float kGhostVacuumShrinkRatio = 0.78f;     // 吸引完了直前の霊魂縮小率
+    static constexpr float kGhostVacuumSpinBoost = 0.28f;       // 吸引中の高速自転加算角速度 (rad/frame)
+    static constexpr uint32_t kGhostExorciseBurstCount = 26;    // 成仏完了瞬間の銃口スパーク粒子数
+    static constexpr uint32_t kGhostVacuumStreamSparkCount = 2; // 吸引中の連続収束スパーク粒子数
+    static constexpr int kGhostVacuumSparkInterval = 5;         // 吸引中のスパーク発生間隔 (frame)
+    static constexpr int kVacuumStreamLineCount = 3;            // 幽霊から銃口へ伸びる2D吸引ストリーム線の本数
+    static constexpr float kVacuumStreamThickness = 2.6f;       // 吸引ストリーム線の太さ (px)
+    static constexpr float kVacuumGaugeRingStartRadius = 56.0f; // 2D吸引収束ゲージリングの開始半径 (px)
+    static constexpr float kVacuumGaugeRingEndRadius = 10.0f;   // 2D吸引収束ゲージリングの完了半径 (px)
+    static constexpr float kVacuumGaugeRingThickness = 3.5f;    // 2D吸引収束ゲージリングの太さ (px)
+
+    float vacuumProgress_ = 0.0f;                               // 吸引ゲージ蓄積度 (0.0f 〜 1.0f)
+    bool isBeingVacuumed_ = false;                              // 現在フレームで吸引捕捉されているか
+    int vacuumActiveFrames_ = 0;                                // 実行順非依存の吸引維持フレームカウンタ
+    Vector3 vacuumTargetMuzzlePos_ = { 0.0f, 0.0f, 0.0f };      // 吸い込み先の銃口3D座標
+    std::unique_ptr<Ring2DObject> vacuumGaugeRing_;             // 幽霊周囲で収縮する2D吸引ゲージリング
+    std::unique_ptr<Line2DObject> vacuumStreamLines_[kVacuumStreamLineCount]; // 幽霊→銃口への2D霊魂ストリーム線
+
+    void EnterGhostState();
+    void UpdateGhostState();
+    void EnsureGhostJammingVisuals();
+    void DrawGhostJamming2D();
 };

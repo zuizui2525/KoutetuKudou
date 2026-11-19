@@ -13,6 +13,7 @@ namespace {
     const std::string kTitleSkyboxTextureKey = "white";
     constexpr Vector4 kTitleSkyboxColor = { 0.02f, 0.02f, 0.03f, 1.0f }; // 重厚なダークブラック背景
     constexpr size_t kImGuiBufferLength = 128;
+    constexpr int kLeftMouseButton = 0;
 }
 
 TitleDirectorScript::TitleDirectorScript()
@@ -40,12 +41,12 @@ void TitleDirectorScript::Start() {
 }
 
 /// <summary>
-/// 毎フレームの入力（スペースキー押下）を監視し、押下された場合はゲーム本編シーンへ遷移します。
+/// 毎フレームの入力（スペースキー押下またはマウス左クリック）を監視し、ゲーム本編シーンへ遷移します。
 /// </summary>
 void TitleDirectorScript::OnUpdate() {
-    // スペースキー押下でゲームシーンへ遷移
+    // スペースキーまたは左クリックでゲームシーンへ遷移
     auto input = InputResource::GetInput();
-    if (input && input->Trigger(DIK_SPACE)) {
+    if (input && (input->Trigger(DIK_SPACE) || input->MouseTrigger(kLeftMouseButton))) {
         SceneManager::GetInstance()->ChangeScene(nextSceneName_);
         return;
     }

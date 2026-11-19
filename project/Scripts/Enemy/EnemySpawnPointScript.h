@@ -52,7 +52,10 @@ public:
     /// <summary>
     /// エリア切り替え時やリスタート時に、出現済みフラグ（hasTriggered_）をリセットします。
     /// </summary>
-    void ResetTrigger() { hasTriggered_ = false; }
+    void ResetTrigger() {
+        hasTriggered_ = false;
+        triggerFadeAlpha_ = kFullVisibleAlpha;
+    }
 
     // ゲッター / セッター
     const std::string& GetPrefabName() const { return prefabName_; }
@@ -135,6 +138,9 @@ private:
     static constexpr float kDefaultCylinderHeight = 3.5f;
     static constexpr float kGroundRingElevation = 0.05f;         // Z-Fighting防止の床面微小浮遊
     static constexpr float kDefaultTriggerMarginRadius = 0.5f;   // 円形トリガー感知マージン (m)
+    static constexpr float kFullVisibleAlpha = 1.0f;             // フェード開始時の完全不透明度係数
+    static constexpr float kTriggerFadeOutSpeed = 0.025f;        // 作動後の透明度減衰速度 (/frame, 約0.67秒で消滅)
+    static constexpr float kMinVisibleAlpha = 0.005f;            // 描画打ち切り最小アルファ閾値
 
     static inline const std::string kDefaultEnemyPrefab = "Enemy";
     static inline const std::string kBossEnemyPrefab = "BossEnemy";
@@ -157,10 +163,14 @@ private:
     float triggerMarginRadius_ = kDefaultTriggerMarginRadius; // 感知マージン
     float cylinderHeight_ = kDefaultCylinderHeight;
     float visualRotationAngle_ = 0.0f;
+    float waveAnimPhase_ = 0.0f;               // 外向き拡散ソナー＆湧き上がり上昇アニメーション位相 (0.0〜1.0)
+    float triggerFadeAlpha_ = kFullVisibleAlpha; // ギミック作動後のフェードアウト不透明度係数 (1.0〜0.0)
 
-    // 3D可視化Primitive（地面塗りつぶし円盤ディスク・外周リング・立体警戒円柱）
+    // 3D可視化Primitive（地面塗りつぶし円盤・外周リング・外向き拡散ソナー・湧き上がり浮上リング・立体警戒円柱）
     std::unique_ptr<FlatRingObject> groundDisc_;
     std::unique_ptr<FlatRingObject> groundRing_;
+    std::unique_ptr<FlatRingObject> expandWaveRing_;
+    std::unique_ptr<FlatRingObject> risingAuraRing_;
     std::unique_ptr<CylinderObject> warningCylinder_;
 
     // 敵情報表示用 Text2D (TextRenderer2DComponent)
